@@ -2,6 +2,37 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>
+// Applies the saved color theme before first paint, so switching themes
+// never shows a flash of the default one while the rest of the page loads.
+// Kept intentionally tiny and duplicated from the full theme list below —
+// this only needs the color values, not labels or app logic.
+(function(){
+  try{
+    var THEME_VARS = {
+      amber:    { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#f2a93b', amberRgb:'242,169,59', amberDim:'#a8752b', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      crimson:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#e2545f', amberRgb:'226,84,95', amberDim:'#9c3a42', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      emerald:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#4fbf8b', amberRgb:'79,191,139', amberDim:'#35805e', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      sapphire: { bg:'#12141a', surface:'#1c1f27', surface2:'#242833', amber:'#5b9fe3', amberRgb:'91,159,227', amberDim:'#3d6d9c', cream:'#e9edf5', muted:'#8b93a3', line:'#2e3340' },
+      violet:   { bg:'#16131a', surface:'#211d27', surface2:'#2a2433', amber:'#b98af0', amberRgb:'185,138,240', amberDim:'#7d5aa6', cream:'#efe7f5', muted:'#948b9e', line:'#38313f' },
+      popcorn:  { bg:'#f4ede0', surface:'#ffffff', surface2:'#f2e8d4', amber:'#d9822b', amberRgb:'217,130,43', amberDim:'#a85f18', cream:'#241a08', muted:'#7a6c54', line:'#ddd0b8' }
+    };
+    var saved = localStorage.getItem('fmn_color_theme');
+    var name = saved ? JSON.parse(saved) : 'amber';
+    var t = THEME_VARS[name] || THEME_VARS.amber;
+    var s = document.documentElement.style;
+    s.setProperty('--bg', t.bg);
+    s.setProperty('--surface', t.surface);
+    s.setProperty('--surface-2', t.surface2);
+    s.setProperty('--amber', t.amber);
+    s.setProperty('--amber-rgb', t.amberRgb);
+    s.setProperty('--amber-dim', t.amberDim);
+    s.setProperty('--cream', t.cream);
+    s.setProperty('--muted', t.muted);
+    s.setProperty('--line', t.line);
+  } catch(e){ /* falls back to the default theme in the stylesheet below */ }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#14141a">
 <meta name="mobile-web-app-capable" content="yes">
@@ -20,8 +51,10 @@
     --surface: #1e1e27;
     --surface-2: #262633;
     --amber: #f2a93b;
+    --amber-rgb: 242,169,59;
     --amber-dim: #a8752b;
     --velvet: #a13446;
+    --velvet-rgb: 161,52,70;
     --green: #5a9e6f;
     --cream: #efe7da;
     --muted: #8b8b98;
@@ -78,7 +111,7 @@
     letter-spacing: 2px;
     margin: 4px 0 2px;
     color: var(--cream);
-    text-shadow: 0 0 18px rgba(242,169,59,0.25);
+    text-shadow: 0 0 18px rgba(var(--amber-rgb),0.25);
   }
   .tagline{ color: var(--muted); font-size: 14px; }
 
@@ -96,6 +129,22 @@
     .reel{ width: 150px; height: 80px; }
     .reel-value{ font-size: 22px; }
   }
+
+  .theme-swatch-grid{ display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+  .theme-swatch{
+    width: 96px; cursor: pointer; border: 2px solid transparent; border-radius: 10px;
+    padding: 6px; text-align: center; transition: border-color .15s ease, transform .1s ease;
+    background: transparent;
+  }
+  .theme-swatch:hover{ transform: translateY(-2px); }
+  .theme-swatch.active{ border-color: var(--amber); }
+  .theme-swatch-preview{
+    width: 100%; height: 56px; border-radius: 7px; display:flex; align-items:flex-end;
+    padding: 6px; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.08);
+  }
+  .theme-swatch-dot{ width: 16px; height: 16px; border-radius: 50%; }
+  .theme-swatch-label{ font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.3px; }
+  .theme-swatch.active .theme-swatch-label{ color: var(--cream); }
 
   .card{
     background: var(--surface);
@@ -185,7 +234,7 @@
   /* ---- Up next box (signature-ish) ---- */
   .up-next-box{
     display:flex; align-items:center; gap: 16px;
-    background: linear-gradient(120deg, rgba(242,169,59,0.16), rgba(161,52,70,0.08));
+    background: linear-gradient(120deg, rgba(var(--amber-rgb),0.16), rgba(var(--velvet-rgb),0.08));
     border: 1px solid var(--amber-dim);
     border-radius: 10px;
     padding: 16px 20px;
@@ -255,7 +304,7 @@
     opacity: 1;
     filter: none;
     border-color: var(--amber);
-    background: linear-gradient(120deg, rgba(242,169,59,0.12), rgba(242,169,59,0.02));
+    background: linear-gradient(120deg, rgba(var(--amber-rgb),0.12), rgba(var(--amber-rgb),0.02));
     box-shadow: 0 0 0 1px var(--amber-dim);
   }
   .source-box.active:hover{ opacity: 1; }
@@ -292,7 +341,7 @@
   .results-head .count{ color: var(--muted); font-size: 13px; font-family: var(--font-mono); }
 
   .tonight{
-    display:flex; gap: 16px; background: linear-gradient(120deg, rgba(242,169,59,0.14), rgba(161,52,70,0.10));
+    display:flex; gap: 16px; background: linear-gradient(120deg, rgba(var(--amber-rgb),0.14), rgba(var(--velvet-rgb),0.10));
     border: 1px solid var(--amber-dim);
     border-radius: 10px; padding: 16px 18px; margin-bottom: 22px;
     align-items:center;
@@ -341,7 +390,7 @@
   }
   .rating-chip{
     font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
-    background: rgba(242,169,59,0.14); color: var(--amber); border: 1px solid var(--amber-dim);
+    background: rgba(var(--amber-rgb),0.14); color: var(--amber); border: 1px solid var(--amber-dim);
     padding: 2px 6px; border-radius: 4px;
   }
   .tmdb-link{
@@ -424,7 +473,6 @@
 
     <div class="marquee">
       <div class="sprockets"></div>
-      <div class="eyebrow">Tonight's Feature</div>
       <h1>NEXT UP - MOVIES</h1>
       <div class="tagline">Spin for a random decade + genre, then whoever's turn it is picks from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
@@ -441,7 +489,7 @@
     <div id="mainTab">
 
       <div class="card">
-        <h2>Movie Night Crew</h2>
+        <h2>Movie Crew</h2>
         <p class="desc">Add everyone who takes a turn picking. The app tracks whose turn is next and moves to the next person automatically after each pick.</p>
         <div class="row">
           <input type="text" id="crewInput" placeholder="Add a family member's name">
@@ -475,6 +523,7 @@
       <div class="spin-btn-row">
         <button class="btn-primary spin-btn" id="spinBtn">🎞 Spin the Reel</button>
         <div class="error" id="spinError" style="display:none;"></div>
+        <div class="source-note" id="spinStatusNote"></div>
         <div class="source-boxes">
           <div class="source-box" id="sourceBoxBuiltin">
             <div class="source-box-top">
@@ -526,6 +575,12 @@
 
     <!-- ===================== ADMIN TAB ===================== -->
     <div id="adminTab" style="display:none;">
+
+      <div class="card">
+        <h2>Color Scheme</h2>
+        <p class="desc">Pick a look for the app. Applies immediately and everywhere.</p>
+        <div id="themeSwatchGrid" class="theme-swatch-grid"></div>
+      </div>
 
       <div class="card" id="wmConnectionCard">
         <h2>Watchmode Connection <span id="wmStatusPill" class="status-pill status-off">NOT CONNECTED</span></h2>
@@ -677,6 +732,20 @@
         <label class="toggle-chip" style="justify-content:flex-start;">
           <input type="checkbox" id="requireCriticScoreCheckbox"> Require a critic score
         </label>
+      </div>
+
+      <div class="card">
+        <h2>Explicit Content Filter</h2>
+        <p class="desc">Best-effort only — this checks a title and description against a list of keywords, it doesn't actually analyze the film itself. It can miss titles with no telling words in their description, and can very occasionally flag something legitimate. There's a built-in list of common terms included automatically (its contents aren't shown here); you can add your own on top of it below. Matching is case-insensitive and checks for the phrase anywhere in the text.</p>
+        <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
+          <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Movies With Explicit Content
+        </label>
+        <div class="row">
+          <input type="text" id="explicitKeywordInput" placeholder="Add a keyword or phrase">
+          <button class="btn-primary" id="explicitKeywordAddBtn">Add</button>
+        </div>
+        <div class="hint" id="explicitKeywordCount" style="margin-top:10px;"></div>
+        <button class="btn-ghost" id="explicitKeywordClearBtn" style="margin-top:8px;">Clear My Added Keywords</button>
       </div>
 
       <div class="card">
@@ -931,6 +1000,50 @@ let enabledLanguages = ['English']; // default: English only, unlike other filte
 let minRating = 0;
 let maxRating = 10; // top of the 0-10 scale — "Any rating" was removed as a selectable option
 let requireCriticScore = true; // when true, Watchmode discovery only returns titles that have a critic score at all — checked by default on first run
+
+// Color themes — each swaps the accent + base palette; danger (velvet) and
+// success (green) colors stay fixed across all of them so status colors
+// keep a consistent meaning no matter which theme is active.
+const COLOR_THEMES = {
+  amber: {
+    label: 'Amber Marquee', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#f2a93b', amberRgb: '242,169,59', amberDim: '#a8752b', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  crimson: {
+    label: 'Crimson Velvet', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#e2545f', amberRgb: '226,84,95', amberDim: '#9c3a42', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  emerald: {
+    label: 'Emerald Cinema', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#4fbf8b', amberRgb: '79,191,139', amberDim: '#35805e', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  sapphire: {
+    label: 'Sapphire Noir', bg: '#12141a', surface: '#1c1f27', surface2: '#242833',
+    amber: '#5b9fe3', amberRgb: '91,159,227', amberDim: '#3d6d9c', cream: '#e9edf5', muted: '#8b93a3', line: '#2e3340'
+  },
+  violet: {
+    label: 'Violet Reel', bg: '#16131a', surface: '#211d27', surface2: '#2a2433',
+    amber: '#b98af0', amberRgb: '185,138,240', amberDim: '#7d5aa6', cream: '#efe7f5', muted: '#948b9e', line: '#38313f'
+  },
+  popcorn: {
+    label: 'Popcorn Light', bg: '#f4ede0', surface: '#ffffff', surface2: '#f2e8d4',
+    amber: '#d9822b', amberRgb: '217,130,43', amberDim: '#a85f18', cream: '#241a08', muted: '#7a6c54', line: '#ddd0b8'
+  }
+};
+let colorTheme = 'amber';
+let filterExplicitContent = true; // on by default — safety filter, checked unless explicitly turned off
+// Best-effort text filter, not a guarantee — matched case-insensitively
+// against title + description. Kept to specific, unambiguous phrases
+// rather than broad single words (avoiding e.g. "sex" or "nude" alone,
+// which would sweep up ordinary dramas/romances). Intentionally not
+// exposed in the UI — only its existence and size are shown, not its
+// contents.
+const DEFAULT_EXPLICIT_KEYWORDS = [
+  'pornographic', 'pornography', 'porn film', 'xxx-rated', 'hardcore sex',
+  'explicit sex', 'sexually explicit', 'erotica', 'erotic film',
+  'adult film', 'adult entertainment', 'sex industry', 'hentai', 'nsfw'
+];
+let customExplicitKeywords = []; // user-added, on top of the built-in list above
 let blockedMovies = []; // {title, year|null}
 let customAdditions = {}; // "decade|genre" -> [{title, year}] — user-added built-in-list entries
 let customRemovals = {}; // "decade|genre" -> ["title|year", ...] — built-in entries the user has hidden
@@ -993,6 +1106,44 @@ async function saveEnabledLanguages(){ await saveJSON('enabled_languages', enabl
 async function saveMinRating(){ await saveJSON('min_rating', minRating); }
 async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
 async function saveRequireCriticScore(){ await saveJSON('require_critic_score', requireCriticScore); }
+
+function applyColorTheme(name){
+  const theme = COLOR_THEMES[name] || COLOR_THEMES.amber;
+  const root = document.documentElement.style;
+  root.setProperty('--bg', theme.bg);
+  root.setProperty('--surface', theme.surface);
+  root.setProperty('--surface-2', theme.surface2);
+  root.setProperty('--amber', theme.amber);
+  root.setProperty('--amber-rgb', theme.amberRgb);
+  root.setProperty('--amber-dim', theme.amberDim);
+  root.setProperty('--cream', theme.cream);
+  root.setProperty('--muted', theme.muted);
+  root.setProperty('--line', theme.line);
+}
+async function saveColorTheme(){ await saveJSON('color_theme', colorTheme); }
+
+function renderThemeSwatches(){
+  $('themeSwatchGrid').innerHTML = Object.entries(COLOR_THEMES).map(([key, t]) => `
+    <div class="theme-swatch ${key === colorTheme ? 'active' : ''}" data-theme="${key}">
+      <div class="theme-swatch-preview" style="background:${t.bg};">
+        <span class="theme-swatch-dot" style="background:${t.amber};"></span>
+      </div>
+      <div class="theme-swatch-label">${escapeHtml(t.label)}</div>
+    </div>
+  `).join('');
+  $('themeSwatchGrid').querySelectorAll('.theme-swatch').forEach(el => {
+    el.addEventListener('click', async () => {
+      const name = el.dataset.theme;
+      if (name === colorTheme) return;
+      colorTheme = name;
+      applyColorTheme(colorTheme);
+      await saveColorTheme();
+      renderThemeSwatches();
+    });
+  });
+}
+async function saveFilterExplicitContent(){ await saveJSON('filter_explicit_content', filterExplicitContent); }
+async function saveCustomExplicitKeywords(){ await saveJSON('custom_explicit_keywords', customExplicitKeywords); }
 async function saveBlockedMovies(){ await saveJSON('blocked_movies', blockedMovies); }
 async function saveCustomAdditions(){ await saveJSON('custom_movie_additions', customAdditions); }
 async function saveCustomRemovals(){ await saveJSON('custom_movie_removals', customRemovals); }
@@ -1039,6 +1190,19 @@ async function init(){
   minRating = await loadJSON('min_rating', 0);
   maxRating = await loadJSON('max_rating_ceiling', 10);
   requireCriticScore = await loadJSON('require_critic_score', true);
+  colorTheme = await loadJSON('color_theme', 'amber');
+  filterExplicitContent = await loadJSON('filter_explicit_content', true);
+  customExplicitKeywords = await loadJSON('custom_explicit_keywords', null);
+  if (customExplicitKeywords === null){
+    // Migration: this used to be one combined, user-editable list. Split
+    // off anything that isn't part of the current built-in defaults as a
+    // preserved custom addition, so nothing already added gets lost now
+    // that the list is a hidden default + separate custom additions.
+    const oldCombined = await loadJSON('explicit_content_keywords', []);
+    const defaultsLower = new Set(DEFAULT_EXPLICIT_KEYWORDS.map(k => k.toLowerCase()));
+    customExplicitKeywords = oldCombined.filter(k => !defaultsLower.has(k.toLowerCase()));
+    await saveCustomExplicitKeywords();
+  }
   enabledLanguages = await loadJSON('enabled_languages', ['English']);
   blockedMovies = await loadJSON('blocked_movies', []);
   customAdditions = await loadJSON('custom_movie_additions', {});
@@ -1270,27 +1434,59 @@ function renderApiCallLog(){
   `).join('');
 }
 
+let wmQuotaExhausted = false; // session-only circuit breaker — once tripped, every wmFetch call fails immediately (no network attempt) so spins fall back to the built-in list right away instead of retrying something unrecoverable
+let wmConsecutiveExhaustedCalls = 0; // counts separate calls that used up all their own retries and still got 429 — resets on any success
+
 async function wmFetch(path, params, attempt, maxAttempts, reason){
+  if (wmQuotaExhausted){
+    throw new Error('Watchmode API limit reached for now — using the built-in list instead.');
+  }
   attempt = attempt || 0;
   const limit = (maxAttempts == null) ? 6 : maxAttempts;
   await wmThrottleGate();
   logApiCall(reason, path, params, attempt);
   const res = await fetch(wmUrl(path, params));
-  if (res.status === 429 && attempt < limit){
-    // Rate-limited — slow the *global* pace down further (adaptive, capped)
-    // in addition to backing off this specific request and retrying.
-    wmMinIntervalMs = Math.min(8000, wmMinIntervalMs * 1.6);
-    const delay = 500 * Math.pow(2, attempt) + Math.random() * 300;
-    await new Promise(r => setTimeout(r, delay));
-    return wmFetch(path, params, attempt + 1, maxAttempts, reason);
+  if (res.status === 429){
+    const body = await res.json().catch(() => ({}));
+    const msg = (body.statusMessage || body.message || '').toLowerCase();
+    // Watchmode's wording for "you're out of requests for your billing
+    // period" isn't confirmed, so this checks for the common phrases any
+    // API tends to use for a hard quota rather than a burst rate limit.
+    const looksLikeQuota = /quota|exceeded your|plan limit|monthly limit|usage limit|request limit/.test(msg);
+    if (looksLikeQuota){
+      wmQuotaExhausted = true;
+      throw new Error('Watchmode API limit reached for now (' + (body.statusMessage || body.message || 'quota exceeded') + ') — using the built-in list instead.');
+    }
+    if (attempt < limit){
+      // Rate-limited — slow the *global* pace down further (adaptive, capped)
+      // in addition to backing off this specific request and retrying.
+      wmMinIntervalMs = Math.min(8000, wmMinIntervalMs * 1.6);
+      const delay = 500 * Math.pow(2, attempt) + Math.random() * 300;
+      await new Promise(r => setTimeout(r, delay));
+      return wmFetch(path, params, attempt + 1, maxAttempts, reason);
+    }
+    // No explicit quota wording, but this call still burned through every
+    // retry without ever succeeding. One of those could just be bad luck;
+    // two in a row (across different calls, not retries of the same one)
+    // is a strong enough signal to stop hammering it for the rest of the
+    // session rather than let every subsequent call also spend up to ~30
+    // seconds retrying something that isn't going to recover on its own.
+    wmConsecutiveExhaustedCalls++;
+    if (wmConsecutiveExhaustedCalls >= 2){
+      wmQuotaExhausted = true;
+      throw new Error('Watchmode is persistently rate-limiting requests — using the built-in list instead for the rest of this session.');
+    }
+    throw new Error(body.statusMessage || body.message || 'Watchmode request failed (429)');
   }
   if (!res.ok){
     const body = await res.json().catch(() => ({}));
     throw new Error(body.statusMessage || body.message || `Watchmode request failed (${res.status})`);
   }
-  // Success — nudge the pace back down slightly. Without this, one rough
-  // stretch early in a session would leave every request slow for the rest
-  // of it, even long after whatever triggered the backoff has cleared.
+  // Success — reset the exhaustion counter and nudge the pace back down
+  // slightly. Without the pace recovery, one rough stretch early in a
+  // session would leave every request slow for the rest of it, even long
+  // after whatever triggered the backoff has cleared.
+  wmConsecutiveExhaustedCalls = 0;
   wmMinIntervalMs = Math.max(1000, wmMinIntervalMs * 0.97);
   return res.json();
 }
@@ -1402,6 +1598,7 @@ document.querySelectorAll('input[name=dataSource]').forEach(radio => {
 });
 
 function renderAdmin(){
+  renderThemeSwatches();
   populateCacheStatsDropdowns();
   updateCacheStats();
   populateEditListDropdowns();
@@ -1494,8 +1691,10 @@ function renderAdmin(){
   $('minRatingSelect').value = String(minRating);
   $('maxRatingSelect').value = String(maxRating);
   $('requireCriticScoreCheckbox').checked = requireCriticScore;
+  $('filterExplicitContentCheckbox').checked = filterExplicitContent;
   $('maxResultsInput').value = String(maxResults);
 
+  renderExplicitKeywordCount();
   renderBlockList();
 }
 
@@ -1687,6 +1886,40 @@ $('requireCriticScoreCheckbox').addEventListener('change', async (e) => {
   requireCriticScore = e.target.checked;
   await saveRequireCriticScore();
 });
+
+$('filterExplicitContentCheckbox').addEventListener('change', async (e) => {
+  filterExplicitContent = e.target.checked;
+  await saveFilterExplicitContent();
+});
+
+function renderExplicitKeywordCount(){
+  const n = customExplicitKeywords.length;
+  $('explicitKeywordCount').textContent = `Built-in list active, plus ${n} keyword${n === 1 ? '' : 's'} you've added.`;
+}
+async function addExplicitKeyword(){
+  const val = $('explicitKeywordInput').value.trim();
+  if (!val) return;
+  const allLower = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords).map(k => k.toLowerCase());
+  if (allLower.includes(val.toLowerCase())){
+    $('explicitKeywordInput').value = '';
+    return; // already covered, either by the built-in list or a previous addition
+  }
+  customExplicitKeywords.push(val);
+  await saveCustomExplicitKeywords();
+  $('explicitKeywordInput').value = '';
+  renderExplicitKeywordCount();
+}
+$('explicitKeywordAddBtn').addEventListener('click', addExplicitKeyword);
+$('explicitKeywordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addExplicitKeyword(); });
+
+$('explicitKeywordClearBtn').addEventListener('click', async () => {
+  if (!customExplicitKeywords.length) return;
+  if (!confirm(`Remove all ${customExplicitKeywords.length} keyword(s) you've added? The built-in list stays active either way.`)) return;
+  customExplicitKeywords = [];
+  await saveCustomExplicitKeywords();
+  renderExplicitKeywordCount();
+});
+
 function showRatingRangeNote(text){
   const el = $('ratingRangeNote');
   el.textContent = text;
@@ -1793,9 +2026,28 @@ $('rerunFiltersBtn').addEventListener('click', () => {
   switchTab('main');
 });
 
+// Last-resort safety net — races a promise against a plain timer. Doesn't
+// actually cancel the underlying request (fetch() has no clean way to do
+// that here), but stops the UI from waiting on it indefinitely if
+// something hangs without ever returning an error of its own.
+function withTimeout(promise, ms, message){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message || 'Timed out')), ms))
+  ]);
+}
+
+// Writes live progress underneath the Spin button instead of into the
+// button's own label — the label stays "🎞 Spin the Reel" throughout so it
+// never changes size or becomes hard to read mid-spin.
+function setSpinStatus(text){
+  $('spinStatusNote').textContent = text || '';
+}
+
 async function spin(){
   $('spinError').style.display = 'none';
   $('enrichStatusNote').textContent = '';
+  setSpinStatus('');
   apiCallLog = [];
 
   const decadePool = DECADES.filter(d => enabledDecades.includes(d));
@@ -1839,12 +2091,17 @@ async function spin(){
 
   if (useWm){
     try{
-      lastFullPool = await buildWatchmodePool(finalDecade, finalGenre);
+      lastFullPool = await withTimeout(
+        buildWatchmodePool(finalDecade, finalGenre),
+        45000,
+        'Watchmode took too long to respond'
+      );
       currentSource = 'watchmode';
-      $('spinBtn').textContent = '🎞 Spin the Reel';
+      setSpinStatus('');
     } catch(e){
       lastFullPool = getEffectiveMovieList(finalDecade, finalGenre);
       currentSource = 'builtin';
+      setSpinStatus('');
       $('spinError').textContent = 'Watchmode request failed (' + e.message + ') — showing the built-in list instead.';
       $('spinError').style.display = 'block';
     }
@@ -1852,11 +2109,11 @@ async function spin(){
     lastFullPool = getEffectiveMovieList(finalDecade, finalGenre);
     currentSource = 'builtin';
     try{
-      await enrichBuiltinListWithWatchmode(lastFullPool);
+      await withTimeout(enrichBuiltinListWithWatchmode(lastFullPool), 30000, 'Built-in list enrichment took too long');
     } catch(e){
       console.warn('Built-in list Watchmode enrichment failed', e.message);
     }
-    $('spinBtn').textContent = '🎞 Spin the Reel';
+    setSpinStatus('');
   }
 
   applyFiltersAndRender();
@@ -1877,6 +2134,10 @@ function computeFilteredSurvivors(pool){
   pool.forEach(m => {
     if (isBlocked(m.title, m.year)){
       filteredOut.push({ movie: m, reason: 'Blocked' });
+      return;
+    }
+    if (!matchesExplicitContentFilter(m)){
+      filteredOut.push({ movie: m, reason: 'Excluded by explicit content filter' });
       return;
     }
     if (!matchesContentRating(m)){
@@ -2071,7 +2332,7 @@ async function enrichBatchWithRatings(movies, opts){
       missing++;
       if (result.error && !firstError) firstError = result.error;
     }
-    if (!silent) $('spinBtn').textContent = `Fetching ratings… ${done}/${movies.length}`;
+    if (!silent) setSpinStatus(`Fetching ratings… ${done}/${movies.length}`);
   });
 
   if (silent) return;
@@ -2129,7 +2390,7 @@ async function enrichBuiltinListWithWatchmode(movies){
       await enrichOneMovie(movie, 2);
     }
     done++;
-    $('spinBtn').textContent = `Enriching built-in list via Watchmode… ${done}/${movies.length}`;
+    setSpinStatus(`Enriching built-in list via Watchmode… ${done}/${movies.length}`);
   }, 250);
 }
 
@@ -2163,6 +2424,20 @@ function matchesCriticScoreRequirement(movie){
   // entire built-in list fallback, which has no critic score data at all.
   if (currentSource !== 'watchmode') return true;
   return movie.criticScore != null;
+}
+
+// Best-effort only — a text match on title/description, not a content
+// analysis of the actual film. Won't catch everything, and can very
+// occasionally flag something legitimate (a serious documentary that uses
+// one of these words clinically, for instance). No source-scoping needed
+// here, unlike the filters above — a title with no description simply
+// can't match anything, so it passes through either way.
+function matchesExplicitContentFilter(movie){
+  if (!filterExplicitContent) return true;
+  const allKeywords = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords);
+  if (!allKeywords.length) return true;
+  const haystack = `${movie.title || ''} ${movie.description || ''}`.toLowerCase();
+  return !allKeywords.some(kw => kw && haystack.includes(kw.toLowerCase()));
 }
 
 function matchesLanguage(movie){
@@ -2223,7 +2498,7 @@ async function fetchWatchmodeMoviesByRating(decade, genre, targetCount, seenIds,
   const collected = [];
   let low = Math.max(floor, ceiling - 1);
   while (true){
-    $('spinBtn').textContent = `${reasonPrefix} — searching rated ${low.toFixed(1)}–${ceiling.toFixed(1)}…`;
+    setSpinStatus(`${reasonPrefix} — searching rated ${low.toFixed(1)}–${ceiling.toFixed(1)}…`);
     const batch = await fetchWatchmodeMoviesPage(decade, genre, 1, targetCount, `${reasonPrefix}: rated ${low}-${ceiling}`, low, ceiling);
     batch.forEach(m => {
       if (!seenIds.has(m.watchmodeId) && !collected.some(c => c.watchmodeId === m.watchmodeId)){
@@ -2277,7 +2552,7 @@ async function buildWatchmodePool(decade, genre){
   // Full pass through the local cache FIRST — zero API calls — before ever
   // reaching for Watchmode. With a well-warmed cache this can fully satisfy
   // a spin on its own.
-  $('spinBtn').textContent = 'Checking local cache…';
+  setSpinStatus('Checking local cache…');
   const seenIds = new Set();
   let pool = [];
   getCachedMoviesForCombo(decade, genre).forEach(m => {
