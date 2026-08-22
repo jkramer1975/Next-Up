@@ -91,7 +91,8 @@
     border: 1px solid var(--line);
   }
   .account-corner{
-    position: absolute; top: 10px; right: 12px; z-index: 2;
+    display: flex; justify-content: flex-end;
+    margin-bottom: 10px;
     font-family: var(--font-mono); font-size: 11px;
   }
   .account-corner button{
@@ -112,7 +113,7 @@
   }
   .account-corner .signout-x:hover{ color: var(--velvet); border: none; }
   @media (max-width: 420px){
-    .account-corner{ position: static; margin-bottom: 10px; display:flex; justify-content:center; }
+    .account-corner{ justify-content: center; }
     .account-corner .signed-in-name{ max-width: 160px; }
   }
   .sprockets{
@@ -502,17 +503,18 @@
 <div class="app">
   <div class="wrap">
 
+    <div class="account-corner" id="accountCorner">
+      <div id="authSignedOut">
+        <button id="signInBtn">Sign in with Google</button>
+      </div>
+      <div id="authSignedIn" class="signed-in-pill" style="display:none;">
+        <span class="signed-in-name" id="authName"></span>
+        <button class="signout-x" id="signOutBtn" title="Sign out">✕</button>
+      </div>
+    </div>
+
     <div class="marquee">
       <div class="sprockets"></div>
-      <div class="account-corner" id="accountCorner">
-        <div id="authSignedOut">
-          <button id="signInBtn">Sign in with Google</button>
-        </div>
-        <div id="authSignedIn" class="signed-in-pill" style="display:none;">
-          <span class="signed-in-name" id="authName"></span>
-          <button class="signout-x" id="signOutBtn" title="Sign out">✕</button>
-        </div>
-      </div>
       <h1>NEXT UP - MOVIES</h1>
       <div class="tagline">Spin for a random decade + genre, then whoever's turn it is picks from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
