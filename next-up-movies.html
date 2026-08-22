@@ -45,6 +45,13 @@
 <title>Next Up - Movies</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<!-- Firebase (Auth + Firestore) — compat build, so it exposes a plain
+     global `firebase` namespace usable from an ordinary script tag,
+     matching the rest of this file rather than requiring an ES module
+     restructure. -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg: #14141a;
@@ -82,6 +89,31 @@
     background: linear-gradient(180deg, var(--surface), var(--bg));
     border-radius: 6px;
     border: 1px solid var(--line);
+  }
+  .account-corner{
+    position: absolute; top: 10px; right: 12px; z-index: 2;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .account-corner button{
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
+    border-radius: 14px; padding: 5px 12px; cursor: pointer;
+  }
+  .account-corner button:hover{ border-color: var(--amber); }
+  .account-corner .signed-in-pill{
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px 6px 4px 10px;
+  }
+  .account-corner .signed-in-name{ color: var(--muted); max-width: 110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .account-corner .signout-x{
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px;
+    padding: 2px 4px; border-radius: 50%; line-height:1;
+  }
+  .account-corner .signout-x:hover{ color: var(--velvet); border: none; }
+  @media (max-width: 420px){
+    .account-corner{ position: static; margin-bottom: 10px; display:flex; justify-content:center; }
+    .account-corner .signed-in-name{ max-width: 160px; }
   }
   .sprockets{
     display:flex; justify-content:space-between;
@@ -280,7 +312,6 @@
     padding: 0 8px;
   }
   .reel.spinning .reel-value{ color: var(--amber); }
-  .reel-x{ font-family: var(--font-display); font-size: 28px; color: var(--muted); }
 
   .spin-btn-row{ text-align:center; margin: 18px 0 30px; }
   .spin-btn{ font-size: 16px; padding: 14px 30px; letter-spacing: 0.5px; }
@@ -473,9 +504,19 @@
 
     <div class="marquee">
       <div class="sprockets"></div>
+      <div class="account-corner" id="accountCorner">
+        <div id="authSignedOut">
+          <button id="signInBtn">Sign in with Google</button>
+        </div>
+        <div id="authSignedIn" class="signed-in-pill" style="display:none;">
+          <span class="signed-in-name" id="authName"></span>
+          <button class="signout-x" id="signOutBtn" title="Sign out">✕</button>
+        </div>
+      </div>
       <h1>NEXT UP - MOVIES</h1>
       <div class="tagline">Spin for a random decade + genre, then whoever's turn it is picks from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
+      <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
     </div>
 
     <div class="tabs">
@@ -514,7 +555,6 @@
           <div class="reel-label">DECADE</div>
           <div class="reel-value" id="decadeValue">----</div>
         </div>
-        <div class="reel-x">+</div>
         <div class="reel" id="genreReel">
           <div class="reel-label">GENRE</div>
           <div class="reel-value" id="genreValue">----</div>
@@ -792,6 +832,44 @@
 <div id="modalRoot"></div>
 
 <script>
+/* ==================================================================
+   Firebase — Google sign-in + cross-device sync
+
+   Config values are public identifiers, not secrets — safe to embed in
+   client code (this is how every Firebase web app does it; access
+   control is enforced by the Firestore security rules, not by hiding
+   this object). This project ("Next Up Suite") is shared across the
+   whole planned app suite, not just this one.
+   ================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyADAPuMongfa8YII9PY39DWNeWuMnFknLc",
+  authDomain: "next-up-suite.firebaseapp.com",
+  projectId: "next-up-suite",
+  storageBucket: "next-up-suite.firebasestorage.app",
+  messagingSenderId: "517680626452",
+  appId: "1:517680626452:web:37b6ef5f9324d4beb36001",
+  measurementId: "G-44NFR9FPGX"
+};
+firebase.initializeApp(firebaseConfig);
+const fbAuth = firebase.auth();
+const fbDb = firebase.firestore();
+
+let currentUser = null; // set once signed in; null while signed out
+
+// Which localStorage/window.storage keys sync to the cloud when signed
+// in. Deliberately excludes anything device-local or easily regenerated
+// (the ratings/search caches, the resolved genre-ID map, warmup status)
+// — those stay local to each device rather than bloating the synced
+// document or fighting over which device's cache "wins."
+const SYNCED_KEYS = new Set([
+  'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
+  'custom_movie_additions', 'custom_movie_removals', 'enabled_decades',
+  'enabled_genres', 'enabled_content_ratings', 'enabled_languages',
+  'min_rating', 'max_rating_ceiling', 'require_critic_score',
+  'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
+  'data_source_pref', 'watchmode_api_key', 'color_theme'
+]);
+
 /* ==================================================================
    Curated movie database — decade (start year) -> genre -> [{title,year}]
    ================================================================== */
@@ -1084,12 +1162,149 @@ async function loadJSON(key, fallback){
 }
 async function saveJSON(key, value){
   if (HAS_CLAUDE_STORAGE){
-    try{ await window.storage.set(key, JSON.stringify(value)); return; }
-    catch(e){ console.error('Storage save failed for ' + key, e); return; }
+    try{ await window.storage.set(key, JSON.stringify(value)); }
+    catch(e){ console.error('Storage save failed for ' + key, e); }
+  } else {
+    warnStorageFallback();
+    try{ localStorage.setItem('fmn_' + key, JSON.stringify(value)); }
+    catch(e){ console.error('Local storage save failed for ' + key, e); }
   }
-  warnStorageFallback();
-  try{ localStorage.setItem('fmn_' + key, JSON.stringify(value)); }
-  catch(e){ console.error('Local storage save failed for ' + key, e); }
+  if (currentUser && SYNCED_KEYS.has(key)){
+    syncKeyToCloud(key, value); // fire-and-forget — local save above already succeeded either way
+  }
+}
+
+async function syncKeyToCloud(key, value){
+  try{
+    await fbDb.collection('users').doc(currentUser.uid)
+      .collection('nextUpApps').doc('movies')
+      .set({ [key]: value }, { merge: true });
+  } catch(e){
+    console.warn('Cloud sync failed for ' + key, e.message);
+  }
+}
+
+// Starts sign-in. Inside the Android app, Google actively blocks sign-in
+// popups from running inside an embedded WebView (a real, enforced
+// security policy — not something we can code around) — so on that
+// platform, sign-in has to happen natively instead. This detects which
+// context it's in and picks the right path; the browser-hosted website
+// version always uses the normal popup.
+function signInWithGoogle(){
+  const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signIn === 'function';
+  if (hasNativeBridge){
+    Android.signIn(); // result arrives async via window.onNativeGoogleSignIn below
+    return;
+  }
+  if (location.protocol === 'file:'){
+    // Firebase Auth's browser sign-in flow (and its session persistence)
+    // requires a real http(s) origin — it can't work when this file is
+    // opened directly rather than loaded from a hosted URL. This isn't a
+    // bug to fix in code; it only works once this is actually hosted
+    // somewhere (e.g. GitHub Pages) and opened via that address.
+    showAuthStatus('Google Sign-In needs the app loaded from a real web address (https://…) — it can\'t work when opening this file directly. Try it from the hosted version instead.');
+    return;
+  }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).catch(e => {
+    console.warn('Google sign-in failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+}
+
+// Called by the native Android side (MainActivity.kt) after it gets a
+// Google credential outside the WebView. Payload is a JSON string:
+// {success:true, idToken} or {success:false, error}.
+window.onNativeGoogleSignIn = function(payloadStr){
+  let payload;
+  try{ payload = JSON.parse(payloadStr); }
+  catch(e){ showAuthStatus('Sign-in failed: unexpected response from the app.'); return; }
+
+  if (!payload.success){
+    showAuthStatus('Sign-in failed: ' + (payload.error || 'unknown error'));
+    return;
+  }
+  const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
+  fbAuth.signInWithCredential(credential).catch(e => {
+    console.warn('Firebase sign-in with native credential failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+};
+
+async function signOutOfGoogle(){
+  try{ await fbAuth.signOut(); }
+  catch(e){ console.warn('Sign-out failed', e.message); }
+  // Also clears the native side's remembered credential state, if
+  // available, so the account picker shows fresh next time rather than
+  // silently reusing the last selection. Harmless no-op on the website.
+  if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
+    Android.signOutNative();
+  }
+}
+
+function showAuthStatus(text){
+  const el = document.getElementById('authStatus');
+  if (el){ el.textContent = text; el.style.display = text ? 'block' : 'none'; }
+}
+
+// Fires whenever sign-in state changes (including automatically on load,
+// if there's already a valid session — Firebase persists that itself).
+fbAuth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  renderAuthUI();
+  if (user) await syncOnSignIn(user);
+});
+
+// Runs once right after a sign-in is confirmed. If cloud data already
+// exists for this account (they've synced from another device before),
+// it's treated as authoritative and pulled down, replacing local state —
+// simple and predictable, though it does mean an unsynced change sitting
+// only on a *different* device could get overwritten the next time that
+// device reconnects. If there's no cloud data yet, this device's current
+// local state is pushed up as the starting point instead.
+async function syncOnSignIn(user){
+  showAuthStatus('Syncing…');
+  try{
+    const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('movies');
+    const snap = await ref.get();
+    if (snap.exists){
+      const data = snap.data();
+      for (const key of SYNCED_KEYS){
+        if (data[key] !== undefined){
+          if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(data[key]));
+          else localStorage.setItem('fmn_' + key, JSON.stringify(data[key]));
+        }
+      }
+      showAuthStatus('Synced from your account — reloading…');
+      location.reload(); // simplest reliable way to get every part of the app to re-read the newly-pulled state
+    } else {
+      const payload = {};
+      for (const key of SYNCED_KEYS){
+        payload[key] = await loadJSON(key, null);
+      }
+      await ref.set(payload);
+      showAuthStatus('');
+    }
+  } catch(e){
+    console.warn('Sync on sign-in failed', e.message);
+    showAuthStatus('Could not sync right now: ' + e.message);
+  }
+}
+
+function renderAuthUI(){
+  const signedOutBox = document.getElementById('authSignedOut');
+  const signedInBox = document.getElementById('authSignedIn');
+  if (!signedOutBox || !signedInBox) return; // shell not rendered yet
+  if (currentUser){
+    signedOutBox.style.display = 'none';
+    signedInBox.style.display = 'flex';
+    const firstName = (currentUser.displayName || currentUser.email || 'Signed in').split(' ')[0];
+    document.getElementById('authName').textContent = firstName;
+    document.getElementById('authName').title = currentUser.displayName || currentUser.email || '';
+  } else {
+    signedOutBox.style.display = 'block';
+    signedInBox.style.display = 'none';
+  }
 }
 
 async function savePicks(){ await saveJSON('movie_picks', picks); }
@@ -1598,6 +1813,7 @@ document.querySelectorAll('input[name=dataSource]').forEach(radio => {
 });
 
 function renderAdmin(){
+  renderAuthUI();
   renderThemeSwatches();
   populateCacheStatsDropdowns();
   updateCacheStats();
@@ -1882,6 +2098,9 @@ $('maxRatingSelect').addEventListener('change', async (e) => {
   }
   await saveMaxRating();
 });
+$('signInBtn').addEventListener('click', signInWithGoogle);
+$('signOutBtn').addEventListener('click', signOutOfGoogle);
+
 $('requireCriticScoreCheckbox').addEventListener('change', async (e) => {
   requireCriticScore = e.target.checked;
   await saveRequireCriticScore();
