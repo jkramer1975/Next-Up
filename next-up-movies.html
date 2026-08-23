@@ -1194,7 +1194,9 @@ async function syncKeyToCloud(key, value){
 // version always uses the normal popup.
 function signInWithGoogle(){
   const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signIn === 'function';
+  console.log('[signInWithGoogle] hasNativeBridge =', hasNativeBridge, '| typeof Android =', typeof Android);
   if (hasNativeBridge){
+    showAuthStatus('Opening Google sign-in…');
     Android.signIn(); // result arrives async via window.onNativeGoogleSignIn below
     return;
   }
@@ -1207,8 +1209,11 @@ function signInWithGoogle(){
     showAuthStatus('Google Sign-In needs the app loaded from a real web address (https://…) — it can\'t work when opening this file directly. Try it from the hosted version instead.');
     return;
   }
+  showAuthStatus('Opening sign-in…');
   const provider = new firebase.auth.GoogleAuthProvider();
-  fbAuth.signInWithPopup(provider).catch(e => {
+  fbAuth.signInWithPopup(provider).then(result => {
+    syncOnSignIn(result.user); // only right after a fresh sign-in — not on every app load
+  }).catch(e => {
     console.warn('Google sign-in failed', e.message);
     showAuthStatus('Sign-in failed: ' + e.message);
   });
@@ -1227,7 +1232,9 @@ window.onNativeGoogleSignIn = function(payloadStr){
     return;
   }
   const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
-  fbAuth.signInWithCredential(credential).catch(e => {
+  fbAuth.signInWithCredential(credential).then(result => {
+    syncOnSignIn(result.user); // only right after a fresh sign-in — not on every app load
+  }).catch(e => {
     console.warn('Firebase sign-in with native credential failed', e.message);
     showAuthStatus('Sign-in failed: ' + e.message);
   });
@@ -1249,12 +1256,18 @@ function showAuthStatus(text){
   if (el){ el.textContent = text; el.style.display = text ? 'block' : 'none'; }
 }
 
-// Fires whenever sign-in state changes (including automatically on load,
-// if there's already a valid session — Firebase persists that itself).
+// Fires whenever sign-in state changes, INCLUDING automatically on every
+// app load if there's already a valid session — Firebase persists that
+// itself. Deliberately does NOT trigger a cloud sync here — syncOnSignIn
+// (which pulls cloud data and reloads the page) is only ever called
+// directly from the two sign-in completion points above, right after an
+// actual new sign-in action. Calling it from here too was the bug: it
+// meant every ordinary app reopen (already signed in, session restored)
+// would re-trigger a pull-and-reload, which reloading the page then
+// immediately re-triggered again — an infinite loop.
 fbAuth.onAuthStateChanged(async (user) => {
   currentUser = user;
   renderAuthUI();
-  if (user) await syncOnSignIn(user);
 });
 
 // Runs once right after a sign-in is confirmed. If cloud data already
