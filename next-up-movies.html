@@ -869,7 +869,7 @@ const SYNCED_KEYS = new Set([
   'enabled_genres', 'enabled_content_ratings', 'enabled_languages',
   'min_rating', 'max_rating_ceiling', 'require_critic_score',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
-  'data_source_pref', 'watchmode_api_key', 'color_theme'
+  'data_source_pref', 'color_theme'
 ]);
 
 /* ==================================================================
@@ -1278,7 +1278,6 @@ const SYNCED_KEY_DEFAULTS = {
   custom_explicit_keywords: () => [],
   max_results: () => MAX_RESULTS_DEFAULT,
   data_source_pref: () => 'auto',
-  watchmode_api_key: () => null,
   color_theme: () => 'amber'
 };
 
@@ -1296,9 +1295,16 @@ async function resetLocalStateToDefaults(){
     if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(value));
     else localStorage.setItem('fmn_' + key, JSON.stringify(value));
   }
+  // watchmode_api_key is a shared, cross-app credential now (see
+  // syncWatchmodeKeyToCloud below) rather than per-app data, so it isn't
+  // in SYNCED_KEYS above — but signing out should still forget it on THIS
+  // device, same as everything else. This only clears the local copy; it
+  // never deletes the shared cloud value, since a TV/Books app signed in
+  // with the same account (or this same account on another device) still
+  // needs it to keep working.
   // These aren't synced themselves, but they're entirely derived from the
   // Watchmode key we just reset — leaving them would be stale/meaningless.
-  for (const key of ['watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_warmup_done']){
+  for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_warmup_done']){
     if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
     else localStorage.setItem('fmn_' + key, JSON.stringify(null));
   }
@@ -1349,6 +1355,24 @@ fbAuth.onAuthStateChanged(async (user) => {
 async function syncOnSignIn(user){
   showAuthStatus('Syncing…');
   try{
+    let pulledSharedKey = false;
+
+    // The Watchmode key is shared across the whole app suite, independent
+    // of whether THIS app's own per-app document exists yet — checked
+    // first so a key connected in a sibling app (TV, Books) is picked up
+    // here automatically, the same way this app's own key would show up
+    // there.
+    const wmRef = fbDb.collection('users').doc(user.uid).collection('sharedSettings').doc('watchmode');
+    const wmSnap = await wmRef.get();
+    if (wmSnap.exists){
+      const wmData = wmSnap.data();
+      if (wmData.watchmode_api_key){
+        if (HAS_CLAUDE_STORAGE) await window.storage.set('watchmode_api_key', JSON.stringify(wmData.watchmode_api_key));
+        else localStorage.setItem('fmn_watchmode_api_key', JSON.stringify(wmData.watchmode_api_key));
+        pulledSharedKey = true;
+      }
+    }
+
     const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('movies');
     const snap = await ref.get();
     if (snap.exists){
@@ -1372,7 +1396,20 @@ async function syncOnSignIn(user){
         if (val !== null) payload[key] = val; // never seed the cloud with a bare null for a key that's never actually been set locally
       }
       await ref.set(payload);
-      showAuthStatus('');
+      // If the shared Watchmode doc didn't exist yet and this device
+      // already has a key locally, seed the shared location with it too —
+      // so the very first app to connect a key is what future sibling
+      // apps (and future devices) pick up automatically.
+      if (!wmSnap.exists){
+        const localWmKey = await loadJSON('watchmode_api_key', null);
+        if (localWmKey) await syncWatchmodeKeyToCloud(localWmKey, user.uid);
+      }
+      if (pulledSharedKey){
+        showAuthStatus('Synced from your account — reloading…');
+        location.reload();
+      } else {
+        showAuthStatus('');
+      }
     }
   } catch(e){
     console.warn('Sync on sign-in failed', e.message);
@@ -1399,7 +1436,28 @@ function renderAuthUI(){
 async function savePicks(){ await saveJSON('movie_picks', picks); }
 async function saveCrew(){ await saveJSON('family_crew', crew); }
 async function saveTurnIndex(){ await saveJSON('turn_index', turnIndex); }
-async function saveWmKey(){ await saveJSON('watchmode_api_key', wmKey); }
+async function saveWmKey(){
+  await saveJSON('watchmode_api_key', wmKey);
+  if (currentUser) syncWatchmodeKeyToCloud(wmKey); // fire-and-forget — shared across the whole "Next Up" suite, not just this app
+}
+
+// The Watchmode key is intentionally NOT part of SYNCED_KEYS / the
+// per-app nextUpApps/movies document — it's account-level, shared across
+// every app in the suite, so it lives at users/{uid}/sharedSettings/watchmode
+// instead. Connecting it in one app (Movies, or later TV/Books) makes it
+// available in all of them automatically, since they'd all read from this
+// same shared location.
+async function syncWatchmodeKeyToCloud(key, uid){
+  const targetUid = uid || (currentUser && currentUser.uid);
+  if (!targetUid) return;
+  try{
+    await fbDb.collection('users').doc(targetUid)
+      .collection('sharedSettings').doc('watchmode')
+      .set({ watchmode_api_key: key }, { merge: true });
+  } catch(e){
+    console.warn('Cloud sync failed for shared Watchmode key', e.message);
+  }
+}
 async function saveWmGenreMap(){ await saveJSON('watchmode_genre_map', wmGenreMap); }
 async function saveWmAllGenreNames(){ await saveJSON('watchmode_all_genre_names', wmAllGenreNames); }
 async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
