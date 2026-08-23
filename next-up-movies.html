@@ -1285,7 +1285,11 @@ async function syncOnSignIn(user){
     if (snap.exists){
       const data = snap.data();
       for (const key of SYNCED_KEYS){
-        if (data[key] !== undefined){
+        // Treat a stored null exactly like a missing field — never write a
+        // literal "null" into local storage, which would otherwise get
+        // read back as a real (empty) value instead of falling through to
+        // the app's actual defaults.
+        if (data[key] !== undefined && data[key] !== null){
           if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(data[key]));
           else localStorage.setItem('fmn_' + key, JSON.stringify(data[key]));
         }
@@ -1295,7 +1299,8 @@ async function syncOnSignIn(user){
     } else {
       const payload = {};
       for (const key of SYNCED_KEYS){
-        payload[key] = await loadJSON(key, null);
+        const val = await loadJSON(key, null);
+        if (val !== null) payload[key] = val; // never seed the cloud with a bare null for a key that's never actually been set locally
       }
       await ref.set(payload);
       showAuthStatus('');
