@@ -1192,6 +1192,22 @@ async function syncKeyToCloud(key, value){
 // platform, sign-in has to happen natively instead. This detects which
 // context it's in and picks the right path; the browser-hosted website
 // version always uses the normal popup.
+// Guards syncOnSignIn so it only ever runs once per actual app
+// launch/session — sessionStorage specifically, not a plain JS variable,
+// because syncOnSignIn's own location.reload() would otherwise reset a
+// plain variable and let it fire again on the reloaded page, right back
+// into the same loop this was built to avoid. sessionStorage survives a
+// same-tab reload but resets on a genuinely new launch (tab/app closed
+// and reopened), which is exactly the "once per launch" behavior wanted.
+// Centralized here (rather than called separately from each sign-in
+// path) so an explicit sign-in and the auth-state listener firing for
+// that same event can't both trigger a sync.
+function triggerSyncOnce(user){
+  if (sessionStorage.getItem('nextup_resynced_this_session')) return;
+  sessionStorage.setItem('nextup_resynced_this_session', '1');
+  syncOnSignIn(user);
+}
+
 function signInWithGoogle(){
   const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signIn === 'function';
   console.log('[signInWithGoogle] hasNativeBridge =', hasNativeBridge, '| typeof Android =', typeof Android);
@@ -1212,7 +1228,7 @@ function signInWithGoogle(){
   showAuthStatus('Opening sign-in…');
   const provider = new firebase.auth.GoogleAuthProvider();
   fbAuth.signInWithPopup(provider).then(result => {
-    syncOnSignIn(result.user); // only right after a fresh sign-in — not on every app load
+    triggerSyncOnce(result.user);
   }).catch(e => {
     console.warn('Google sign-in failed', e.message);
     showAuthStatus('Sign-in failed: ' + e.message);
@@ -1233,12 +1249,60 @@ window.onNativeGoogleSignIn = function(payloadStr){
   }
   const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
   fbAuth.signInWithCredential(credential).then(result => {
-    syncOnSignIn(result.user); // only right after a fresh sign-in — not on every app load
+    triggerSyncOnce(result.user);
   }).catch(e => {
     console.warn('Firebase sign-in with native credential failed', e.message);
     showAuthStatus('Sign-in failed: ' + e.message);
   });
 };
+
+// The true fresh-install default for every synced key — these must match
+// exactly what init() falls back to when nothing's been saved yet, so
+// signing out genuinely looks like a first-ever run, not an arbitrary
+// blank state.
+const SYNCED_KEY_DEFAULTS = {
+  family_crew: () => [],
+  turn_index: () => 0,
+  movie_picks: () => [],
+  blocked_movies: () => [],
+  custom_movie_additions: () => ({}),
+  custom_movie_removals: () => ({}),
+  enabled_decades: () => DECADES.slice(),
+  enabled_genres: () => GENRES.slice(),
+  enabled_content_ratings: () => CONTENT_RATINGS.slice(),
+  enabled_languages: () => ['English'],
+  min_rating: () => 0,
+  max_rating_ceiling: () => 10,
+  require_critic_score: () => true,
+  filter_explicit_content: () => true,
+  custom_explicit_keywords: () => [],
+  max_results: () => MAX_RESULTS_DEFAULT,
+  data_source_pref: () => 'auto',
+  watchmode_api_key: () => null,
+  color_theme: () => 'amber'
+};
+
+// Resets every synced key back to its true default — this is what makes
+// signing out actually behave like signing out, rather than leaving
+// whatever was last synced sitting in local storage for the next person
+// to use this device/browser. Deliberately leaves the ratings/search
+// cache alone — that's not personal data, just cached movie metadata, and
+// clearing it would only cost the next connection extra API calls to
+// rebuild for no real benefit.
+async function resetLocalStateToDefaults(){
+  for (const key of SYNCED_KEYS){
+    const getDefault = SYNCED_KEY_DEFAULTS[key];
+    const value = getDefault ? getDefault() : null;
+    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(value));
+    else localStorage.setItem('fmn_' + key, JSON.stringify(value));
+  }
+  // These aren't synced themselves, but they're entirely derived from the
+  // Watchmode key we just reset — leaving them would be stale/meaningless.
+  for (const key of ['watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_warmup_done']){
+    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
+    else localStorage.setItem('fmn_' + key, JSON.stringify(null));
+  }
+}
 
 async function signOutOfGoogle(){
   try{ await fbAuth.signOut(); }
@@ -1249,6 +1313,10 @@ async function signOutOfGoogle(){
   if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
     Android.signOutNative();
   }
+  sessionStorage.removeItem('nextup_resynced_this_session'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
+  showAuthStatus('Signed out — resetting to defaults…');
+  await resetLocalStateToDefaults();
+  location.reload(); // same pattern as sign-in — the reliable way to get every part of the app to re-read the reset state
 }
 
 function showAuthStatus(text){
@@ -1258,16 +1326,17 @@ function showAuthStatus(text){
 
 // Fires whenever sign-in state changes, INCLUDING automatically on every
 // app load if there's already a valid session — Firebase persists that
-// itself. Deliberately does NOT trigger a cloud sync here — syncOnSignIn
-// (which pulls cloud data and reloads the page) is only ever called
-// directly from the two sign-in completion points above, right after an
-// actual new sign-in action. Calling it from here too was the bug: it
-// meant every ordinary app reopen (already signed in, session restored)
-// would re-trigger a pull-and-reload, which reloading the page then
-// immediately re-triggered again — an infinite loop.
+// itself. That's also exactly the moment a resync-on-launch is wanted:
+// if you were signed in on this device already, this is the one chance
+// to pick up whatever changed on another device since last time. Routed
+// through triggerSyncOnce so it can never fire more than once per actual
+// launch — without that guard, this would be the same infinite-reload
+// bug as before, since syncOnSignIn's own reload would just cause this
+// listener to fire again on the reloaded page.
 fbAuth.onAuthStateChanged(async (user) => {
   currentUser = user;
   renderAuthUI();
+  if (user) triggerSyncOnce(user);
 });
 
 // Runs once right after a sign-in is confirmed. If cloud data already
@@ -1410,18 +1479,28 @@ async function init(){
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
   // Migration: a genre added to the app after someone already saved their
   // filter selection (e.g. Fantasy/Western) should default to enabled for
-  // them too, not silently vanish from their spin pool.
-  const missingGenres = GENRES.filter(g => !enabledGenres.includes(g));
-  if (missingGenres.length){
-    enabledGenres = enabledGenres.concat(missingGenres);
+  // them too, not silently vanish from their spin pool — but a genre the
+  // user has deliberately unchecked must never get silently re-enabled
+  // just because it's also "missing" from their enabled list. The only way
+  // to tell those apart is to track which categories the app has actually
+  // seen before: only a category that's brand new since last time counts
+  // as "missing," never one that already existed and was just turned off.
+  const knownGenres = await loadJSON('known_genres', GENRES.slice()); // first run after this fix: treat everything current as already known, so nothing gets force-re-enabled once
+  const newlyAddedGenres = GENRES.filter(g => !knownGenres.includes(g));
+  if (newlyAddedGenres.length){
+    enabledGenres = enabledGenres.concat(newlyAddedGenres.filter(g => !enabledGenres.includes(g)));
     await saveEnabledGenres();
   }
+  await saveJSON('known_genres', GENRES.slice());
+
   enabledContentRatings = await loadJSON('enabled_content_ratings', CONTENT_RATINGS.slice());
-  const missingRatings = CONTENT_RATINGS.filter(r => !enabledContentRatings.includes(r));
-  if (missingRatings.length){
-    enabledContentRatings = enabledContentRatings.concat(missingRatings);
+  const knownContentRatings = await loadJSON('known_content_ratings', CONTENT_RATINGS.slice());
+  const newlyAddedRatings = CONTENT_RATINGS.filter(r => !knownContentRatings.includes(r));
+  if (newlyAddedRatings.length){
+    enabledContentRatings = enabledContentRatings.concat(newlyAddedRatings.filter(r => !enabledContentRatings.includes(r)));
     await saveEnabledContentRatings();
   }
+  await saveJSON('known_content_ratings', CONTENT_RATINGS.slice());
   minRating = await loadJSON('min_rating', 0);
   maxRating = await loadJSON('max_rating_ceiling', 10);
   requireCriticScore = await loadJSON('require_critic_score', true);
