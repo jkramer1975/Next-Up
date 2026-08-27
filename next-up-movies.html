@@ -678,6 +678,12 @@
         </div>
       </div>
 
+      <div class="card">
+        <h2>About</h2>
+        <p class="desc">Next Up - Movies is a free, independent project — not affiliated with, endorsed by, or sponsored by Watchmode, Google, or any streaming service. Movie data and streaming availability come from Watchmode when connected and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
+        <p class="desc" style="margin-top:8px;"><a href="privacy.html">Privacy Policy</a></p>
+      </div>
+
     </div>
 
     <!-- ===================== MOVIE FILTERS TAB ===================== -->
@@ -718,6 +724,16 @@
           <button class="btn-ghost" id="ratingsNoneBtn">Select None</button>
         </div>
         <div id="contentRatingToggles" class="toggle-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Streaming Services</h2>
+        <p class="desc">Uncheck a service to hide titles that aren't available on any of the remaining checked ones. This is applied by Watchmode itself during the search, so it only affects Watchmode-sourced spins — the built-in list isn't checked against streaming availability until you actually open a title.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="servicesAllBtn">Select All</button>
+          <button class="btn-ghost" id="servicesNoneBtn">Select None</button>
+        </div>
+        <div id="streamingServiceToggles" class="toggle-grid"></div>
       </div>
 
       <div class="card">
@@ -867,6 +883,7 @@ const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
   'custom_movie_additions', 'custom_movie_removals', 'enabled_decades',
   'enabled_genres', 'enabled_content_ratings', 'enabled_languages',
+  'enabled_streaming_services',
   'min_rating', 'max_rating_ceiling', 'require_critic_score',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
   'data_source_pref', 'color_theme'
@@ -976,6 +993,7 @@ function getEffectiveMovieList(decade, genre){
   return kept.concat(additions);
 }
 const CONTENT_RATINGS = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'NR', 'NO_DATA'];
+const STREAMING_SERVICES = ['Apple TV+', 'Disney+', 'Hulu', 'Max', 'Netflix', 'Paramount+', 'Peacock', 'Prime Video'];
 const CONTENT_RATING_LABELS = { NO_DATA: 'No Rating Available' };
 // Confirmed: Watchmode's discovery endpoint supports a `languages` param
 // (comma-separated 2-letter ISO 639 codes, e.g. "en,es") — unlike content
@@ -1009,6 +1027,17 @@ function normalizeLanguage(raw){
 // something Watchmode's param can express.
 function enabledLanguageCodes(){
   return enabledLanguages.map(l => LANG_NAME_TO_CODE[l]).filter(Boolean);
+}
+// Resolved Watchmode source IDs for whichever streaming services are
+// currently enabled — returns null when everything's enabled (no actual
+// restriction), so the caller can omit the source_ids param entirely
+// rather than sending a pointless "every service" list.
+function enabledStreamingSourceIds(){
+  if (!wmSourceMap) return null;
+  if (enabledStreamingServices.length === STREAMING_SERVICES.length) return null; // nothing actually excluded
+  const ids = [];
+  enabledStreamingServices.forEach(s => { if (wmSourceMap[s]) ids.push(...wmSourceMap[s]); });
+  return ids.length ? ids : null;
 }
 // User-configurable in Admin — how many titles a Watchmode spin pulls back.
 // Requesting more costs nothing extra for discovery itself (still one call
@@ -1069,6 +1098,8 @@ let wmKey = null;        // Watchmode
 let dataSourcePref = 'auto'; // 'auto' | 'builtin'
 let wmGenreMap = null;   // resolved once per key: { "Action": <watchmode genre id>, ... }
 let wmAllGenreNames = null; // full table: { <watchmode genre id>: "Adventure", ... } — covers genres outside our 8 spin categories
+let wmSourceMap = null;  // resolved once per key: { "Netflix": [<watchmode source id>, ...], ... } — mirrors wmGenreMap
+let enabledStreamingServices = [];
 let wmWarmupDone = false;
 const wmDetailsCache = new Map(); // watchmode title id -> full details/sources result, used at pick time (session only)
 const wmRatingsCache = new Map(); // watchmode title id -> {userRating, usRating} only, used for the whole grid (session only)
@@ -1270,6 +1301,7 @@ const SYNCED_KEY_DEFAULTS = {
   enabled_decades: () => DECADES.slice(),
   enabled_genres: () => GENRES.slice(),
   enabled_content_ratings: () => CONTENT_RATINGS.slice(),
+  enabled_streaming_services: () => STREAMING_SERVICES.slice(),
   enabled_languages: () => ['English'],
   min_rating: () => 0,
   max_rating_ceiling: () => 10,
@@ -1304,7 +1336,7 @@ async function resetLocalStateToDefaults(){
   // needs it to keep working.
   // These aren't synced themselves, but they're entirely derived from the
   // Watchmode key we just reset — leaving them would be stale/meaningless.
-  for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_warmup_done']){
+  for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_source_map', 'watchmode_warmup_done']){
     if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
     else localStorage.setItem('fmn_' + key, JSON.stringify(null));
   }
@@ -1460,6 +1492,8 @@ async function syncWatchmodeKeyToCloud(key, uid){
 }
 async function saveWmGenreMap(){ await saveJSON('watchmode_genre_map', wmGenreMap); }
 async function saveWmAllGenreNames(){ await saveJSON('watchmode_all_genre_names', wmAllGenreNames); }
+async function saveWmSourceMap(){ await saveJSON('watchmode_source_map', wmSourceMap); }
+async function saveEnabledStreamingServices(){ await saveJSON('enabled_streaming_services', enabledStreamingServices); }
 async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
 async function saveEnabledDecades(){ await saveJSON('enabled_decades', enabledDecades); }
 async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
@@ -1532,6 +1566,7 @@ async function init(){
   wmKey = await loadJSON('watchmode_api_key', null);
   wmGenreMap = await loadJSON('watchmode_genre_map', null);
   wmAllGenreNames = await loadJSON('watchmode_all_genre_names', null);
+  wmSourceMap = await loadJSON('watchmode_source_map', null);
   dataSourcePref = await loadJSON('data_source_pref', 'auto');
   enabledDecades = await loadJSON('enabled_decades', DECADES.slice());
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
@@ -1559,6 +1594,16 @@ async function init(){
     await saveEnabledContentRatings();
   }
   await saveJSON('known_content_ratings', CONTENT_RATINGS.slice());
+
+  enabledStreamingServices = await loadJSON('enabled_streaming_services', STREAMING_SERVICES.slice());
+  const knownStreamingServices = await loadJSON('known_streaming_services', STREAMING_SERVICES.slice());
+  const newlyAddedServices = STREAMING_SERVICES.filter(s => !knownStreamingServices.includes(s));
+  if (newlyAddedServices.length){
+    enabledStreamingServices = enabledStreamingServices.concat(newlyAddedServices.filter(s => !enabledStreamingServices.includes(s)));
+    await saveEnabledStreamingServices();
+  }
+  await saveJSON('known_streaming_services', STREAMING_SERVICES.slice());
+
   minRating = await loadJSON('min_rating', 0);
   maxRating = await loadJSON('max_rating_ceiling', 10);
   requireCriticScore = await loadJSON('require_critic_score', true);
@@ -1603,6 +1648,16 @@ async function init(){
       await saveWmGenreMap();
       await saveWmAllGenreNames();
     } catch(e){ console.warn('Could not refresh genre map for newly-added genres', e.message); }
+  }
+
+  // Same reasoning as the genre map refresh above — anyone who connected a
+  // key before this filter existed needs their source map resolved once.
+  const sourceMapNeedsRefresh = wmKey && (!wmSourceMap || STREAMING_SERVICES.some(s => !(s in wmSourceMap)));
+  if (sourceMapNeedsRefresh){
+    try{
+      wmSourceMap = await resolveWmSources();
+      await saveWmSourceMap();
+    } catch(e){ console.warn('Could not refresh streaming source map', e.message); }
   }
 
   renderCrew();
@@ -1889,6 +1944,31 @@ async function resolveWmGenres(){
   return { map, allNames };
 }
 
+// Mirrors resolveWmGenres exactly — Watchmode's numeric source IDs aren't
+// something to hardcode and hope stay correct, so this resolves the
+// current IDs for our curated service list by name every time a key
+// connects, same reasoning as the genre map.
+async function resolveWmSources(){
+  const list = await wmFetch('/sources/', {}, 0, 6, 'Resolve streaming source ID map');
+  const arr = Array.isArray(list) ? list : (list.sources || []);
+  const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, '');
+  const aliases = {
+    appletv: ['appletv', 'appletvplus'],
+    disney: ['disney', 'disneyplus'],
+    max: ['max', 'hbomax'],
+    paramount: ['paramount', 'paramountplus'],
+    primevideo: ['primevideo', 'amazonprimevideo', 'amazonvideo']
+  };
+  const map = {};
+  STREAMING_SERVICES.forEach(s => {
+    const target = norm(s);
+    const candidates = aliases[target] || [target];
+    const hits = arr.filter(entry => candidates.includes(norm(entry.name || '')));
+    if (hits.length) map[s] = hits.map(h => h.source_id != null ? h.source_id : h.id);
+  });
+  return map;
+}
+
 $('saveWmKeyBtn').addEventListener('click', async () => {
   const val = $('wmKeyInput').value.trim();
   $('wmKeyError').style.display = 'none';
@@ -1907,6 +1987,8 @@ $('saveWmKeyBtn').addEventListener('click', async () => {
     await saveWmKey();
     await saveWmGenreMap();
     await saveWmAllGenreNames();
+    wmSourceMap = await resolveWmSources();
+    await saveWmSourceMap();
     // First-ever connection — make sure the new key actually gets used,
     // even if "Always use built-in list only" was selected before there
     // was a key to use.
@@ -1940,10 +2022,12 @@ $('removeWmKeyBtn').addEventListener('click', async () => {
   wmKey = null;
   wmGenreMap = null;
   wmAllGenreNames = null;
+  wmSourceMap = null;
   wmDetailsCache.clear();
   await saveWmKey();
   await saveWmGenreMap();
   await saveWmAllGenreNames();
+  await saveWmSourceMap();
   renderAdmin();
   updateSourceNote();
 });
@@ -2043,6 +2127,21 @@ function renderAdmin(){
       else { enabledContentRatings = enabledContentRatings.filter(x => x !== r); }
       renderAdmin();
       await saveEnabledContentRatings();
+    });
+  });
+
+  $('streamingServiceToggles').innerHTML = STREAMING_SERVICES.map(s => `
+    <label class="toggle-chip ${enabledStreamingServices.includes(s) ? '' : 'off'}">
+      <input type="checkbox" data-service="${escapeHtml(s)}" ${enabledStreamingServices.includes(s) ? 'checked' : ''}> ${escapeHtml(s)}
+    </label>
+  `).join('');
+  $('streamingServiceToggles').querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const s = cb.dataset.service;
+      if (cb.checked) { if (!enabledStreamingServices.includes(s)) enabledStreamingServices.push(s); }
+      else { enabledStreamingServices = enabledStreamingServices.filter(x => x !== s); }
+      renderAdmin();
+      await saveEnabledStreamingServices();
     });
   });
 
@@ -2216,6 +2315,8 @@ $('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES
 $('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
 $('ratingsAllBtn').addEventListener('click', async () => { enabledContentRatings = CONTENT_RATINGS.slice(); renderAdmin(); await saveEnabledContentRatings(); });
 $('ratingsNoneBtn').addEventListener('click', async () => { enabledContentRatings = []; renderAdmin(); await saveEnabledContentRatings(); });
+$('servicesAllBtn').addEventListener('click', async () => { enabledStreamingServices = STREAMING_SERVICES.slice(); renderAdmin(); await saveEnabledStreamingServices(); });
+$('servicesNoneBtn').addEventListener('click', async () => { enabledStreamingServices = []; renderAdmin(); await saveEnabledStreamingServices(); });
 $('languagesAllBtn').addEventListener('click', async () => { enabledLanguages = LANGUAGES.slice(); renderAdmin(); await saveEnabledLanguages(); });
 $('languagesNoneBtn').addEventListener('click', async () => { enabledLanguages = []; renderAdmin(); await saveEnabledLanguages(); });
 const RATING_GAP = 1;
@@ -2846,6 +2947,8 @@ async function fetchWatchmodeMoviesPage(startYear, genreName, page, limit, reaso
   if (requireCriticScore){ params.critic_score_low = '0'; params.critic_score_high = '100'; }
   const langCodes = enabledLanguageCodes();
   if (langCodes.length) params.languages = langCodes.join(',');
+  const sourceIds = enabledStreamingSourceIds();
+  if (sourceIds) params.source_ids = sourceIds.join(',');
   const data = await wmFetch('/list-titles/', params, 0, 6, reason || 'Discovery list');
   const titles = data.titles || data.title_results || [];
   return titles.slice(0, limit).map(t => ({
