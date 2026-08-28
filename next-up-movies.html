@@ -490,6 +490,7 @@
   .modal{
     background: var(--surface); border:1px solid var(--line); border-radius: 10px;
     padding: 26px; max-width: 380px; width:100%; text-align:center;
+    max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
   .modal img{ width: 120px; border-radius: 6px; margin-bottom: 12px; }
   .modal .m-icon{ font-size: 42px; margin-bottom: 8px; }
@@ -892,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.9.1';
+const APP_VERSION = '1.10.0';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -3465,6 +3466,17 @@ function backfillGridCard(movie){
 }
 
 function closeModal(){ $('modalRoot').innerHTML = ''; }
+
+// Called by the native Android side (MainActivity.kt) when the device back
+// button is pressed. Returning true means "handled here, don't exit the
+// app" — false means "nothing to close, go ahead and exit."
+window.handleNativeBackPress = function(){
+  if ($('modalBackdrop')){
+    closeModal();
+    return true;
+  }
+  return false;
+};
 
 async function confirmPick(movie){
   const picker = crew.length ? crew[turnIndex] : 'Unknown';

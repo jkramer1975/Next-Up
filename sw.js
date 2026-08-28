@@ -1,4 +1,4 @@
-const CACHE_NAME = 'next-up-movies-v12';
+const CACHE_NAME = 'next-up-movies-v13';
 const APP_SHELL = [
   'next-up-movies.html',
   'manifest.json',
