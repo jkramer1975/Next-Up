@@ -733,6 +733,7 @@
           <button class="btn-ghost" id="servicesNoneBtn">Select None</button>
         </div>
         <div id="streamingServiceToggles" class="toggle-grid"></div>
+        <p class="desc" id="streamingSourceNamesHint" style="margin-top:10px; display:none;"></p>
       </div>
 
       <div class="card">
@@ -891,7 +892,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.9.0';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -1127,6 +1128,7 @@ let dataSourcePref = 'auto'; // 'auto' | 'builtin'
 let wmGenreMap = null;   // resolved once per key: { "Action": <watchmode genre id>, ... }
 let wmAllGenreNames = null; // full table: { <watchmode genre id>: "Adventure", ... } — covers genres outside our 8 spin categories
 let wmSourceMap = null;  // resolved once per key: { "Netflix": [<watchmode source id>, ...], ... } — mirrors wmGenreMap
+let wmSourceNames = null; // { "Netflix": ["Netflix"], "Apple TV+": [...raw Watchmode names that matched...] } — purely diagnostic, not used for filtering itself
 let enabledStreamingServices = [];
 // When true, streaming availability is entirely left out of the Watchmode
 // request — not just "everything happens to be checked," an explicit,
@@ -1146,7 +1148,9 @@ let ignoreStreamingService = true;
 // default-checked state of the named services.
 let includeFreeServices = true;
 let wmWarmupDone = false;
-const wmDetailsCache = new Map(); // watchmode title id -> full details/sources result, used at pick time (session only)
+const wmDetailsCache = new Map(); // watchmode title id -> {data, fetchedAt} — persisted locally with a staleness check, since streaming availability changes over time unlike ratings/posters
+const WM_DETAILS_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — pick-time data (streaming availability especially) older than this is treated as a miss and re-fetched
+const WM_DETAILS_PRUNE_MS = 30 * 24 * 60 * 60 * 1000; // entries older than this get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
 const wmRatingsCache = new Map(); // watchmode title id -> {userRating, usRating} only, used for the whole grid (session only)
 const wmSearchCache = new Map(); // "title|year" -> watchmode id (or null for a confirmed no-match), used to enrich the built-in list
 let enabledDecades = DECADES.slice();
@@ -1383,7 +1387,7 @@ async function resetLocalStateToDefaults(){
   // needs it to keep working.
   // These aren't synced themselves, but they're entirely derived from the
   // Watchmode key we just reset — leaving them would be stale/meaningless.
-  for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_source_map', 'watchmode_warmup_done']){
+  for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_source_map', 'watchmode_source_names', 'watchmode_warmup_done']){
     if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
     else localStorage.setItem('fmn_' + key, JSON.stringify(null));
   }
@@ -1540,6 +1544,7 @@ async function syncWatchmodeKeyToCloud(key, uid){
 async function saveWmGenreMap(){ await saveJSON('watchmode_genre_map', wmGenreMap); }
 async function saveWmAllGenreNames(){ await saveJSON('watchmode_all_genre_names', wmAllGenreNames); }
 async function saveWmSourceMap(){ await saveJSON('watchmode_source_map', wmSourceMap); }
+async function saveWmSourceNames(){ await saveJSON('watchmode_source_names', wmSourceNames); }
 async function saveEnabledStreamingServices(){ await saveJSON('enabled_streaming_services', enabledStreamingServices); }
 async function saveIgnoreStreamingService(){ await saveJSON('ignore_streaming_service', ignoreStreamingService); }
 async function saveIncludeFreeServices(){ await saveJSON('include_free_services', includeFreeServices); }
@@ -1603,6 +1608,14 @@ async function saveWmSearchCache(){
   wmSearchCache.forEach((v, k) => { obj[k] = v; });
   await saveJSON('watchmode_search_cache', obj);
 }
+async function saveWmDetailsCache(){
+  const obj = {};
+  const cutoff = Date.now() - WM_DETAILS_PRUNE_MS;
+  wmDetailsCache.forEach((v, k) => {
+    if (v && v.fetchedAt && v.fetchedAt >= cutoff) obj[k] = v; // drop long-abandoned entries rather than let this grow forever
+  });
+  await saveJSON('watchmode_details_cache', obj);
+}
 async function saveWmWarmupDone(){ await saveJSON('watchmode_warmup_done', wmWarmupDone); }
 
 /* ==================================================================
@@ -1616,6 +1629,7 @@ async function init(){
   wmGenreMap = await loadJSON('watchmode_genre_map', null);
   wmAllGenreNames = await loadJSON('watchmode_all_genre_names', null);
   wmSourceMap = await loadJSON('watchmode_source_map', null);
+  wmSourceNames = await loadJSON('watchmode_source_names', null);
   dataSourcePref = await loadJSON('data_source_pref', 'auto');
   enabledDecades = await loadJSON('enabled_decades', DECADES.slice());
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
@@ -1680,6 +1694,11 @@ async function init(){
   Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
   const savedSearchCache = await loadJSON('watchmode_search_cache', {});
   Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
+  const savedDetailsCache = await loadJSON('watchmode_details_cache', {});
+  const detailsCutoff = Date.now() - WM_DETAILS_STALE_MS;
+  Object.entries(savedDetailsCache).forEach(([k, v]) => {
+    if (v && v.fetchedAt && v.fetchedAt >= detailsCutoff) wmDetailsCache.set(k, v); // stale entries just aren't loaded — same effect as a miss, no separate cleanup pass needed
+  });
   wmWarmupDone = await loadJSON('watchmode_warmup_done', false);
 
   // Migration: a saved genre map from before Fantasy/Western existed won't
@@ -1707,8 +1726,11 @@ async function init(){
   const sourceMapNeedsRefresh = wmKey && (!wmSourceMap || STREAMING_SERVICES.some(s => !(s in wmSourceMap)));
   if (sourceMapNeedsRefresh){
     try{
-      wmSourceMap = await resolveWmSources();
+      const { map, names } = await resolveWmSources();
+      wmSourceMap = map;
+      wmSourceNames = names;
       await saveWmSourceMap();
+      await saveWmSourceNames();
     } catch(e){ console.warn('Could not refresh streaming source map', e.message); }
   }
 
@@ -2013,22 +2035,33 @@ async function resolveWmGenres(){
 async function resolveWmSources(){
   const list = await wmFetch('/sources/', {}, 0, 6, 'Resolve streaming source ID map');
   const arr = Array.isArray(list) ? list : (list.sources || []);
-  const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, '');
+  // Keeps '+' as a real character rather than stripping it — "Apple TV+"
+  // (the subscription service) and "Apple TV" (Apple's separate iTunes-
+  // style rental/purchase storefront) are two different Watchmode sources
+  // that would otherwise both normalize to the identical string "appletv",
+  // silently merging an unrelated pay-per-title catalog into what's
+  // supposed to be a subscription-only filter. Same risk applies to
+  // Disney+ and Paramount+, so this protects all three, not just one.
+  const norm = (s) => s.toLowerCase().replace(/[^a-z+]/g, '');
   const aliases = {
-    appletv: ['appletv', 'appletvplus'],
-    disney: ['disney', 'disneyplus'],
+    'appletv+': ['appletv+', 'appletvplus'],
+    'disney+': ['disney+', 'disneyplus'],
     max: ['max', 'hbomax'],
-    paramount: ['paramount', 'paramountplus'],
+    'paramount+': ['paramount+', 'paramountplus'],
     primevideo: ['primevideo', 'amazonprimevideo', 'amazonvideo']
   };
   const map = {};
+  const names = {};
   STREAMING_SERVICES.forEach(s => {
     const target = norm(s);
     const candidates = aliases[target] || [target];
     const hits = arr.filter(entry => candidates.includes(norm(entry.name || '')));
-    if (hits.length) map[s] = hits.map(h => h.source_id != null ? h.source_id : h.id);
+    if (hits.length){
+      map[s] = hits.map(h => h.source_id != null ? h.source_id : h.id);
+      names[s] = hits.map(h => h.name);
+    }
   });
-  return map;
+  return { map, names };
 }
 
 $('saveWmKeyBtn').addEventListener('click', async () => {
@@ -2049,8 +2082,11 @@ $('saveWmKeyBtn').addEventListener('click', async () => {
     await saveWmKey();
     await saveWmGenreMap();
     await saveWmAllGenreNames();
-    wmSourceMap = await resolveWmSources();
+    const sourceResolved = await resolveWmSources();
+    wmSourceMap = sourceResolved.map;
+    wmSourceNames = sourceResolved.names;
     await saveWmSourceMap();
+    await saveWmSourceNames();
     // First-ever connection — make sure the new key actually gets used,
     // even if "Always use built-in list only" was selected before there
     // was a key to use.
@@ -2084,11 +2120,14 @@ $('removeWmKeyBtn').addEventListener('click', async () => {
   wmGenreMap = null;
   wmAllGenreNames = null;
   wmSourceMap = null;
+  wmSourceNames = null;
   wmDetailsCache.clear();
   await saveWmKey();
   await saveWmGenreMap();
   await saveWmAllGenreNames();
   await saveWmSourceMap();
+  await saveWmSourceNames();
+  await saveWmDetailsCache();
   renderAdmin();
   updateSourceNote();
 });
@@ -2220,6 +2259,21 @@ function renderAdmin(){
     renderAdmin();
     await saveIncludeFreeServices();
   });
+
+  const namesHint = $('streamingSourceNamesHint');
+  if (!ignoreStreamingService && wmSourceNames && enabledStreamingServices.length){
+    const lines = enabledStreamingServices
+      .filter(s => wmSourceNames[s])
+      .map(s => `${s} → matched: ${wmSourceNames[s].join(', ')}`);
+    if (lines.length){
+      namesHint.innerHTML = 'What Watchmode actually matched for your checked services (useful for spotting an unwanted match):<br>' + lines.map(l => escapeHtml(l)).join('<br>');
+      namesHint.style.display = 'block';
+    } else {
+      namesHint.style.display = 'none';
+    }
+  } else {
+    namesHint.style.display = 'none';
+  }
 
   $('languageToggles').innerHTML = LANGUAGES.map(l => `
     <label class="toggle-chip ${enabledLanguages.includes(l) ? '' : 'off'}">
@@ -3121,13 +3175,28 @@ async function buildWatchmodePool(decade, genre){
   // Full pass through the local cache FIRST — zero API calls — before ever
   // reaching for Watchmode. With a well-warmed cache this can fully satisfy
   // a spin on its own.
+  //
+  // BUT: the local cache only stores rating/genre/poster data — never
+  // streaming availability, which is deliberately looked up lazily, only
+  // when a title is actually clicked, specifically to avoid an extra API
+  // call per candidate. That means a cached title (possibly fetched
+  // during an earlier session under a different or no streaming
+  // restriction at all) can never be trusted to match a *currently*
+  // active streaming filter. So whenever one is in effect, this shortcut
+  // is skipped entirely and every result instead comes from a live,
+  // properly source-restricted Watchmode query — costing the instant
+  // zero-call spin this cache normally provides, but that's the right
+  // trade for actually respecting the filter you've set rather than
+  // silently ignoring it for anything already cached.
   setSpinStatus('Checking local cache…');
   const seenIds = new Set();
   let pool = [];
-  getCachedMoviesForCombo(decade, genre).forEach(m => {
-    pool.push(m);
-    seenIds.add(m.watchmodeId);
-  });
+  if (ignoreStreamingService){
+    getCachedMoviesForCombo(decade, genre).forEach(m => {
+      pool.push(m);
+      seenIds.add(m.watchmodeId);
+    });
+  }
 
   let { survivors } = computeFilteredSurvivors(pool);
   let didLiveFetch = false;
@@ -3420,7 +3489,8 @@ async function confirmPick(movie){
 
 async function fetchWatchmodeExtras(movie){
   const cacheKey = movie.watchmodeId;
-  if (wmDetailsCache.has(cacheKey)) return wmDetailsCache.get(cacheKey);
+  const cached = wmDetailsCache.get(cacheKey);
+  if (cached && cached.fetchedAt >= Date.now() - WM_DETAILS_STALE_MS) return cached.data;
   let trailerUrl = null, streamNames = [], userRating = null, criticScore = null, usRating = null, posterUrl = null, genres = null, description = null;
   let details = null;
   try{
@@ -3453,7 +3523,8 @@ async function fetchWatchmodeExtras(movie){
   }
 
   const result = { trailerUrl, streamNames, userRating, criticScore, usRating, posterUrl, genres, description };
-  wmDetailsCache.set(cacheKey, result);
+  wmDetailsCache.set(cacheKey, { data: result, fetchedAt: Date.now() });
+  saveWmDetailsCache(); // fire-and-forget — don't block on a local storage write
   return result;
 }
 
