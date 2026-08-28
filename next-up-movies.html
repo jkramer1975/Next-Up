@@ -733,7 +733,7 @@
           <button class="btn-ghost" id="servicesNoneBtn">Select None</button>
         </div>
         <div id="streamingServiceToggles" class="toggle-grid"></div>
-        <p class="desc" id="streamingSourceNamesHint" style="margin-top:10px; display:none;"></p>
+        <p class="error" id="streamingSourceNamesHint" style="margin-top:10px; display:none;"></p>
       </div>
 
       <div class="card">
@@ -892,7 +892,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -2262,11 +2262,9 @@ function renderAdmin(){
 
   const namesHint = $('streamingSourceNamesHint');
   if (!ignoreStreamingService && wmSourceNames && enabledStreamingServices.length){
-    const lines = enabledStreamingServices
-      .filter(s => wmSourceNames[s])
-      .map(s => `${s} → matched: ${wmSourceNames[s].join(', ')}`);
-    if (lines.length){
-      namesHint.innerHTML = 'What Watchmode actually matched for your checked services (useful for spotting an unwanted match):<br>' + lines.map(l => escapeHtml(l)).join('<br>');
+    const unmatched = enabledStreamingServices.filter(s => !wmSourceNames[s] || !wmSourceNames[s].length);
+    if (unmatched.length){
+      namesHint.innerHTML = unmatched.map(s => escapeHtml(`${s} → Match Not Found`)).join('<br>');
       namesHint.style.display = 'block';
     } else {
       namesHint.style.display = 'none';
