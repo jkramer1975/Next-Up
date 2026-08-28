@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Next Up - Movies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #14141a;
+    --surface: #1e1e27;
+    --amber: #f2a93b;
+    --cream: #efe7da;
+    --muted: #8b8b98;
+    --line: #34343f;
+    --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background: var(--bg); color: var(--cream);
+    font-family: var(--font-body); line-height: 1.6;
+  }
+  .wrap{ max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1{
+    font-family: var(--font-display); font-size: 42px; letter-spacing: 1px;
+    color: var(--amber); margin: 0 0 4px;
+  }
+  .updated{ color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+  h2{
+    font-family: var(--font-display); font-size: 24px; letter-spacing: 0.5px;
+    color: var(--amber); margin: 36px 0 10px;
+  }
+  p, li{ font-size: 15px; color: var(--cream); }
+  ul{ padding-left: 22px; }
+  li{ margin-bottom: 8px; }
+  a{ color: var(--amber); }
+  .card{
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 20px 22px; margin-top: 12px;
+  }
+  .back{
+    display: inline-block; margin-bottom: 24px; color: var(--muted);
+    text-decoration: none; font-size: 14px;
+  }
+  .back:hover{ color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="next-up-movies.html">← Back to Next Up - Movies</a>
+  <h1>Privacy Policy</h1>
+  <div class="updated">Last updated: [DATE]</div>
+
+  <p>This policy covers Next Up - Movies (the "App"), including both the website version and the Android app. It's meant to plainly describe what data the App collects and why — not legal boilerplate you have to dig through.</p>
+
+  <h2>The short version</h2>
+  <div class="card">
+    <p>If you don't sign in, nothing you do in this App ever leaves your device — everything (your crew list, watch history, filters, and settings) stays in local storage on that device only. If you sign in with Google, that same data syncs to a private Google Firestore database tied to your account, so it can follow you across your devices. Either way, the App doesn't run ads, doesn't use any analytics or tracking service, and doesn't sell or share your data with anyone.</p>
+  </div>
+
+  <h2>Information the App stores</h2>
+  <ul>
+    <li><strong>If you sign in with Google:</strong> your name and email address, as provided by Google, used only to identify your account and keep your data separate from anyone else's.</li>
+    <li><strong>App data you create:</strong> names you enter for your "crew," your watch history, your blocked-titles list, any customizations to the built-in movie list, and your filter/admin preferences (genres, ratings, color theme, etc.).</li>
+    <li><strong>Your own Watchmode API key,</strong> if you choose to connect one — stored so you don't have to re-enter it, never seen or used by anyone but you.</li>
+  </ul>
+  <p>None of this is used for advertising, profiling, or anything beyond making the App itself work the way you've set it up.</p>
+
+  <h2>Where your data is stored</h2>
+  <ul>
+    <li><strong>Signed out:</strong> only in your browser's or app's local storage, on that device. Nothing is transmitted anywhere except requests you make to Watchmode (see below).</li>
+    <li><strong>Signed in:</strong> the same data is also stored in Google Firestore, a cloud database, secured so that only your own signed-in account can read or write it. As the developer, I have standard administrative access to this Firebase project (as anyone running a Firebase-backed app does), but I don't access, view, or use individual users' data in the ordinary course of running the App.</li>
+  </ul>
+
+  <h2>Third-party services this App talks to</h2>
+  <ul>
+    <li><strong>Google Sign-In / Firebase</strong> — handles authentication and the optional cloud sync described above. Google's own privacy policy governs how they handle your account and authentication data.</li>
+    <li><strong>Watchmode</strong> — only if you connect your own personal API key. When you do, your device sends requests directly to Watchmode's API (movie titles, ratings, streaming availability) using your key. This isn't a shared or pooled key — it's yours, and your usage is governed by <a href="https://api.watchmode.com/tc" target="_blank" rel="noopener">Watchmode's own terms</a>.</li>
+  </ul>
+  <p>The App does not use any advertising network, analytics service, or third-party tracking of any kind at this time. If that ever changes, this page will be updated first.</p>
+
+  <h2>Children's privacy</h2>
+  <p>This App is intended for general family use, but the Google Sign-In feature itself is intended for users old enough to hold their own Google account per Google's own terms. It isn't directed at collecting information from children under 13.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>You can use the entire App without ever signing in — nothing about its core functionality requires an account.</li>
+    <li>Signing out resets your local device back to defaults and stops any further syncing, though it doesn't delete what's already stored in the cloud for your account.</li>
+    <li>To request full deletion of your account's data from the App's database, contact the email below.</li>
+  </ul>
+
+  <h2>Changes to this policy</h2>
+  <p>If how the App handles data changes — for example, if advertising or analytics is ever added — this page will be updated to reflect that before the change takes effect.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy or your data: <a href="mailto:[YOUR EMAIL]">[YOUR EMAIL]</a></p>
+</div>
+</body>
+</html>
