@@ -717,16 +717,6 @@
       </div>
 
       <div class="card">
-        <h2>Content Ratings</h2>
-        <p class="desc">Uncheck a rating to hide titles Watchmode has confirmed to carry it. "NR" is for titles explicitly marked Not Rated by Watchmode; "No Rating Available" is separate — it covers titles Watchmode simply has no content rating on file for at all. This filter only affects Watchmode-sourced spins — the built-in list has no rating data to filter on.</p>
-        <div class="select-all-row">
-          <button class="btn-ghost" id="ratingsAllBtn">Select All</button>
-          <button class="btn-ghost" id="ratingsNoneBtn">Select None</button>
-        </div>
-        <div id="contentRatingToggles" class="toggle-grid"></div>
-      </div>
-
-      <div class="card">
         <h2>Streaming Services</h2>
         <p class="desc">Uncheck a service to hide titles that aren't available on any of the remaining checked ones. This is applied by Watchmode itself during the search, so it only affects Watchmode-sourced spins — the built-in list isn't checked against streaming availability until you actually open a title.</p>
         <div class="select-all-row">
@@ -734,6 +724,16 @@
           <button class="btn-ghost" id="servicesNoneBtn">Select None</button>
         </div>
         <div id="streamingServiceToggles" class="toggle-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Content Ratings</h2>
+        <p class="desc">Uncheck a rating to hide titles Watchmode has confirmed to carry it. "NR" is for titles explicitly marked Not Rated by Watchmode; "No Rating Available" is separate — it covers titles Watchmode simply has no content rating on file for at all. This filter only affects Watchmode-sourced spins — the built-in list has no rating data to filter on.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="ratingsAllBtn">Select All</button>
+          <button class="btn-ghost" id="ratingsNoneBtn">Select None</button>
+        </div>
+        <div id="contentRatingToggles" class="toggle-grid"></div>
       </div>
 
       <div class="card">
@@ -1636,7 +1636,8 @@ async function init(){
   // multiple Watchmode IDs (e.g. Sci-Fi matching both "Science Fiction" and
   // "Sci-Fi & Fantasy") will have old single-value entries — re-resolve
   // against Watchmode rather than leaving either stale.
-  const genreMapNeedsRefresh = wmKey && wmGenreMap && (
+  const genreMapNeedsRefresh = wmKey && (
+    !wmGenreMap ||
     GENRES.some(g => !(g in wmGenreMap)) ||
     Object.values(wmGenreMap).some(v => !Array.isArray(v))
   );
@@ -1864,6 +1865,14 @@ function renderApiCallLog(){
 let wmQuotaExhausted = false; // session-only circuit breaker — once tripped, every wmFetch call fails immediately (no network attempt) so spins fall back to the built-in list right away instead of retrying something unrecoverable
 let wmConsecutiveExhaustedCalls = 0; // counts separate calls that used up all their own retries and still got 429 — resets on any success
 
+// How long any single Watchmode request is allowed to take before being
+// treated as hung — resets fresh for every individual call (including each
+// retry attempt), rather than being a shared budget across an entire spin's
+// worth of sequential requests. A spin making steady progress, one call at
+// a time, is never penalized just because the calls add up over time; only
+// an actual stuck request trips this.
+const WM_PER_CALL_TIMEOUT_MS = 10000;
+
 async function wmFetch(path, params, attempt, maxAttempts, reason){
   if (wmQuotaExhausted){
     throw new Error('Watchmode API limit reached for now — using the built-in list instead.');
@@ -1872,7 +1881,11 @@ async function wmFetch(path, params, attempt, maxAttempts, reason){
   const limit = (maxAttempts == null) ? 6 : maxAttempts;
   await wmThrottleGate();
   logApiCall(reason, path, params, attempt);
-  const res = await fetch(wmUrl(path, params));
+  const res = await withTimeout(
+    fetch(wmUrl(path, params)),
+    WM_PER_CALL_TIMEOUT_MS,
+    'Watchmode request timed out'
+  );
   if (res.status === 429){
     const body = await res.json().catch(() => ({}));
     const msg = (body.statusMessage || body.message || '').toLowerCase();
@@ -2568,11 +2581,7 @@ async function spin(){
 
   if (useWm){
     try{
-      lastFullPool = await withTimeout(
-        buildWatchmodePool(finalDecade, finalGenre),
-        45000,
-        'Watchmode took too long to respond'
-      );
+      lastFullPool = await buildWatchmodePool(finalDecade, finalGenre);
       currentSource = 'watchmode';
       setSpinStatus('');
     } catch(e){
@@ -2586,7 +2595,7 @@ async function spin(){
     lastFullPool = getEffectiveMovieList(finalDecade, finalGenre);
     currentSource = 'builtin';
     try{
-      await withTimeout(enrichBuiltinListWithWatchmode(lastFullPool), 30000, 'Built-in list enrichment took too long');
+      await enrichBuiltinListWithWatchmode(lastFullPool);
     } catch(e){
       console.warn('Built-in list Watchmode enrichment failed', e.message);
     }
