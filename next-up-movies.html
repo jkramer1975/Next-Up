@@ -893,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.10.1';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -2788,7 +2788,12 @@ function computeFilteredSurvivors(pool){
     if (a.userRating == null && b.userRating == null) return 0;
     if (a.userRating == null) return 1;
     if (b.userRating == null) return -1;
-    return b.userRating - a.userRating;
+    if (a.userRating !== b.userRating) return b.userRating - a.userRating;
+    // Tied on user rating — break the tie with critic score, when available.
+    if (a.criticScore == null && b.criticScore == null) return 0;
+    if (a.criticScore == null) return 1;
+    if (b.criticScore == null) return -1;
+    return b.criticScore - a.criticScore;
   });
 
   if (survivors.length > maxResults){
