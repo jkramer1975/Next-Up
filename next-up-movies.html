@@ -477,6 +477,8 @@
   }
   .toggle-chip input{ accent-color: var(--amber); width:15px; height:15px; }
   .toggle-chip.off{ opacity: 0.5; }
+  .toggle-chip.disabled{ opacity: 0.35; cursor: not-allowed; }
+  .toggle-chip.disabled input{ cursor: not-allowed; }
   .select-all-row{ display:flex; gap:8px; margin-top: 10px; }
 
   .modal-backdrop{
@@ -720,6 +722,10 @@
       <div class="card">
         <h2>Streaming Services</h2>
         <p class="desc">Uncheck a service to hide titles that aren't available on any of the remaining checked ones. This is applied by Watchmode itself during the search, so it only affects Watchmode-sourced spins — the built-in list isn't checked against streaming availability until you actually open a title.</p>
+        <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:10px;">
+          <input type="checkbox" id="ignoreStreamingCheckbox"> Ignore streaming service (don't filter by this at all)
+        </label>
+        <p class="desc" id="streamingServicesGreyedHint" style="display:none; margin-bottom:10px;">Our list only covers 8 of Watchmode's 200+ tracked services — narrowing to specific ones here means titles exclusive to any of the others get excluded too, not just the ones you've unchecked. Turn this off if you want to filter by service anyway.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="servicesAllBtn">Select All</button>
           <button class="btn-ghost" id="servicesNoneBtn">Select None</button>
@@ -889,7 +895,7 @@ const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
   'custom_movie_additions', 'custom_movie_removals', 'enabled_decades',
   'enabled_genres', 'enabled_content_ratings', 'enabled_languages',
-  'enabled_streaming_services',
+  'enabled_streaming_services', 'ignore_streaming_service',
   'min_rating', 'max_rating_ceiling', 'require_critic_score',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
   'data_source_pref', 'color_theme'
@@ -1039,6 +1045,7 @@ function enabledLanguageCodes(){
 // restriction), so the caller can omit the source_ids param entirely
 // rather than sending a pointless "every service" list.
 function enabledStreamingSourceIds(){
+  if (ignoreStreamingService) return null;
   if (!wmSourceMap) return null;
   if (enabledStreamingServices.length === STREAMING_SERVICES.length) return null; // nothing actually excluded
   const ids = [];
@@ -1106,6 +1113,16 @@ let wmGenreMap = null;   // resolved once per key: { "Action": <watchmode genre 
 let wmAllGenreNames = null; // full table: { <watchmode genre id>: "Adventure", ... } — covers genres outside our 8 spin categories
 let wmSourceMap = null;  // resolved once per key: { "Netflix": [<watchmode source id>, ...], ... } — mirrors wmGenreMap
 let enabledStreamingServices = [];
+// When true, streaming availability is entirely left out of the Watchmode
+// request — not just "everything happens to be checked," an explicit,
+// unambiguous "don't filter by this at all." Needed because our curated
+// list only covers 8 of Watchmode's 200+ services: unchecking even one
+// doesn't just deprioritize it, it restricts results to *only* the
+// remaining checked services, silently excluding anything exclusive to
+// any of the 190+ services we don't even list. Defaults to true so a
+// fresh install behaves the same permissive way the old "all checked"
+// state did.
+let ignoreStreamingService = true;
 let wmWarmupDone = false;
 const wmDetailsCache = new Map(); // watchmode title id -> full details/sources result, used at pick time (session only)
 const wmRatingsCache = new Map(); // watchmode title id -> {userRating, usRating} only, used for the whole grid (session only)
@@ -1308,6 +1325,7 @@ const SYNCED_KEY_DEFAULTS = {
   enabled_genres: () => GENRES.slice(),
   enabled_content_ratings: () => CONTENT_RATINGS.slice(),
   enabled_streaming_services: () => STREAMING_SERVICES.slice(),
+  ignore_streaming_service: () => true,
   enabled_languages: () => ['English'],
   min_rating: () => 0,
   max_rating_ceiling: () => 10,
@@ -1500,6 +1518,7 @@ async function saveWmGenreMap(){ await saveJSON('watchmode_genre_map', wmGenreMa
 async function saveWmAllGenreNames(){ await saveJSON('watchmode_all_genre_names', wmAllGenreNames); }
 async function saveWmSourceMap(){ await saveJSON('watchmode_source_map', wmSourceMap); }
 async function saveEnabledStreamingServices(){ await saveJSON('enabled_streaming_services', enabledStreamingServices); }
+async function saveIgnoreStreamingService(){ await saveJSON('ignore_streaming_service', ignoreStreamingService); }
 async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
 async function saveEnabledDecades(){ await saveJSON('enabled_decades', enabledDecades); }
 async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
@@ -1609,6 +1628,7 @@ async function init(){
     await saveEnabledStreamingServices();
   }
   await saveJSON('known_streaming_services', STREAMING_SERVICES.slice());
+  ignoreStreamingService = await loadJSON('ignore_streaming_service', true);
 
   minRating = await loadJSON('min_rating', 0);
   maxRating = await loadJSON('max_rating_ceiling', 10);
@@ -2148,9 +2168,13 @@ function renderAdmin(){
     });
   });
 
+  $('ignoreStreamingCheckbox').checked = ignoreStreamingService;
+  $('streamingServicesGreyedHint').style.display = ignoreStreamingService ? 'block' : 'none';
+  $('servicesAllBtn').disabled = ignoreStreamingService;
+  $('servicesNoneBtn').disabled = ignoreStreamingService;
   $('streamingServiceToggles').innerHTML = STREAMING_SERVICES.map(s => `
-    <label class="toggle-chip ${enabledStreamingServices.includes(s) ? '' : 'off'}">
-      <input type="checkbox" data-service="${escapeHtml(s)}" ${enabledStreamingServices.includes(s) ? 'checked' : ''}> ${escapeHtml(s)}
+    <label class="toggle-chip ${ignoreStreamingService ? 'disabled' : (enabledStreamingServices.includes(s) ? '' : 'off')}">
+      <input type="checkbox" data-service="${escapeHtml(s)}" ${enabledStreamingServices.includes(s) ? 'checked' : ''} ${ignoreStreamingService ? 'disabled' : ''}> ${escapeHtml(s)}
     </label>
   `).join('');
   $('streamingServiceToggles').querySelectorAll('input').forEach(cb => {
@@ -2380,6 +2404,12 @@ $('signOutBtn').addEventListener('click', signOutOfGoogle);
 $('requireCriticScoreCheckbox').addEventListener('change', async (e) => {
   requireCriticScore = e.target.checked;
   await saveRequireCriticScore();
+});
+
+$('ignoreStreamingCheckbox').addEventListener('change', async (e) => {
+  ignoreStreamingService = e.target.checked;
+  renderAdmin();
+  await saveIgnoreStreamingService();
 });
 
 $('filterExplicitContentCheckbox').addEventListener('change', async (e) => {
