@@ -1673,8 +1673,6 @@ async function init(){
   renderAdmin();
   updateSourceNote();
   updateStorageNote();
-
-  if (wmKey && wmGenreMap) runStartupWarmup(); // fire-and-forget — never awaited, never blocks the UI
 }
 
 function updateStorageNote(){
@@ -2026,7 +2024,6 @@ $('saveWmKeyBtn').addEventListener('click', async () => {
       $('wmKeyError').style.color = 'var(--amber)';
       $('wmKeyError').style.display = 'block';
     }
-    runStartupWarmup(); // fire-and-forget — new connection, worth warming the cache now
   } catch(e){
     wmKey = prevKey;
     $('wmKeyError').textContent = "That key didn't work: " + e.message;
@@ -2052,7 +2049,7 @@ $('removeWmKeyBtn').addEventListener('click', async () => {
 });
 
 $('rerunWarmupBtn').addEventListener('click', () => {
-  runStartupWarmup(true); // force=true — bypass the "already done" check
+  runStartupWarmup(); // the only trigger now — no automatic runs on connect or page load
 });
 
 $('clearCacheBtn').addEventListener('click', async () => {
@@ -3107,9 +3104,8 @@ async function buildWatchmodePool(decade, genre){
 // start already cached. Uses enrichBatchWithRatings's silent mode so it
 // never touches the spin button or status text, even if a real spin
 // happens to run at the same time.
-async function runStartupWarmup(force){
+async function runStartupWarmup(){
   if (!wmKey || !wmGenreMap) return;
-  if (wmWarmupDone && !force) return;
 
   const combos = [];
   DECADES.filter(d => enabledDecades.includes(d)).forEach(d => {
