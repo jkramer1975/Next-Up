@@ -682,6 +682,7 @@
         <h2>About</h2>
         <p class="desc">Next Up - Movies is a free, independent project — not affiliated with, endorsed by, or sponsored by Watchmode, Google, or any streaming service. Movie data and streaming availability come from Watchmode when connected and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
         <p class="desc" style="margin-top:8px;"><a href="privacy.html">Privacy Policy</a></p>
+        <p class="desc hint" style="margin-top:8px;">App version: <span id="appVersionLabel"></span></p>
       </div>
 
     </div>
@@ -879,6 +880,11 @@ let currentUser = null; // set once signed in; null while signed out
 // (the ratings/search caches, the resolved genre-ID map, warmup status)
 // — those stay local to each device rather than bloating the synced
 // document or fighting over which device's cache "wins."
+// Bumped with every shipped update — shown in Admin's About card, and a
+// useful thing to check if you're ever unsure whether a page is actually
+// running the latest version versus something the service worker cached.
+const APP_VERSION = '1.4.0';
+
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
   'custom_movie_additions', 'custom_movie_removals', 'enabled_decades',
@@ -2068,6 +2074,8 @@ document.querySelectorAll('input[name=dataSource]').forEach(radio => {
 
 function renderAdmin(){
   renderAuthUI();
+  const versionLabel = $('appVersionLabel');
+  if (versionLabel) versionLabel.textContent = APP_VERSION;
   renderThemeSwatches();
   populateCacheStatsDropdowns();
   updateCacheStats();
@@ -3342,8 +3350,12 @@ async function fetchWatchmodeExtras(movie){
   const cacheKey = movie.watchmodeId;
   if (wmDetailsCache.has(cacheKey)) return wmDetailsCache.get(cacheKey);
   let trailerUrl = null, streamNames = [], userRating = null, criticScore = null, usRating = null, posterUrl = null, genres = null, description = null;
+  let details = null;
   try{
-    const details = await fetchWatchmodeTitleDetails(cacheKey, undefined, `Full details (trailer/ratings) on click: "${movie.title}"`);
+    // append_to_response=sources bundles streaming availability into this
+    // same request instead of a separate one — cuts pick-time lookups from
+    // two calls down to one.
+    details = await wmFetch(`/title/${cacheKey}/details/`, { append_to_response: 'sources' }, 0, 6, `Full details + streaming (on click): "${movie.title}"`);
     trailerUrl = details.trailer || null;
     userRating = firstNumber(details.user_rating, details.imdb_rating, details.rating);
     criticScore = firstNumber(details.critic_score, details.critics_score, details.tomatometer);
@@ -3352,12 +3364,22 @@ async function fetchWatchmodeExtras(movie){
     genres = normalizeGenreList(firstArray(details.genre_names, details.genres));
     description = firstString(details.plot_overview, details.overview, details.description, details.plot);
   } catch(e){ console.warn('Watchmode details lookup failed at pick time for', movie.title, e.message); }
-  try{
-    const sources = await wmFetch(`/title/${cacheKey}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click: "${movie.title}"`);
-    if (Array.isArray(sources)){
-      streamNames = [...new Set(sources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
-    }
-  } catch(e){ /* best-effort */ }
+
+  const appendedSources = details && firstArray(details.sources, details.sources_data, details.streaming_sources);
+  if (appendedSources){
+    streamNames = [...new Set(appendedSources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
+  } else {
+    // Fall back to the separate call only if the combined response didn't
+    // actually include sources — keeps this working even if Watchmode's
+    // append_to_response shape differs from what's expected above.
+    try{
+      const sources = await wmFetch(`/title/${cacheKey}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${movie.title}"`);
+      if (Array.isArray(sources)){
+        streamNames = [...new Set(sources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
+      }
+    } catch(e){ /* best-effort */ }
+  }
+
   const result = { trailerUrl, streamNames, userRating, criticScore, usRating, posterUrl, genres, description };
   wmDetailsCache.set(cacheKey, result);
   return result;
@@ -3494,7 +3516,28 @@ $('clearHistoryBtn').addEventListener('click', async () => {
 // localhost), so this only takes effect once hosted somewhere.
 if ('serviceWorker' in navigator && location.protocol !== 'file:'){
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker registration failed', e));
+    navigator.serviceWorker.register('sw.js').then((registration) => {
+      // Ask right away whether a newer sw.js exists, rather than only
+      // relying on the browser's own background check timing (which can
+      // be quite lazy about it).
+      registration.update().catch(() => {});
+    }).catch((e) => console.warn('Service worker registration failed', e));
+
+    // Fires once a new service worker actually takes control — which
+    // happens automatically shortly after a newer version is found and
+    // installed, since sw.js calls skipWaiting()/clients.claim() rather
+    // than waiting for every tab to close first. This reloads the page
+    // exactly once so the fresh version is what's actually showing,
+    // instead of needing a manual hard-refresh or cache clear. This only
+    // touches the service worker's own app-shell cache (the HTML/CSS/JS
+    // files themselves) — it has no effect on localStorage or Firestore,
+    // so your crew, picks, and settings are completely untouched by it.
+    let hasReloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hasReloadedForUpdate) return; // guard against a theoretical double-fire
+      hasReloadedForUpdate = true;
+      location.reload();
+    });
   });
 }
 
