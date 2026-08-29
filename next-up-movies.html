@@ -95,6 +95,11 @@
     margin-bottom: 10px;
     font-family: var(--font-mono); font-size: 11px;
   }
+  .version-badge{
+    position: fixed; bottom: 10px; right: 12px; z-index: 40;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3px;
+    color: var(--muted); opacity: 0.55; pointer-events: none;
+  }
   .account-corner button{
     font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
     background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
@@ -505,6 +510,7 @@
 </style>
 </head>
 <body>
+<div class="version-badge" id="versionBadge"></div>
 <div class="app">
   <div class="wrap">
 
@@ -893,7 +899,8 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.24.0';
+const APP_VERSION = '1.25.1';
+document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -2912,6 +2919,13 @@ function firstArray(...vals){
   for (const v of vals) if (Array.isArray(v) && v.length) return v;
   return null;
 }
+// Pulls the unique service names for a given source type (rent/buy) —
+// same dedup pattern as streamNames. Watchmode doesn't return pricing at
+// all, confirmed directly, so this is deliberately name-only rather than
+// carrying a price field that would never actually be populated.
+function extractNames(sources, type){
+  return [...new Set(sources.filter(s => s.type === type).map(s => s.name))];
+}
 // Watchmode's own genre names sometimes differ from our internal spin
 // labels even though the matching in resolveWmGenres already correctly
 // links them (e.g. "Sci-Fi" resolves to Watchmode's real "Science Fiction"
@@ -3764,18 +3778,26 @@ function appendModalExtras(extras, movie){
   }
 
   const bits = [];
-  if (extras.streamNames && extras.streamNames.length){
-    bits.push(`<div class="genre-chips" style="justify-content:center;">${extras.streamNames.map(n => `<span class="rating-chip">📺 ${escapeHtml(n)}</span>`).join('')}</div>`);
-  }
-  if (extras.buyNames && extras.buyNames.length){
-    bits.push(`<div class="genre-chips" style="justify-content:center; margin-top:6px;">${extras.buyNames.map(n => `<span class="rating-chip">🛒 ${escapeHtml(n)}</span>`).join('')}</div>`);
-  }
-  if (!(extras.streamNames && extras.streamNames.length) && !(extras.buyNames && extras.buyNames.length)){
-    bits.push('<span class="hint">Not currently streaming or available to buy on a tracked service.</span>');
+  bits.push(renderOfferSection('Streaming', '📺', extras.streamNames));
+  bits.push(renderOfferSection('Rent', '🎬', extras.rentNames));
+  bits.push(renderOfferSection('Buy', '🛒', extras.buyNames));
+  const hasAnyOffer = (extras.streamNames && extras.streamNames.length) || (extras.rentNames && extras.rentNames.length) || (extras.buyNames && extras.buyNames.length);
+  if (!hasAnyOffer){
+    bits.push('<span class="hint">Not currently streaming, renting, or available to buy on a tracked service.</span>');
   }
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">▶ Watch Trailer</a>`);
   container.className = '';
   container.innerHTML = bits.join('');
+}
+
+// Renders one labeled row of chips (Streaming/Rent/Buy) — returns an empty
+// string if there's nothing to show, so callers can just join() the
+// results without checking emptiness themselves. Watchmode doesn't
+// return pricing at all, confirmed directly, so this is name-only.
+function renderOfferSection(label, emoji, items){
+  if (!items || !items.length) return '';
+  const chips = items.map(item => `<span class="rating-chip">${emoji} ${escapeHtml(item)}</span>`).join('');
+  return `<div style="margin-top:8px;"><div class="hint" style="margin-bottom:4px;">${escapeHtml(label)}</div><div class="genre-chips" style="justify-content:center;">${chips}</div></div>`;
 }
 
 // Updates a movie's already-rendered grid card in place — used once a
@@ -3842,6 +3864,7 @@ function mergeDetailsFreshestTiers(local, shared){
   if ((shared.streamingCheckedAt || 0) > (local.streamingCheckedAt || 0)){
     merged.trailerUrl = shared.trailerUrl;
     merged.streamNames = shared.streamNames;
+    merged.rentNames = shared.rentNames;
     merged.buyNames = shared.buyNames;
     merged.streamingCheckedAt = shared.streamingCheckedAt;
   }
@@ -3858,6 +3881,7 @@ function recordToExtrasResult(record, tierFlags){
     userRating: tierFlags.ratingFresh ? (record.userRating ?? null) : null,
     criticScore: tierFlags.ratingFresh ? (record.criticScore ?? null) : null,
     streamNames: tierFlags.streamingFresh ? (record.streamNames || []) : [],
+    rentNames: tierFlags.streamingFresh ? (record.rentNames || []) : [],
     buyNames: tierFlags.streamingFresh ? (record.buyNames || []) : []
   };
 }
@@ -3905,7 +3929,7 @@ async function fetchWatchmodeExtras(movie){
   // all three, since they come from the same Watchmode response.
   let details = null;
   let trailerUrl = null, posterUrl = null, genres = null, description = null, usRating = null;
-  let userRating = null, criticScore = null, streamNames = [], buyNames = [];
+  let userRating = null, criticScore = null, streamNames = [], rentNames = [], buyNames = [];
   let imdbId = null, tmdbId = null;
   try{
     // append_to_response=sources bundles streaming availability into this
@@ -3927,7 +3951,8 @@ async function fetchWatchmodeExtras(movie){
   const appendedSources = details && firstArray(details.sources, details.sources_data, details.streaming_sources);
   if (appendedSources){
     streamNames = [...new Set(appendedSources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
-    buyNames = [...new Set(appendedSources.filter(s => s.type === 'buy').map(s => s.name))];
+    rentNames = extractNames(appendedSources, 'rent');
+    buyNames = extractNames(appendedSources, 'buy');
     sourcesCheckSucceeded = true;
   } else if (details) {
     // Fall back to the separate call only if the combined response didn't
@@ -3937,7 +3962,8 @@ async function fetchWatchmodeExtras(movie){
       const sources = await wmFetch(`/title/${id}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${movie.title}"`);
       if (Array.isArray(sources)){
         streamNames = [...new Set(sources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
-        buyNames = [...new Set(sources.filter(s => s.type === 'buy').map(s => s.name))];
+        rentNames = extractNames(sources, 'rent');
+        buyNames = extractNames(sources, 'buy');
         sourcesCheckSucceeded = true;
       }
     } catch(e){ /* best-effort */ }
@@ -3981,6 +4007,7 @@ async function fetchWatchmodeExtras(movie){
     if (gotStreaming){
       fresh.trailerUrl = trailerUrl;
       fresh.streamNames = streamNames;
+      fresh.rentNames = rentNames;
       fresh.buyNames = buyNames;
       fresh.streamingCheckedAt = now;
     }
@@ -4021,6 +4048,7 @@ function appendTonightExtras(extras, movie){
   const bits = [];
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener">▶ Watch Trailer</a>`);
   if (extras.streamNames && extras.streamNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Streaming: ${escapeHtml(extras.streamNames.join(', '))}</span>`);
+  if (extras.rentNames && extras.rentNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Rent: ${escapeHtml(extras.rentNames.join(', '))}</span>`);
   if (extras.buyNames && extras.buyNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Buy: ${escapeHtml(extras.buyNames.join(', '))}</span>`);
   if (bits.length) banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${bits.join(' ')}</div>`);
 }
