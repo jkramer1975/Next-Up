@@ -645,13 +645,6 @@
           <button class="btn-danger" id="clearCacheBtn" style="display:none;">Clear Cache</button>
         </div>
 
-        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Built-In List Genre Check</strong> — checks whether Watchmode's own genre categorization for each built-in list title actually agrees with the decade/genre bucket it's filed under here. Matters because the shared database filters purely by Watchmode's genre data, so a mismatch here could mean a title behaves inconsistently between built-in browsing and the shared/live discovery paths. Checks all 1,083 built-in list entries — takes roughly 4-5 minutes minimum even with a fully warmed cache, longer if live lookups are needed.</p>
-        <div class="row">
-          <button class="btn-ghost" id="validateGenresBtn" style="display:none;">Run Genre Check</button>
-        </div>
-        <div class="hint" id="validateGenresStatus"></div>
-        <div id="validateGenresResults" style="display:none; margin-top:10px; max-height:300px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; padding:10px;"></div>
-
         <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many movies are already cached for a given decade/genre. Those spins should feel noticeably faster since little or no live lookup is needed.</p>
         <div class="row">
           <select id="cacheStatsDecade" style="max-width:140px;">
@@ -900,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.20.1';
+const APP_VERSION = '1.22.1';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -917,84 +910,84 @@ const SYNCED_KEYS = new Set([
    ================================================================== */
 const MOVIE_DB = {
 1980:{
-Action:[{title:"Die Hard",year:1988},{title:"Raiders of the Lost Ark",year:1981},{title:"The Terminator",year:1984},{title:"Lethal Weapon",year:1987},{title:"Rambo: First Blood Part II",year:1985},{title:"Beverly Hills Cop",year:1984},{title:"RoboCop",year:1987},{title:"Predator",year:1987},{title:"Top Gun",year:1986},{title:"Commando",year:1985},{title:"Mad Max 2: The Road Warrior",year:1981},{title:"First Blood",year:1982},{title:"Escape from New York",year:1981},{title:"Conan the Barbarian",year:1982},{title:"Rocky III",year:1982},{title:"Rocky IV",year:1985},{title:"Red Dawn",year:1984}],
-Comedy:[{title:"Ghostbusters",year:1984},{title:"Airplane!",year:1980},{title:"Trading Places",year:1983},{title:"Ferris Bueller's Day Off",year:1986},{title:"Caddyshack",year:1980},{title:"National Lampoon's Vacation",year:1983},{title:"Beetlejuice",year:1988},{title:"The Blues Brothers",year:1980},{title:"Coming to America",year:1988},{title:"Big",year:1988},{title:"Planes, Trains and Automobiles",year:1987},{title:"Fast Times at Ridgemont High",year:1982},{title:"Stripes",year:1981},{title:"Uncle Buck",year:1989},{title:"Three Men and a Baby",year:1987},{title:"The Naked Gun",year:1988},{title:"Spaceballs",year:1987},{title:"Down and Out in Beverly Hills",year:1986}],
-Drama:[{title:"Rain Man",year:1988},{title:"Amadeus",year:1984},{title:"Ordinary People",year:1980},{title:"Raging Bull",year:1980},{title:"Terms of Endearment",year:1983},{title:"Platoon",year:1986},{title:"Dead Poets Society",year:1989},{title:"The Elephant Man",year:1980},{title:"Stand by Me",year:1986},{title:"Field of Dreams",year:1989},{title:"Gandhi",year:1982},{title:"The Killing Fields",year:1984},{title:"Tootsie",year:1982},{title:"On Golden Pond",year:1981},{title:"The Color Purple",year:1985},{title:"Mississippi Burning",year:1988},{title:"Wall Street",year:1987}],
+Action:[{title:"Die Hard",year:1988},{title:"Raiders of the Lost Ark",year:1981},{title:"The Terminator",year:1984},{title:"Lethal Weapon",year:1987},{title:"Rambo: First Blood Part II",year:1985},{title:"Beverly Hills Cop",year:1984},{title:"RoboCop",year:1987},{title:"Predator",year:1987},{title:"Top Gun",year:1986},{title:"Commando",year:1985},{title:"Mad Max 2: The Road Warrior",year:1981},{title:"First Blood",year:1982},{title:"Escape from New York",year:1981},{title:"Conan the Barbarian",year:1982},{title:"Red Dawn",year:1984},{title:"The Karate Kid",year:1984},{title:"Willow",year:1988},{title:"Flash Gordon",year:1980},{title:"The Big Easy",year:1986}],
+Adventure:[{title:"Raiders of the Lost Ark",year:1981},{title:"Indiana Jones and the Temple of Doom",year:1984},{title:"The Goonies",year:1985},{title:"Romancing the Stone",year:1984},{title:"Back to the Future",year:1985},{title:"Crocodile Dundee",year:1986},{title:"The NeverEnding Story",year:1984},{title:"Willow",year:1988},{title:"Clash of the Titans",year:1981},{title:"Time Bandits",year:1981},{title:"Flight of the Navigator",year:1986},{title:"Explorers",year:1985},{title:"Krull",year:1983},{title:"Big Trouble in Little China",year:1986},{title:"Flash Gordon",year:1980}],
 Animation:[{title:"The Fox and the Hound",year:1981},{title:"The Little Mermaid",year:1989},{title:"An American Tail",year:1986},{title:"The Land Before Time",year:1988},{title:"The Great Mouse Detective",year:1986},{title:"Akira",year:1988},{title:"Oliver & Company",year:1988},{title:"The Black Cauldron",year:1985},{title:"My Neighbor Totoro",year:1988},{title:"The Secret of NIMH",year:1982},{title:"All Dogs Go to Heaven",year:1989},{title:"Grave of the Fireflies",year:1988},{title:"Castle in the Sky",year:1986},{title:"Heavy Metal",year:1981},{title:"The Care Bears Movie",year:1985}],
-Horror:[{title:"The Shining",year:1980},{title:"A Nightmare on Elm Street",year:1984},{title:"Poltergeist",year:1982},{title:"The Thing",year:1982},{title:"Friday the 13th",year:1980},{title:"An American Werewolf in London",year:1981},{title:"Evil Dead II",year:1987},{title:"Child's Play",year:1988},{title:"Fright Night",year:1985},{title:"The Fly",year:1986},{title:"Hellraiser",year:1987},{title:"The Evil Dead",year:1981},{title:"Re-Animator",year:1985},{title:"Pet Sematary",year:1989},{title:"Christine",year:1983},{title:"Gremlins",year:1984},{title:"The Howling",year:1981}],
-"Sci-Fi":[{title:"Back to the Future",year:1985},{title:"E.T. the Extra-Terrestrial",year:1982},{title:"Blade Runner",year:1982},{title:"Aliens",year:1986},{title:"The Empire Strikes Back",year:1980},{title:"Return of the Jedi",year:1983},{title:"Tron",year:1982},{title:"Star Trek II: The Wrath of Khan",year:1982},{title:"Flight of the Navigator",year:1986},{title:"Short Circuit",year:1986},{title:"WarGames",year:1983},{title:"Weird Science",year:1985},{title:"Enemy Mine",year:1985},{title:"Innerspace",year:1987},{title:"Star Trek IV: The Voyage Home",year:1986},{title:"The Last Starfighter",year:1984}],
-Romance:[{title:"Dirty Dancing",year:1987},{title:"Sixteen Candles",year:1984},{title:"Say Anything...",year:1989},{title:"Splash",year:1984},{title:"The Princess Bride",year:1987},{title:"Pretty in Pink",year:1986},{title:"Working Girl",year:1988},{title:"Moonstruck",year:1987},{title:"When Harry Met Sally...",year:1989},{title:"An Officer and a Gentleman",year:1982},{title:"Arthur",year:1981},{title:"The Blue Lagoon",year:1980},{title:"Bull Durham",year:1988},{title:"Overboard",year:1987},{title:"Mannequin",year:1987},{title:"Cocktail",year:1988},{title:"Crocodile Dundee",year:1986}],
-Thriller:[{title:"Fatal Attraction",year:1987},{title:"Body Heat",year:1981},{title:"Witness",year:1985},{title:"No Way Out",year:1987},{title:"Blue Velvet",year:1986},{title:"Blood Simple",year:1984},{title:"Sea of Love",year:1989},{title:"The Hitcher",year:1986},{title:"Angel Heart",year:1987},{title:"The Verdict",year:1982},{title:"Jagged Edge",year:1985},{title:"Someone to Watch Over Me",year:1987},{title:"Manhunter",year:1986},{title:"Dressed to Kill",year:1980},{title:"Sudden Impact",year:1983},{title:"The Big Easy",year:1986}],
-Fantasy:[{title:"The Princess Bride",year:1987},{title:"Ladyhawke",year:1985},{title:"Legend",year:1985},{title:"Willow",year:1988},{title:"The NeverEnding Story",year:1984},{title:"Labyrinth",year:1986},{title:"Clash of the Titans",year:1981},{title:"Time Bandits",year:1981},{title:"Dragonslayer",year:1981},{title:"The Dark Crystal",year:1982},{title:"Highlander",year:1986},{title:"Big Trouble in Little China",year:1986},{title:"Flash Gordon",year:1980},{title:"Krull",year:1983},{title:"Return to Oz",year:1985}],
-Western:[{title:"Silverado",year:1985},{title:"Pale Rider",year:1985},{title:"Young Guns",year:1988},{title:"Heaven's Gate",year:1980},{title:"The Long Riders",year:1980},{title:"Barbarosa",year:1982},{title:"Tom Horn",year:1980},{title:"Bronco Billy",year:1980},{title:"The Grey Fox",year:1982},{title:"Three Amigos",year:1986},{title:"Rustlers' Rhapsody",year:1985},{title:"Walker",year:1987},{title:"Extreme Prejudice",year:1987},{title:"The Legend of the Lone Ranger",year:1981},{title:"Zorro, the Gay Blade",year:1981}],
-Adventure:[{title:"Raiders of the Lost Ark",year:1981},{title:"Indiana Jones and the Temple of Doom",year:1984},{title:"The Goonies",year:1985},{title:"Romancing the Stone",year:1984},{title:"Back to the Future",year:1985},{title:"Crocodile Dundee",year:1986},{title:"The NeverEnding Story",year:1984},{title:"Willow",year:1988},{title:"Clash of the Titans",year:1981},{title:"Time Bandits",year:1981},{title:"Flight of the Navigator",year:1986},{title:"Explorers",year:1985},{title:"Krull",year:1983},{title:"The Karate Kid",year:1984},{title:"Big Trouble in Little China",year:1986}],
-Crime:[{title:"Scarface",year:1983},{title:"The Untouchables",year:1987},{title:"Once Upon a Time in America",year:1984},{title:"Beverly Hills Cop",year:1984},{title:"48 Hrs.",year:1982},{title:"Witness",year:1985},{title:"Blood Simple",year:1984},{title:"Body Heat",year:1981},{title:"The Big Easy",year:1986},{title:"No Way Out",year:1987},{title:"Prizzi's Honor",year:1985},{title:"Married to the Mob",year:1988},{title:"Midnight Run",year:1988},{title:"RoboCop",year:1987},{title:"Wall Street",year:1987}],
-Documentary:[{title:"This Is Spinal Tap",year:1984},{title:"Koyaanisqatsi",year:1982},{title:"The Times of Harvey Milk",year:1984},{title:"Shoah",year:1985},{title:"Roger & Me",year:1989},{title:"28 Up",year:1984},{title:"The Thin Blue Line",year:1988},{title:"Streetwise",year:1984},{title:"The Atomic Cafe",year:1982},{title:"Style Wars",year:1983},{title:"Sherman's March",year:1985},{title:"Stop Making Sense",year:1984},{title:"The Life and Times of Rosie the Riveter",year:1980},{title:"Marlene",year:1984},{title:"The Compleat Beatles",year:1982}],
-Family:[{title:"E.T. the Extra-Terrestrial",year:1982},{title:"The Karate Kid",year:1984},{title:"The NeverEnding Story",year:1984},{title:"Annie",year:1982},{title:"The Princess Bride",year:1987},{title:"Big",year:1988},{title:"Flight of the Navigator",year:1986},{title:"Short Circuit",year:1986},{title:"The Land Before Time",year:1988},{title:"Honey, I Shrunk the Kids",year:1989},{title:"The Goonies",year:1985},{title:"Willow",year:1988},{title:"Splash",year:1984},{title:"An American Tail",year:1986},{title:"The Little Mermaid",year:1989}]
+Comedy:[{title:"Ghostbusters",year:1984},{title:"Airplane!",year:1980},{title:"Trading Places",year:1983},{title:"Ferris Bueller's Day Off",year:1986},{title:"Caddyshack",year:1980},{title:"National Lampoon's Vacation",year:1983},{title:"Beetlejuice",year:1988},{title:"The Blues Brothers",year:1980},{title:"Coming to America",year:1988},{title:"Big",year:1988},{title:"Planes, Trains and Automobiles",year:1987},{title:"Fast Times at Ridgemont High",year:1982},{title:"Stripes",year:1981},{title:"Uncle Buck",year:1989},{title:"Three Men and a Baby",year:1987},{title:"The Naked Gun",year:1988},{title:"Spaceballs",year:1987},{title:"Down and Out in Beverly Hills",year:1986},{title:"This Is Spinal Tap",year:1984},{title:"Tootsie",year:1982},{title:"Splash",year:1984},{title:"Crocodile Dundee",year:1986},{title:"Bronco Billy",year:1980}],
+Crime:[{title:"Scarface",year:1983},{title:"The Untouchables",year:1987},{title:"Once Upon a Time in America",year:1984},{title:"Beverly Hills Cop",year:1984},{title:"48 Hrs.",year:1982},{title:"Witness",year:1985},{title:"Blood Simple",year:1984},{title:"Body Heat",year:1981},{title:"Prizzi's Honor",year:1985},{title:"Married to the Mob",year:1988},{title:"Midnight Run",year:1988},{title:"Wall Street",year:1987},{title:"Sea of Love",year:1989},{title:"The Big Easy",year:1986}],
+Documentary:[{title:"Koyaanisqatsi",year:1982},{title:"The Times of Harvey Milk",year:1984},{title:"Shoah",year:1985},{title:"Roger & Me",year:1989},{title:"28 Up",year:1984},{title:"The Thin Blue Line",year:1988},{title:"Streetwise",year:1984},{title:"The Atomic Cafe",year:1982},{title:"Style Wars",year:1983},{title:"Sherman's March",year:1985},{title:"Stop Making Sense",year:1984},{title:"The Life and Times of Rosie the Riveter",year:1980},{title:"Marlene",year:1984},{title:"The Compleat Beatles",year:1982}],
+Drama:[{title:"Rain Man",year:1988},{title:"Amadeus",year:1984},{title:"Ordinary People",year:1980},{title:"Raging Bull",year:1980},{title:"Terms of Endearment",year:1983},{title:"Platoon",year:1986},{title:"Dead Poets Society",year:1989},{title:"The Elephant Man",year:1980},{title:"Stand by Me",year:1986},{title:"Field of Dreams",year:1989},{title:"Gandhi",year:1982},{title:"The Killing Fields",year:1984},{title:"On Golden Pond",year:1981},{title:"The Color Purple",year:1985},{title:"Mississippi Burning",year:1988},{title:"Wall Street",year:1987},{title:"Rocky III",year:1982},{title:"Rocky IV",year:1985},{title:"The Karate Kid",year:1984},{title:"Big",year:1988},{title:"Sea of Love",year:1989},{title:"The Verdict",year:1982},{title:"The Big Easy",year:1986},{title:"Bronco Billy",year:1980},{title:"Walker",year:1987},{title:"No Way Out",year:1987}],
+Family:[{title:"E.T. the Extra-Terrestrial",year:1982},{title:"The NeverEnding Story",year:1984},{title:"Annie",year:1982},{title:"The Princess Bride",year:1987},{title:"Flight of the Navigator",year:1986},{title:"Short Circuit",year:1986},{title:"The Land Before Time",year:1988},{title:"Honey, I Shrunk the Kids",year:1989},{title:"The Goonies",year:1985},{title:"An American Tail",year:1986},{title:"The Little Mermaid",year:1989},{title:"The Karate Kid",year:1984}],
+Fantasy:[{title:"The Princess Bride",year:1987},{title:"Ladyhawke",year:1985},{title:"Legend",year:1985},{title:"Willow",year:1988},{title:"The NeverEnding Story",year:1984},{title:"Labyrinth",year:1986},{title:"Clash of the Titans",year:1981},{title:"Time Bandits",year:1981},{title:"Dragonslayer",year:1981},{title:"The Dark Crystal",year:1982},{title:"Highlander",year:1986},{title:"Big Trouble in Little China",year:1986},{title:"Krull",year:1983},{title:"Return to Oz",year:1985},{title:"Big",year:1988},{title:"Splash",year:1984}],
+Horror:[{title:"The Shining",year:1980},{title:"A Nightmare on Elm Street",year:1984},{title:"Poltergeist",year:1982},{title:"The Thing",year:1982},{title:"Friday the 13th",year:1980},{title:"An American Werewolf in London",year:1981},{title:"Evil Dead II",year:1987},{title:"Child's Play",year:1988},{title:"Fright Night",year:1985},{title:"The Fly",year:1986},{title:"Hellraiser",year:1987},{title:"The Evil Dead",year:1981},{title:"Re-Animator",year:1985},{title:"Pet Sematary",year:1989},{title:"Christine",year:1983},{title:"Gremlins",year:1984},{title:"The Howling",year:1981},{title:"Angel Heart",year:1987}],
+Romance:[{title:"Dirty Dancing",year:1987},{title:"Sixteen Candles",year:1984},{title:"Say Anything...",year:1989},{title:"Splash",year:1984},{title:"The Princess Bride",year:1987},{title:"Pretty in Pink",year:1986},{title:"Working Girl",year:1988},{title:"Moonstruck",year:1987},{title:"When Harry Met Sally...",year:1989},{title:"An Officer and a Gentleman",year:1982},{title:"Arthur",year:1981},{title:"The Blue Lagoon",year:1980},{title:"Bull Durham",year:1988},{title:"Overboard",year:1987},{title:"Mannequin",year:1987},{title:"Cocktail",year:1988},{title:"Tootsie",year:1982},{title:"Sea of Love",year:1989},{title:"Bronco Billy",year:1980}],
+"Sci-Fi":[{title:"Back to the Future",year:1985},{title:"E.T. the Extra-Terrestrial",year:1982},{title:"Blade Runner",year:1982},{title:"Aliens",year:1986},{title:"The Empire Strikes Back",year:1980},{title:"Return of the Jedi",year:1983},{title:"Tron",year:1982},{title:"Star Trek II: The Wrath of Khan",year:1982},{title:"Flight of the Navigator",year:1986},{title:"Short Circuit",year:1986},{title:"WarGames",year:1983},{title:"Weird Science",year:1985},{title:"Enemy Mine",year:1985},{title:"Innerspace",year:1987},{title:"Star Trek IV: The Voyage Home",year:1986},{title:"The Last Starfighter",year:1984},{title:"RoboCop",year:1987},{title:"Flash Gordon",year:1980}],
+Thriller:[{title:"Fatal Attraction",year:1987},{title:"Body Heat",year:1981},{title:"Witness",year:1985},{title:"No Way Out",year:1987},{title:"Blue Velvet",year:1986},{title:"Blood Simple",year:1984},{title:"The Hitcher",year:1986},{title:"Jagged Edge",year:1985},{title:"Someone to Watch Over Me",year:1987},{title:"Manhunter",year:1986},{title:"Dressed to Kill",year:1980},{title:"Sudden Impact",year:1983},{title:"RoboCop",year:1987}],
+Western:[{title:"Silverado",year:1985},{title:"Pale Rider",year:1985},{title:"Young Guns",year:1988},{title:"Heaven's Gate",year:1980},{title:"The Long Riders",year:1980},{title:"Barbarosa",year:1982},{title:"Tom Horn",year:1980},{title:"The Grey Fox",year:1982},{title:"Three Amigos",year:1986},{title:"Rustlers' Rhapsody",year:1985},{title:"Extreme Prejudice",year:1987},{title:"The Legend of the Lone Ranger",year:1981},{title:"Zorro, the Gay Blade",year:1981}]
 },
 1990:{
-Action:[{title:"Terminator 2: Judgment Day",year:1991},{title:"Die Hard with a Vengeance",year:1995},{title:"Speed",year:1994},{title:"The Matrix",year:1999},{title:"True Lies",year:1994},{title:"Con Air",year:1997},{title:"Face/Off",year:1997},{title:"Mission: Impossible",year:1996},{title:"GoldenEye",year:1995},{title:"Point Break",year:1991},{title:"The Rock",year:1996},{title:"Air Force One",year:1997},{title:"Die Hard 2",year:1990},{title:"Under Siege",year:1992},{title:"Broken Arrow",year:1996},{title:"Tomorrow Never Dies",year:1997}],
-Comedy:[{title:"Home Alone",year:1990},{title:"Dumb and Dumber",year:1994},{title:"Groundhog Day",year:1993},{title:"Wayne's World",year:1992},{title:"Mrs. Doubtfire",year:1993},{title:"There's Something About Mary",year:1998},{title:"Austin Powers: International Man of Mystery",year:1997},{title:"The Big Lebowski",year:1998},{title:"Clueless",year:1995},{title:"Liar Liar",year:1997},{title:"Happy Gilmore",year:1996},{title:"Home Alone 2: Lost in New York",year:1992},{title:"Billy Madison",year:1995},{title:"The Waterboy",year:1998},{title:"Tommy Boy",year:1995},{title:"Grumpy Old Men",year:1993},{title:"My Cousin Vinny",year:1992}],
-Drama:[{title:"Forrest Gump",year:1994},{title:"The Shawshank Redemption",year:1994},{title:"Good Will Hunting",year:1997},{title:"Schindler's List",year:1993},{title:"American Beauty",year:1999},{title:"The Green Mile",year:1999},{title:"As Good as It Gets",year:1997},{title:"Dead Man Walking",year:1995},{title:"Philadelphia",year:1993},{title:"Braveheart",year:1995},{title:"The English Patient",year:1996},{title:"The Insider",year:1999},{title:"Boogie Nights",year:1997},{title:"Magnolia",year:1999},{title:"Leaving Las Vegas",year:1995},{title:"The Silence of the Lambs",year:1991}],
+Action:[{title:"Terminator 2: Judgment Day",year:1991},{title:"Die Hard with a Vengeance",year:1995},{title:"Speed",year:1994},{title:"The Matrix",year:1999},{title:"True Lies",year:1994},{title:"Con Air",year:1997},{title:"Face/Off",year:1997},{title:"Mission: Impossible",year:1996},{title:"GoldenEye",year:1995},{title:"Point Break",year:1991},{title:"The Rock",year:1996},{title:"Air Force One",year:1997},{title:"Die Hard 2",year:1990},{title:"Under Siege",year:1992},{title:"Broken Arrow",year:1996},{title:"Tomorrow Never Dies",year:1997},{title:"Heat",year:1995}],
+Adventure:[{title:"Jurassic Park",year:1993},{title:"Jumanji",year:1995},{title:"The Mummy",year:1999},{title:"Free Willy",year:1993},{title:"Hook",year:1991},{title:"The Rocketeer",year:1991},{title:"Twister",year:1996},{title:"Dances with Wolves",year:1990},{title:"Cliffhanger",year:1993},{title:"The Three Musketeers",year:1993},{title:"Anaconda",year:1997},{title:"Waterworld",year:1995},{title:"Congo",year:1995},{title:"George of the Jungle",year:1997}],
 Animation:[{title:"The Lion King",year:1994},{title:"Toy Story",year:1995},{title:"Beauty and the Beast",year:1991},{title:"Aladdin",year:1992},{title:"Mulan",year:1998},{title:"A Bug's Life",year:1998},{title:"Antz",year:1998},{title:"The Prince of Egypt",year:1998},{title:"Pocahontas",year:1995},{title:"Hercules",year:1997},{title:"Toy Story 2",year:1999},{title:"Princess Mononoke",year:1997},{title:"The Iron Giant",year:1999},{title:"James and the Giant Peach",year:1996},{title:"The Nightmare Before Christmas",year:1993},{title:"Anastasia",year:1997},{title:"The Hunchback of Notre Dame",year:1996},{title:"The Rescuers Down Under",year:1990}],
-Horror:[{title:"Scream",year:1996},{title:"Interview with the Vampire",year:1994},{title:"Candyman",year:1992},{title:"Event Horizon",year:1997},{title:"The Blair Witch Project",year:1999},{title:"Sleepy Hollow",year:1999},{title:"Misery",year:1990},{title:"I Know What You Did Last Summer",year:1997},{title:"Bram Stoker's Dracula",year:1992},{title:"Urban Legend",year:1998},{title:"The Frighteners",year:1996},{title:"Species",year:1995},{title:"Arachnophobia",year:1990},{title:"Scream 2",year:1997}],
-"Sci-Fi":[{title:"Jurassic Park",year:1993},{title:"The Matrix",year:1999},{title:"Independence Day",year:1996},{title:"Men in Black",year:1997},{title:"Twelve Monkeys",year:1995},{title:"Gattaca",year:1997},{title:"Total Recall",year:1990},{title:"Stargate",year:1994},{title:"The Fifth Element",year:1997},{title:"Starship Troopers",year:1997},{title:"Contact",year:1997},{title:"Waterworld",year:1995},{title:"Deep Impact",year:1998},{title:"Armageddon",year:1998},{title:"The Truman Show",year:1998},{title:"Dark City",year:1998}],
-Romance:[{title:"Pretty Woman",year:1990},{title:"Sleepless in Seattle",year:1993},{title:"Titanic",year:1997},{title:"Notting Hill",year:1999},{title:"While You Were Sleeping",year:1995},{title:"You've Got Mail",year:1998},{title:"Ghost",year:1990},{title:"Jerry Maguire",year:1996},{title:"10 Things I Hate About You",year:1999},{title:"My Best Friend's Wedding",year:1997},{title:"French Kiss",year:1995},{title:"Sabrina",year:1995},{title:"Runaway Bride",year:1999},{title:"Four Weddings and a Funeral",year:1994},{title:"Only You",year:1994}],
-Thriller:[{title:"The Silence of the Lambs",year:1991},{title:"Se7en",year:1995},{title:"The Usual Suspects",year:1995},{title:"L.A. Confidential",year:1997},{title:"Fargo",year:1996},{title:"The Sixth Sense",year:1999},{title:"Heat",year:1995},{title:"Basic Instinct",year:1992},{title:"The Fugitive",year:1993},{title:"Primal Fear",year:1996},{title:"Kiss the Girls",year:1997},{title:"The Talented Mr. Ripley",year:1999},{title:"The Game",year:1997},{title:"Cape Fear",year:1991},{title:"Copycat",year:1995}],
-Fantasy:[{title:"Edward Scissorhands",year:1990},{title:"Hook",year:1991},{title:"The Fisher King",year:1991},{title:"Jumanji",year:1995},{title:"Dragonheart",year:1996},{title:"Casper",year:1995},{title:"Interview with the Vampire",year:1994},{title:"The Nightmare Before Christmas",year:1993},{title:"Groundhog Day",year:1993},{title:"Death Becomes Her",year:1992},{title:"Toys",year:1992},{title:"The Indian in the Cupboard",year:1995},{title:"Michael",year:1996},{title:"Powder",year:1995},{title:"Multiplicity",year:1996}],
-Western:[{title:"Dances with Wolves",year:1990},{title:"Unforgiven",year:1992},{title:"Tombstone",year:1993},{title:"Wyatt Earp",year:1994},{title:"The Quick and the Dead",year:1995},{title:"Maverick",year:1994},{title:"Young Guns II",year:1990},{title:"City Slickers",year:1991},{title:"Geronimo: An American Legend",year:1993},{title:"Posse",year:1993},{title:"Bad Girls",year:1994},{title:"The Ballad of Little Jo",year:1993},{title:"Wild Bill",year:1995},{title:"Last of the Mohicans",year:1992},{title:"8 Seconds",year:1994}],
-Adventure:[{title:"Jurassic Park",year:1993},{title:"Jumanji",year:1995},{title:"The Mummy",year:1999},{title:"Apollo 13",year:1995},{title:"Free Willy",year:1993},{title:"Hook",year:1991},{title:"The Rocketeer",year:1991},{title:"Twister",year:1996},{title:"Dances with Wolves",year:1990},{title:"Cliffhanger",year:1993},{title:"The Three Musketeers",year:1993},{title:"Anaconda",year:1997},{title:"Waterworld",year:1995},{title:"Congo",year:1995},{title:"George of the Jungle",year:1997}],
+Comedy:[{title:"Home Alone",year:1990},{title:"Dumb and Dumber",year:1994},{title:"Groundhog Day",year:1993},{title:"Wayne's World",year:1992},{title:"Mrs. Doubtfire",year:1993},{title:"There's Something About Mary",year:1998},{title:"Austin Powers: International Man of Mystery",year:1997},{title:"The Big Lebowski",year:1998},{title:"Clueless",year:1995},{title:"Liar Liar",year:1997},{title:"Happy Gilmore",year:1996},{title:"Home Alone 2: Lost in New York",year:1992},{title:"Billy Madison",year:1995},{title:"The Waterboy",year:1998},{title:"Tommy Boy",year:1995},{title:"Grumpy Old Men",year:1993},{title:"My Cousin Vinny",year:1992},{title:"The Fisher King",year:1991},{title:"Toys",year:1992},{title:"The Truman Show",year:1998}],
 Crime:[{title:"Goodfellas",year:1990},{title:"Pulp Fiction",year:1994},{title:"The Usual Suspects",year:1995},{title:"Heat",year:1995},{title:"Casino",year:1995},{title:"L.A. Confidential",year:1997},{title:"Reservoir Dogs",year:1992},{title:"Se7en",year:1995},{title:"The Silence of the Lambs",year:1991},{title:"Fargo",year:1996},{title:"Donnie Brasco",year:1997},{title:"Menace II Society",year:1993},{title:"Boyz n the Hood",year:1991},{title:"Carlito's Way",year:1993},{title:"Trainspotting",year:1996}],
 Documentary:[{title:"Hoop Dreams",year:1994},{title:"When We Were Kings",year:1996},{title:"Paris Is Burning",year:1990},{title:"Crumb",year:1994},{title:"Fast, Cheap & Out of Control",year:1997},{title:"The Celluloid Closet",year:1995},{title:"Buena Vista Social Club",year:1999},{title:"4 Little Girls",year:1997},{title:"The War Room",year:1993},{title:"Unzipped",year:1995},{title:"Visions of Light",year:1992},{title:"Anne Frank Remembered",year:1995},{title:"Brother's Keeper",year:1992},{title:"Microcosmos",year:1996},{title:"Hands on a Hard Body",year:1997}],
-Family:[{title:"Home Alone",year:1990},{title:"The Lion King",year:1994},{title:"Jumanji",year:1995},{title:"Beauty and the Beast",year:1991},{title:"Matilda",year:1996},{title:"Free Willy",year:1993},{title:"The Sandlot",year:1993},{title:"Toy Story",year:1995},{title:"Mrs. Doubtfire",year:1993},{title:"Homeward Bound: The Incredible Journey",year:1993},{title:"Angels in the Outfield",year:1994},{title:"The Mighty Ducks",year:1992},{title:"Andre",year:1994},{title:"Casper",year:1995},{title:"Flubber",year:1997}]
+Drama:[{title:"Forrest Gump",year:1994},{title:"The Shawshank Redemption",year:1994},{title:"Good Will Hunting",year:1997},{title:"Schindler's List",year:1993},{title:"American Beauty",year:1999},{title:"The Green Mile",year:1999},{title:"As Good as It Gets",year:1997},{title:"Dead Man Walking",year:1995},{title:"Philadelphia",year:1993},{title:"Braveheart",year:1995},{title:"The English Patient",year:1996},{title:"The Insider",year:1999},{title:"Boogie Nights",year:1997},{title:"Magnolia",year:1999},{title:"Leaving Las Vegas",year:1995},{title:"The Silence of the Lambs",year:1991},{title:"Apollo 13",year:1995},{title:"Mrs. Doubtfire",year:1993},{title:"The Fisher King",year:1991},{title:"Toys",year:1992},{title:"Misery",year:1990},{title:"Heat",year:1995},{title:"The Truman Show",year:1998},{title:"Last of the Mohicans",year:1992}],
+Family:[{title:"Home Alone",year:1990},{title:"The Lion King",year:1994},{title:"Jumanji",year:1995},{title:"Beauty and the Beast",year:1991},{title:"Matilda",year:1996},{title:"Free Willy",year:1993},{title:"The Sandlot",year:1993},{title:"Toy Story",year:1995},{title:"Homeward Bound: The Incredible Journey",year:1993},{title:"Angels in the Outfield",year:1994},{title:"The Mighty Ducks",year:1992},{title:"Andre",year:1994},{title:"Casper",year:1995},{title:"Flubber",year:1997}],
+Fantasy:[{title:"Edward Scissorhands",year:1990},{title:"Hook",year:1991},{title:"Jumanji",year:1995},{title:"Dragonheart",year:1996},{title:"Casper",year:1995},{title:"Interview with the Vampire",year:1994},{title:"The Nightmare Before Christmas",year:1993},{title:"Groundhog Day",year:1993},{title:"Death Becomes Her",year:1992},{title:"The Indian in the Cupboard",year:1995},{title:"Michael",year:1996},{title:"Powder",year:1995},{title:"Multiplicity",year:1996}],
+Horror:[{title:"Scream",year:1996},{title:"Interview with the Vampire",year:1994},{title:"Candyman",year:1992},{title:"Event Horizon",year:1997},{title:"The Blair Witch Project",year:1999},{title:"Sleepy Hollow",year:1999},{title:"I Know What You Did Last Summer",year:1997},{title:"Bram Stoker's Dracula",year:1992},{title:"Urban Legend",year:1998},{title:"The Frighteners",year:1996},{title:"Species",year:1995},{title:"Arachnophobia",year:1990},{title:"Scream 2",year:1997}],
+Romance:[{title:"Pretty Woman",year:1990},{title:"Sleepless in Seattle",year:1993},{title:"Titanic",year:1997},{title:"Notting Hill",year:1999},{title:"While You Were Sleeping",year:1995},{title:"You've Got Mail",year:1998},{title:"Ghost",year:1990},{title:"Jerry Maguire",year:1996},{title:"10 Things I Hate About You",year:1999},{title:"My Best Friend's Wedding",year:1997},{title:"French Kiss",year:1995},{title:"Sabrina",year:1995},{title:"Runaway Bride",year:1999},{title:"Four Weddings and a Funeral",year:1994},{title:"Only You",year:1994}],
+"Sci-Fi":[{title:"Jurassic Park",year:1993},{title:"The Matrix",year:1999},{title:"Independence Day",year:1996},{title:"Men in Black",year:1997},{title:"Twelve Monkeys",year:1995},{title:"Gattaca",year:1997},{title:"Total Recall",year:1990},{title:"Stargate",year:1994},{title:"The Fifth Element",year:1997},{title:"Starship Troopers",year:1997},{title:"Contact",year:1997},{title:"Waterworld",year:1995},{title:"Deep Impact",year:1998},{title:"Armageddon",year:1998},{title:"Dark City",year:1998},{title:"Toys",year:1992}],
+Thriller:[{title:"The Silence of the Lambs",year:1991},{title:"Se7en",year:1995},{title:"The Usual Suspects",year:1995},{title:"L.A. Confidential",year:1997},{title:"Fargo",year:1996},{title:"The Sixth Sense",year:1999},{title:"Basic Instinct",year:1992},{title:"The Fugitive",year:1993},{title:"Primal Fear",year:1996},{title:"Kiss the Girls",year:1997},{title:"The Talented Mr. Ripley",year:1999},{title:"The Game",year:1997},{title:"Cape Fear",year:1991},{title:"Copycat",year:1995},{title:"Misery",year:1990}],
+Western:[{title:"Dances with Wolves",year:1990},{title:"Unforgiven",year:1992},{title:"Tombstone",year:1993},{title:"Wyatt Earp",year:1994},{title:"The Quick and the Dead",year:1995},{title:"Maverick",year:1994},{title:"Young Guns II",year:1990},{title:"City Slickers",year:1991},{title:"Geronimo: An American Legend",year:1993},{title:"Posse",year:1993},{title:"Bad Girls",year:1994},{title:"The Ballad of Little Jo",year:1993},{title:"Wild Bill",year:1995},{title:"8 Seconds",year:1994}]
 },
 2000:{
-Action:[{title:"Gladiator",year:2000},{title:"The Bourne Identity",year:2002},{title:"Kill Bill: Vol. 1",year:2003},{title:"Batman Begins",year:2005},{title:"Iron Man",year:2008},{title:"The Dark Knight",year:2008},{title:"Casino Royale",year:2006},{title:"300",year:2006},{title:"Live Free or Die Hard",year:2007},{title:"Spider-Man",year:2002},{title:"Mission: Impossible III",year:2006},{title:"The Bourne Supremacy",year:2004},{title:"National Treasure",year:2004},{title:"Man on Fire",year:2004},{title:"Behind Enemy Lines",year:2001},{title:"V for Vendetta",year:2005}],
-Comedy:[{title:"Superbad",year:2007},{title:"Anchorman: The Legend of Ron Burgundy",year:2004},{title:"Meet the Parents",year:2000},{title:"Wedding Crashers",year:2005},{title:"Napoleon Dynamite",year:2004},{title:"Zoolander",year:2001},{title:"Legally Blonde",year:2001},{title:"Bruce Almighty",year:2003},{title:"Knocked Up",year:2007},{title:"The 40-Year-Old Virgin",year:2005},{title:"Elf",year:2003},{title:"Old School",year:2003},{title:"Dodgeball: A True Underdog Story",year:2004},{title:"Meet the Fockers",year:2004},{title:"Talladega Nights: The Ballad of Ricky Bobby",year:2006},{title:"School of Rock",year:2003},{title:"Zombieland",year:2009},{title:"The Hangover",year:2009}],
-Drama:[{title:"The Departed",year:2006},{title:"No Country for Old Men",year:2007},{title:"Million Dollar Baby",year:2004},{title:"There Will Be Blood",year:2007},{title:"Slumdog Millionaire",year:2008},{title:"American History X",year:2000},{title:"Requiem for a Dream",year:2000},{title:"Crash",year:2004},{title:"Little Miss Sunshine",year:2006},{title:"The Pursuit of Happyness",year:2006},{title:"A Beautiful Mind",year:2001},{title:"The Aviator",year:2004},{title:"Cinderella Man",year:2005},{title:"Munich",year:2005},{title:"Capote",year:2005},{title:"Brokeback Mountain",year:2005}],
+Action:[{title:"Gladiator",year:2000},{title:"The Bourne Identity",year:2002},{title:"Kill Bill: Vol. 1",year:2003},{title:"Batman Begins",year:2005},{title:"Iron Man",year:2008},{title:"The Dark Knight",year:2008},{title:"Casino Royale",year:2006},{title:"300",year:2006},{title:"Live Free or Die Hard",year:2007},{title:"Spider-Man",year:2002},{title:"Mission: Impossible III",year:2006},{title:"The Bourne Supremacy",year:2004},{title:"National Treasure",year:2004},{title:"Man on Fire",year:2004},{title:"Behind Enemy Lines",year:2001},{title:"V for Vendetta",year:2005},{title:"Ned Kelly",year:2003}],
+Adventure:[{title:"Pirates of the Caribbean: The Curse of the Black Pearl",year:2003},{title:"The Lord of the Rings: The Fellowship of the Ring",year:2001},{title:"Master and Commander: The Far Side of the World",year:2003},{title:"National Treasure",year:2004},{title:"Journey to the Center of the Earth",year:2008},{title:"Around the World in 80 Days",year:2004},{title:"Sahara",year:2005},{title:"The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",year:2005},{title:"King Kong",year:2005},{title:"The Golden Compass",year:2007},{title:"Into the Wild",year:2007},{title:"Cast Away",year:2000},{title:"Indiana Jones and the Kingdom of the Crystal Skull",year:2008},{title:"Harry Potter and the Sorcerer's Stone",year:2001},{title:"Ned Kelly",year:2003}],
 Animation:[{title:"Finding Nemo",year:2003},{title:"Shrek",year:2001},{title:"The Incredibles",year:2004},{title:"Wall-E",year:2008},{title:"Monsters, Inc.",year:2001},{title:"Ratatouille",year:2007},{title:"Spirited Away",year:2001},{title:"Kung Fu Panda",year:2008},{title:"Ice Age",year:2002},{title:"Shrek 2",year:2004},{title:"Madagascar",year:2005},{title:"Cars",year:2006},{title:"Over the Hedge",year:2006},{title:"Corpse Bride",year:2005},{title:"Happy Feet",year:2006},{title:"Coraline",year:2009},{title:"The Polar Express",year:2004}],
-Horror:[{title:"The Ring",year:2002},{title:"Saw",year:2004},{title:"28 Days Later",year:2002},{title:"The Others",year:2001},{title:"Paranormal Activity",year:2007},{title:"Shaun of the Dead",year:2004},{title:"Let the Right One In",year:2008},{title:"Dawn of the Dead",year:2004},{title:"Hostel",year:2005},{title:"The Descent",year:2005},{title:"30 Days of Night",year:2007},{title:"The Grudge",year:2004},{title:"House of Wax",year:2005},{title:"Orphan",year:2009},{title:"The Mist",year:2007},{title:"Drag Me to Hell",year:2009}],
-"Sci-Fi":[{title:"The Matrix Reloaded",year:2003},{title:"Minority Report",year:2002},{title:"I, Robot",year:2004},{title:"War of the Worlds",year:2005},{title:"Children of Men",year:2006},{title:"District 9",year:2009},{title:"Wall-E",year:2008},{title:"Avatar",year:2009},{title:"Star Wars: Episode III - Revenge of the Sith",year:2005},{title:"I Am Legend",year:2007},{title:"Sunshine",year:2007},{title:"Serenity",year:2005},{title:"A.I. Artificial Intelligence",year:2001},{title:"Cloverfield",year:2008},{title:"Signs",year:2002}],
-Romance:[{title:"The Notebook",year:2004},{title:"Love Actually",year:2003},{title:"(500) Days of Summer",year:2009},{title:"Eternal Sunshine of the Spotless Mind",year:2004},{title:"Pride & Prejudice",year:2005},{title:"Enchanted",year:2007},{title:"27 Dresses",year:2008},{title:"Something's Gotta Give",year:2003},{title:"How to Lose a Guy in 10 Days",year:2003},{title:"Sweet Home Alabama",year:2002},{title:"Music and Lyrics",year:2007},{title:"The Holiday",year:2006},{title:"13 Going on 30",year:2004},{title:"Just Married",year:2003},{title:"A Walk to Remember",year:2002}],
-Thriller:[{title:"Memento",year:2000},{title:"Zodiac",year:2007},{title:"Gone Baby Gone",year:2007},{title:"Mystic River",year:2003},{title:"The Prestige",year:2006},{title:"Collateral",year:2004},{title:"Michael Clayton",year:2007},{title:"Panic Room",year:2002},{title:"Taken",year:2008},{title:"The Bourne Ultimatum",year:2007},{title:"Body of Lies",year:2008},{title:"Eagle Eye",year:2008},{title:"Red Eye",year:2005},{title:"Disturbia",year:2007},{title:"Flightplan",year:2005},{title:"Vantage Point",year:2008},{title:"Wanted",year:2008},{title:"16 Blocks",year:2006}],
-Fantasy:[{title:"Harry Potter and the Sorcerer's Stone",year:2001},{title:"The Lord of the Rings: The Fellowship of the Ring",year:2001},{title:"The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",year:2005},{title:"Pan's Labyrinth",year:2006},{title:"Stardust",year:2007},{title:"Big Fish",year:2003},{title:"Charlie and the Chocolate Factory",year:2005},{title:"Pirates of the Caribbean: The Curse of the Black Pearl",year:2003},{title:"Harry Potter and the Chamber of Secrets",year:2002},{title:"The Lord of the Rings: The Two Towers",year:2002},{title:"The Lord of the Rings: The Return of the King",year:2003},{title:"Shrek",year:2001},{title:"Elf",year:2003},{title:"The Golden Compass",year:2007},{title:"Enchanted",year:2007}],
-Western:[{title:"3:10 to Yuma",year:2007},{title:"Open Range",year:2003},{title:"The Assassination of Jesse James by the Coward Robert Ford",year:2007},{title:"Appaloosa",year:2008},{title:"The Alamo",year:2004},{title:"Seraphim Falls",year:2006},{title:"The Missing",year:2003},{title:"American Outlaws",year:2001},{title:"Down in the Valley",year:2005},{title:"The Proposition",year:2005},{title:"Sukiyaki Western Django",year:2007},{title:"Bandidas",year:2006},{title:"Ned Kelly",year:2003},{title:"Shanghai Noon",year:2000},{title:"Texas Rangers",year:2001}],
-Adventure:[{title:"Pirates of the Caribbean: The Curse of the Black Pearl",year:2003},{title:"The Lord of the Rings: The Fellowship of the Ring",year:2001},{title:"Master and Commander: The Far Side of the World",year:2003},{title:"National Treasure",year:2004},{title:"Night at the Museum",year:2006},{title:"Journey to the Center of the Earth",year:2008},{title:"Around the World in 80 Days",year:2004},{title:"Sahara",year:2005},{title:"The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",year:2005},{title:"King Kong",year:2005},{title:"The Golden Compass",year:2007},{title:"Into the Wild",year:2007},{title:"Cast Away",year:2000},{title:"The Bourne Identity",year:2002},{title:"Indiana Jones and the Kingdom of the Crystal Skull",year:2008}],
-Crime:[{title:"The Departed",year:2006},{title:"No Country for Old Men",year:2007},{title:"American Gangster",year:2007},{title:"Catch Me If You Can",year:2002},{title:"Ocean's Eleven",year:2001},{title:"Training Day",year:2001},{title:"Road to Perdition",year:2002},{title:"Kill Bill: Vol. 1",year:2003},{title:"A History of Violence",year:2005},{title:"Sin City",year:2005},{title:"Collateral",year:2004},{title:"Zodiac",year:2007},{title:"Mystic River",year:2003},{title:"In Bruges",year:2008},{title:"21 Grams",year:2003}],
+Comedy:[{title:"Superbad",year:2007},{title:"Anchorman: The Legend of Ron Burgundy",year:2004},{title:"Meet the Parents",year:2000},{title:"Wedding Crashers",year:2005},{title:"Napoleon Dynamite",year:2004},{title:"Zoolander",year:2001},{title:"Legally Blonde",year:2001},{title:"Bruce Almighty",year:2003},{title:"Knocked Up",year:2007},{title:"The 40-Year-Old Virgin",year:2005},{title:"Elf",year:2003},{title:"Old School",year:2003},{title:"Dodgeball: A True Underdog Story",year:2004},{title:"Meet the Fockers",year:2004},{title:"Talladega Nights: The Ballad of Ricky Bobby",year:2006},{title:"School of Rock",year:2003},{title:"Zombieland",year:2009},{title:"The Hangover",year:2009},{title:"Night at the Museum",year:2006}],
+Crime:[{title:"The Departed",year:2006},{title:"No Country for Old Men",year:2007},{title:"American Gangster",year:2007},{title:"Catch Me If You Can",year:2002},{title:"Ocean's Eleven",year:2001},{title:"Training Day",year:2001},{title:"Road to Perdition",year:2002},{title:"Kill Bill: Vol. 1",year:2003},{title:"A History of Violence",year:2005},{title:"Sin City",year:2005},{title:"Collateral",year:2004},{title:"Zodiac",year:2007},{title:"Mystic River",year:2003},{title:"In Bruges",year:2008},{title:"21 Grams",year:2003},{title:"Gone Baby Gone",year:2007}],
 Documentary:[{title:"Super Size Me",year:2004},{title:"Fahrenheit 9/11",year:2004},{title:"March of the Penguins",year:2005},{title:"An Inconvenient Truth",year:2006},{title:"Bowling for Columbine",year:2002},{title:"Spellbound",year:2002},{title:"Man on Wire",year:2008},{title:"Grizzly Man",year:2005},{title:"Winged Migration",year:2001},{title:"The Fog of War",year:2003},{title:"Capturing the Friedmans",year:2003},{title:"Murderball",year:2005},{title:"Touching the Void",year:2003},{title:"The King of Kong",year:2007},{title:"Religulous",year:2008}],
-Family:[{title:"Finding Nemo",year:2003},{title:"The Incredibles",year:2004},{title:"Shrek",year:2001},{title:"Elf",year:2003},{title:"Charlie and the Chocolate Factory",year:2005},{title:"Night at the Museum",year:2006},{title:"Harry Potter and the Sorcerer's Stone",year:2001},{title:"The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",year:2005},{title:"Because of Winn-Dixie",year:2005},{title:"Ice Age",year:2002},{title:"Freaky Friday",year:2003},{title:"Cheaper by the Dozen",year:2003},{title:"The Princess Diaries",year:2001},{title:"Holes",year:2003},{title:"Nanny McPhee",year:2005}]
+Drama:[{title:"The Departed",year:2006},{title:"Million Dollar Baby",year:2004},{title:"There Will Be Blood",year:2007},{title:"Slumdog Millionaire",year:2008},{title:"American History X",year:2000},{title:"Requiem for a Dream",year:2000},{title:"Crash",year:2004},{title:"Little Miss Sunshine",year:2006},{title:"The Pursuit of Happyness",year:2006},{title:"A Beautiful Mind",year:2001},{title:"The Aviator",year:2004},{title:"Cinderella Man",year:2005},{title:"Munich",year:2005},{title:"Capote",year:2005},{title:"Brokeback Mountain",year:2005},{title:"Gone Baby Gone",year:2007},{title:"The Prestige",year:2006},{title:"The Alamo",year:2004},{title:"Ned Kelly",year:2003}],
+Family:[{title:"Finding Nemo",year:2003},{title:"The Incredibles",year:2004},{title:"Shrek",year:2001},{title:"Elf",year:2003},{title:"Charlie and the Chocolate Factory",year:2005},{title:"Night at the Museum",year:2006},{title:"The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",year:2005},{title:"Because of Winn-Dixie",year:2005},{title:"Ice Age",year:2002},{title:"Freaky Friday",year:2003},{title:"Cheaper by the Dozen",year:2003},{title:"The Princess Diaries",year:2001},{title:"Holes",year:2003},{title:"Nanny McPhee",year:2005}],
+Fantasy:[{title:"Harry Potter and the Sorcerer's Stone",year:2001},{title:"The Lord of the Rings: The Fellowship of the Ring",year:2001},{title:"The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",year:2005},{title:"Pan's Labyrinth",year:2006},{title:"Stardust",year:2007},{title:"Big Fish",year:2003},{title:"Charlie and the Chocolate Factory",year:2005},{title:"Pirates of the Caribbean: The Curse of the Black Pearl",year:2003},{title:"Harry Potter and the Chamber of Secrets",year:2002},{title:"The Lord of the Rings: The Two Towers",year:2002},{title:"The Lord of the Rings: The Return of the King",year:2003},{title:"Shrek",year:2001},{title:"Elf",year:2003},{title:"The Golden Compass",year:2007},{title:"Enchanted",year:2007},{title:"Night at the Museum",year:2006}],
+Horror:[{title:"The Ring",year:2002},{title:"Saw",year:2004},{title:"28 Days Later",year:2002},{title:"The Others",year:2001},{title:"Paranormal Activity",year:2007},{title:"Shaun of the Dead",year:2004},{title:"Let the Right One In",year:2008},{title:"Dawn of the Dead",year:2004},{title:"Hostel",year:2005},{title:"The Descent",year:2005},{title:"30 Days of Night",year:2007},{title:"The Grudge",year:2004},{title:"House of Wax",year:2005},{title:"Orphan",year:2009},{title:"The Mist",year:2007},{title:"Drag Me to Hell",year:2009}],
+Romance:[{title:"The Notebook",year:2004},{title:"Love Actually",year:2003},{title:"(500) Days of Summer",year:2009},{title:"Eternal Sunshine of the Spotless Mind",year:2004},{title:"Pride & Prejudice",year:2005},{title:"Enchanted",year:2007},{title:"27 Dresses",year:2008},{title:"Something's Gotta Give",year:2003},{title:"How to Lose a Guy in 10 Days",year:2003},{title:"Sweet Home Alabama",year:2002},{title:"Music and Lyrics",year:2007},{title:"The Holiday",year:2006},{title:"13 Going on 30",year:2004},{title:"Just Married",year:2003},{title:"A Walk to Remember",year:2002}],
+"Sci-Fi":[{title:"The Matrix Reloaded",year:2003},{title:"Minority Report",year:2002},{title:"I, Robot",year:2004},{title:"War of the Worlds",year:2005},{title:"Children of Men",year:2006},{title:"District 9",year:2009},{title:"Wall-E",year:2008},{title:"Avatar",year:2009},{title:"Star Wars: Episode III - Revenge of the Sith",year:2005},{title:"I Am Legend",year:2007},{title:"Sunshine",year:2007},{title:"Serenity",year:2005},{title:"A.I. Artificial Intelligence",year:2001},{title:"Cloverfield",year:2008},{title:"Signs",year:2002},{title:"The Prestige",year:2006}],
+Thriller:[{title:"Memento",year:2000},{title:"Zodiac",year:2007},{title:"Mystic River",year:2003},{title:"Collateral",year:2004},{title:"Michael Clayton",year:2007},{title:"Panic Room",year:2002},{title:"Taken",year:2008},{title:"The Bourne Ultimatum",year:2007},{title:"Body of Lies",year:2008},{title:"Eagle Eye",year:2008},{title:"Red Eye",year:2005},{title:"Disturbia",year:2007},{title:"Flightplan",year:2005},{title:"Vantage Point",year:2008},{title:"Wanted",year:2008},{title:"16 Blocks",year:2006},{title:"The Bourne Identity",year:2002},{title:"No Country for Old Men",year:2007}],
+Western:[{title:"3:10 to Yuma",year:2007},{title:"Open Range",year:2003},{title:"The Assassination of Jesse James by the Coward Robert Ford",year:2007},{title:"Appaloosa",year:2008},{title:"Seraphim Falls",year:2006},{title:"The Missing",year:2003},{title:"American Outlaws",year:2001},{title:"Down in the Valley",year:2005},{title:"The Proposition",year:2005},{title:"Sukiyaki Western Django",year:2007},{title:"Bandidas",year:2006},{title:"Shanghai Noon",year:2000},{title:"Texas Rangers",year:2001},{title:"No Country for Old Men",year:2007}]
 },
 2010:{
-Action:[{title:"The Avengers",year:2012},{title:"Mad Max: Fury Road",year:2015},{title:"John Wick",year:2014},{title:"Mission: Impossible - Fallout",year:2018},{title:"Kingsman: The Secret Service",year:2014},{title:"Black Panther",year:2018},{title:"Baby Driver",year:2017},{title:"Skyfall",year:2012},{title:"Wonder Woman",year:2017},{title:"Guardians of the Galaxy",year:2014},{title:"Fast Five",year:2011},{title:"Furious 7",year:2015},{title:"Deadpool",year:2016},{title:"Logan",year:2017},{title:"Captain America: Civil War",year:2016},{title:"Star Wars: The Last Jedi",year:2017}],
-Comedy:[{title:"Bridesmaids",year:2011},{title:"21 Jump Street",year:2012},{title:"The Grand Budapest Hotel",year:2014},{title:"Crazy Rich Asians",year:2018},{title:"Game Night",year:2018},{title:"The Big Sick",year:2017},{title:"Booksmart",year:2019},{title:"Ted",year:2012},{title:"What We Do in the Shadows",year:2014},{title:"Neighbors",year:2014},{title:"Spy",year:2015},{title:"Trainwreck",year:2015},{title:"The Nice Guys",year:2016},{title:"Popstar: Never Stop Never Stopping",year:2016},{title:"Central Intelligence",year:2016}],
-Drama:[{title:"12 Years a Slave",year:2013},{title:"The Social Network",year:2010},{title:"Whiplash",year:2014},{title:"Moonlight",year:2016},{title:"La La Land",year:2016},{title:"Manchester by the Sea",year:2016},{title:"Room",year:2015},{title:"The Shape of Water",year:2017},{title:"Three Billboards Outside Ebbing, Missouri",year:2017},{title:"Parasite",year:2019},{title:"The King's Speech",year:2010},{title:"Black Swan",year:2010},{title:"Argo",year:2012},{title:"Boyhood",year:2014},{title:"The Revenant",year:2015},{title:"Spotlight",year:2015},{title:"Lady Bird",year:2017}],
+Action:[{title:"The Avengers",year:2012},{title:"Mad Max: Fury Road",year:2015},{title:"John Wick",year:2014},{title:"Mission: Impossible - Fallout",year:2018},{title:"Kingsman: The Secret Service",year:2014},{title:"Black Panther",year:2018},{title:"Baby Driver",year:2017},{title:"Skyfall",year:2012},{title:"Wonder Woman",year:2017},{title:"Guardians of the Galaxy",year:2014},{title:"Fast Five",year:2011},{title:"Furious 7",year:2015},{title:"Deadpool",year:2016},{title:"Logan",year:2017},{title:"Captain America: Civil War",year:2016},{title:"Star Wars: The Last Jedi",year:2017},{title:"The Huntsman: Winter's War",year:2016}],
+Adventure:[{title:"The Hobbit: An Unexpected Journey",year:2012},{title:"Life of Pi",year:2012},{title:"The Martian",year:2015},{title:"Guardians of the Galaxy",year:2014},{title:"Jumanji: Welcome to the Jungle",year:2017},{title:"The Jungle Book",year:2016},{title:"Everest",year:2015},{title:"127 Hours",year:2010},{title:"The Revenant",year:2015},{title:"Tomorrowland",year:2015},{title:"Pacific Rim",year:2013},{title:"The Secret Life of Walter Mitty",year:2013},{title:"Wonder Woman",year:2017},{title:"The Huntsman: Winter's War",year:2016},{title:"Nerve",year:2016}],
 Animation:[{title:"Frozen",year:2013},{title:"Inside Out",year:2015},{title:"How to Train Your Dragon",year:2010},{title:"Coco",year:2017},{title:"Zootopia",year:2016},{title:"Toy Story 3",year:2010},{title:"Big Hero 6",year:2014},{title:"Moana",year:2016},{title:"Spider-Man: Into the Spider-Verse",year:2018},{title:"The Lego Movie",year:2014},{title:"Wreck-It Ralph",year:2012},{title:"Brave",year:2012},{title:"The Croods",year:2013},{title:"Despicable Me",year:2010},{title:"Despicable Me 2",year:2013},{title:"Kubo and the Two Strings",year:2016},{title:"Isle of Dogs",year:2018}],
-Horror:[{title:"Get Out",year:2017},{title:"The Conjuring",year:2013},{title:"It",year:2017},{title:"Hereditary",year:2018},{title:"A Quiet Place",year:2018},{title:"Us",year:2019},{title:"The Babadook",year:2014},{title:"It Follows",year:2014},{title:"Split",year:2016},{title:"Insidious",year:2010},{title:"Sinister",year:2012},{title:"The Witch",year:2015},{title:"Don't Breathe",year:2016},{title:"Annabelle: Creation",year:2017},{title:"Ready or Not",year:2019}],
-"Sci-Fi":[{title:"Inception",year:2010},{title:"Interstellar",year:2014},{title:"Arrival",year:2016},{title:"Gravity",year:2013},{title:"Ex Machina",year:2014},{title:"Edge of Tomorrow",year:2014},{title:"Blade Runner 2049",year:2017},{title:"Ready Player One",year:2018},{title:"The Martian",year:2015},{title:"Star Wars: The Force Awakens",year:2015},{title:"Looper",year:2012},{title:"Elysium",year:2013},{title:"Pacific Rim",year:2013},{title:"Snowpiercer",year:2013},{title:"Passengers",year:2016},{title:"Annihilation",year:2018}],
-Romance:[{title:"Crazy, Stupid, Love.",year:2011},{title:"Silver Linings Playbook",year:2012},{title:"The Fault in Our Stars",year:2014},{title:"About Time",year:2013},{title:"Before Midnight",year:2013},{title:"To All the Boys I've Loved Before",year:2018},{title:"Call Me by Your Name",year:2017},{title:"The Vow",year:2012},{title:"Me Before You",year:2016},{title:"Love, Simon",year:2018},{title:"Isn't It Romantic",year:2019},{title:"Warm Bodies",year:2013},{title:"The Best of Me",year:2014},{title:"Everything, Everything",year:2017},{title:"Midnight in Paris",year:2011}],
-Thriller:[{title:"Gone Girl",year:2014},{title:"Shutter Island",year:2010},{title:"Prisoners",year:2013},{title:"Nightcrawler",year:2014},{title:"Knives Out",year:2019},{title:"The Girl with the Dragon Tattoo",year:2011},{title:"Sicario",year:2015},{title:"Widows",year:2018},{title:"The Girl on the Train",year:2016},{title:"A Simple Favor",year:2018},{title:"Bad Times at the El Royale",year:2018},{title:"Searching",year:2018},{title:"The Invitation",year:2015},{title:"Nerve",year:2016},{title:"The Guest",year:2014},{title:"Wind River",year:2017}],
-Fantasy:[{title:"The Hobbit: An Unexpected Journey",year:2012},{title:"Harry Potter and the Deathly Hallows: Part 2",year:2011},{title:"Maleficent",year:2014},{title:"Beauty and the Beast",year:2017},{title:"Doctor Strange",year:2016},{title:"The Shape of Water",year:2017},{title:"Crimson Peak",year:2015},{title:"The Hobbit: The Desolation of Smaug",year:2013},{title:"The Hobbit: The Battle of the Five Armies",year:2014},{title:"Alice in Wonderland",year:2010},{title:"Oz the Great and Powerful",year:2013},{title:"Cinderella",year:2015},{title:"Into the Woods",year:2014},{title:"The Huntsman: Winter's War",year:2016},{title:"Pan",year:2015}],
-Western:[{title:"True Grit",year:2010},{title:"Django Unchained",year:2012},{title:"The Hateful Eight",year:2015},{title:"Hell or High Water",year:2016},{title:"The Lone Ranger",year:2013},{title:"Cowboys & Aliens",year:2011},{title:"Jane Got a Gun",year:2016},{title:"Bone Tomahawk",year:2015},{title:"Slow West",year:2015},{title:"The Salvation",year:2014},{title:"In a Valley of Violence",year:2016},{title:"The Homesman",year:2014},{title:"The Sisters Brothers",year:2018},{title:"Diablo",year:2015},{title:"The Magnificent Seven",year:2016}],
-Adventure:[{title:"The Hobbit: An Unexpected Journey",year:2012},{title:"Life of Pi",year:2012},{title:"The Martian",year:2015},{title:"Guardians of the Galaxy",year:2014},{title:"Jumanji: Welcome to the Jungle",year:2017},{title:"The Jungle Book",year:2016},{title:"Wild",year:2014},{title:"Into the Woods",year:2014},{title:"Everest",year:2015},{title:"127 Hours",year:2010},{title:"The Revenant",year:2015},{title:"Tomorrowland",year:2015},{title:"Pacific Rim",year:2013},{title:"The Secret Life of Walter Mitty",year:2013},{title:"Wonder Woman",year:2017}],
-Crime:[{title:"The Wolf of Wall Street",year:2013},{title:"Baby Driver",year:2017},{title:"The Town",year:2010},{title:"Prisoners",year:2013},{title:"Sicario",year:2015},{title:"Knives Out",year:2019},{title:"Gone Girl",year:2014},{title:"Nightcrawler",year:2014},{title:"American Hustle",year:2013},{title:"Logan Lucky",year:2017},{title:"Widows",year:2018},{title:"Hell or High Water",year:2016},{title:"The Gentlemen",year:2019},{title:"Uncut Gems",year:2019},{title:"Good Time",year:2017}],
+Comedy:[{title:"Bridesmaids",year:2011},{title:"21 Jump Street",year:2012},{title:"The Grand Budapest Hotel",year:2014},{title:"Crazy Rich Asians",year:2018},{title:"Game Night",year:2018},{title:"The Big Sick",year:2017},{title:"Booksmart",year:2019},{title:"Ted",year:2012},{title:"What We Do in the Shadows",year:2014},{title:"Neighbors",year:2014},{title:"Spy",year:2015},{title:"Trainwreck",year:2015},{title:"The Nice Guys",year:2016},{title:"Popstar: Never Stop Never Stopping",year:2016},{title:"Central Intelligence",year:2016},{title:"Into the Woods",year:2014},{title:"Knives Out",year:2019}],
+Crime:[{title:"The Wolf of Wall Street",year:2013},{title:"Baby Driver",year:2017},{title:"The Town",year:2010},{title:"Prisoners",year:2013},{title:"Sicario",year:2015},{title:"Knives Out",year:2019},{title:"Nightcrawler",year:2014},{title:"American Hustle",year:2013},{title:"Logan Lucky",year:2017},{title:"Widows",year:2018},{title:"Hell or High Water",year:2016},{title:"The Gentlemen",year:2019},{title:"Uncut Gems",year:2019},{title:"Good Time",year:2017},{title:"Nerve",year:2016}],
 Documentary:[{title:"20 Feet from Stardom",year:2013},{title:"Amy",year:2015},{title:"Free Solo",year:2018},{title:"Won't You Be My Neighbor?",year:2018},{title:"RBG",year:2018},{title:"Blackfish",year:2013},{title:"Icarus",year:2017},{title:"O.J.: Made in America",year:2016},{title:"The Act of Killing",year:2012},{title:"Searching for Sugar Man",year:2012},{title:"Citizenfour",year:2014},{title:"Jiro Dreams of Sushi",year:2011},{title:"Weiner",year:2016},{title:"Three Identical Strangers",year:2018},{title:"Cave of Forgotten Dreams",year:2010}],
-Family:[{title:"Frozen",year:2013},{title:"Inside Out",year:2015},{title:"Moana",year:2016},{title:"Paddington",year:2014},{title:"Paddington 2",year:2017},{title:"Wonder",year:2017},{title:"Coco",year:2017},{title:"Zootopia",year:2016},{title:"Big Hero 6",year:2014},{title:"The Lego Movie",year:2014},{title:"Christopher Robin",year:2018},{title:"A Wrinkle in Time",year:2018},{title:"Peter Rabbit",year:2018},{title:"Sing",year:2016},{title:"The BFG",year:2016}]
+Drama:[{title:"12 Years a Slave",year:2013},{title:"The Social Network",year:2010},{title:"Whiplash",year:2014},{title:"Moonlight",year:2016},{title:"La La Land",year:2016},{title:"Manchester by the Sea",year:2016},{title:"Room",year:2015},{title:"The Shape of Water",year:2017},{title:"Three Billboards Outside Ebbing, Missouri",year:2017},{title:"Parasite",year:2019},{title:"The King's Speech",year:2010},{title:"Black Swan",year:2010},{title:"Argo",year:2012},{title:"Boyhood",year:2014},{title:"The Revenant",year:2015},{title:"Spotlight",year:2015},{title:"Lady Bird",year:2017},{title:"Wild",year:2014},{title:"Gone Girl",year:2014},{title:"Crimson Peak",year:2015},{title:"The Huntsman: Winter's War",year:2016}],
+Family:[{title:"Frozen",year:2013},{title:"Inside Out",year:2015},{title:"Moana",year:2016},{title:"Paddington",year:2014},{title:"Paddington 2",year:2017},{title:"Wonder",year:2017},{title:"Coco",year:2017},{title:"Zootopia",year:2016},{title:"Big Hero 6",year:2014},{title:"The Lego Movie",year:2014},{title:"Christopher Robin",year:2018},{title:"A Wrinkle in Time",year:2018},{title:"Peter Rabbit",year:2018},{title:"Sing",year:2016},{title:"The BFG",year:2016}],
+Fantasy:[{title:"The Hobbit: An Unexpected Journey",year:2012},{title:"Harry Potter and the Deathly Hallows: Part 2",year:2011},{title:"Maleficent",year:2014},{title:"Beauty and the Beast",year:2017},{title:"Doctor Strange",year:2016},{title:"The Shape of Water",year:2017},{title:"The Hobbit: The Desolation of Smaug",year:2013},{title:"The Hobbit: The Battle of the Five Armies",year:2014},{title:"Alice in Wonderland",year:2010},{title:"Oz the Great and Powerful",year:2013},{title:"Cinderella",year:2015},{title:"Into the Woods",year:2014},{title:"Pan",year:2015}],
+Horror:[{title:"Get Out",year:2017},{title:"The Conjuring",year:2013},{title:"It",year:2017},{title:"Hereditary",year:2018},{title:"A Quiet Place",year:2018},{title:"Us",year:2019},{title:"The Babadook",year:2014},{title:"It Follows",year:2014},{title:"Split",year:2016},{title:"Insidious",year:2010},{title:"Sinister",year:2012},{title:"The Witch",year:2015},{title:"Don't Breathe",year:2016},{title:"Annabelle: Creation",year:2017},{title:"Ready or Not",year:2019},{title:"Crimson Peak",year:2015}],
+Romance:[{title:"Crazy, Stupid, Love.",year:2011},{title:"Silver Linings Playbook",year:2012},{title:"The Fault in Our Stars",year:2014},{title:"About Time",year:2013},{title:"Before Midnight",year:2013},{title:"To All the Boys I've Loved Before",year:2018},{title:"Call Me by Your Name",year:2017},{title:"The Vow",year:2012},{title:"Me Before You",year:2016},{title:"Love, Simon",year:2018},{title:"Isn't It Romantic",year:2019},{title:"Warm Bodies",year:2013},{title:"The Best of Me",year:2014},{title:"Everything, Everything",year:2017},{title:"Midnight in Paris",year:2011},{title:"Crimson Peak",year:2015}],
+"Sci-Fi":[{title:"Inception",year:2010},{title:"Interstellar",year:2014},{title:"Arrival",year:2016},{title:"Gravity",year:2013},{title:"Ex Machina",year:2014},{title:"Edge of Tomorrow",year:2014},{title:"Blade Runner 2049",year:2017},{title:"Ready Player One",year:2018},{title:"The Martian",year:2015},{title:"Star Wars: The Force Awakens",year:2015},{title:"Looper",year:2012},{title:"Elysium",year:2013},{title:"Pacific Rim",year:2013},{title:"Snowpiercer",year:2013},{title:"Passengers",year:2016},{title:"Annihilation",year:2018}],
+Thriller:[{title:"Gone Girl",year:2014},{title:"Shutter Island",year:2010},{title:"Prisoners",year:2013},{title:"Nightcrawler",year:2014},{title:"The Girl with the Dragon Tattoo",year:2011},{title:"Sicario",year:2015},{title:"Widows",year:2018},{title:"The Girl on the Train",year:2016},{title:"A Simple Favor",year:2018},{title:"Bad Times at the El Royale",year:2018},{title:"Searching",year:2018},{title:"The Invitation",year:2015},{title:"The Guest",year:2014},{title:"Wind River",year:2017},{title:"Crimson Peak",year:2015}],
+Western:[{title:"True Grit",year:2010},{title:"Django Unchained",year:2012},{title:"The Hateful Eight",year:2015},{title:"Hell or High Water",year:2016},{title:"The Lone Ranger",year:2013},{title:"Cowboys & Aliens",year:2011},{title:"Jane Got a Gun",year:2016},{title:"Bone Tomahawk",year:2015},{title:"Slow West",year:2015},{title:"The Salvation",year:2014},{title:"In a Valley of Violence",year:2016},{title:"The Homesman",year:2014},{title:"The Sisters Brothers",year:2018},{title:"Diablo",year:2015},{title:"The Magnificent Seven",year:2016}]
 },
 2020:{
-Action:[{title:"Top Gun: Maverick",year:2022},{title:"No Time to Die",year:2021},{title:"Dune",year:2021},{title:"John Wick: Chapter 4",year:2023},{title:"The Batman",year:2022},{title:"Spider-Man: No Way Home",year:2021},{title:"Mission: Impossible - Dead Reckoning Part One",year:2023},{title:"Black Widow",year:2021},{title:"Fast X",year:2023},{title:"Extraction",year:2020},{title:"The Suicide Squad",year:2021},{title:"Nobody",year:2021},{title:"The Gray Man",year:2022},{title:"Bullet Train",year:2022},{title:"Extraction 2",year:2023}],
-Comedy:[{title:"Barbie",year:2023},{title:"Free Guy",year:2021},{title:"Ticket to Paradise",year:2022},{title:"The Menu",year:2022},{title:"Glass Onion: A Knives Out Mystery",year:2022},{title:"Don't Look Up",year:2021},{title:"Weird: The Al Yankovic Story",year:2022},{title:"Cocaine Bear",year:2023},{title:"Palm Springs",year:2020},{title:"Bros",year:2022},{title:"No Hard Feelings",year:2023},{title:"Vacation Friends",year:2021},{title:"Dungeons & Dragons: Honor Among Thieves",year:2023},{title:"Joy Ride",year:2023},{title:"Book Club: The Next Chapter",year:2023}],
-Drama:[{title:"Nomadland",year:2020},{title:"CODA",year:2021},{title:"Everything Everywhere All at Once",year:2022},{title:"The Whale",year:2022},{title:"Oppenheimer",year:2023},{title:"Killers of the Flower Moon",year:2023},{title:"Past Lives",year:2023},{title:"The Fabelmans",year:2022},{title:"Minari",year:2020},{title:"American Fiction",year:2023},{title:"Sound of Metal",year:2020},{title:"Belfast",year:2021},{title:"The Power of the Dog",year:2021},{title:"The Holdovers",year:2023},{title:"Anatomy of a Fall",year:2023}],
+Action:[{title:"Top Gun: Maverick",year:2022},{title:"No Time to Die",year:2021},{title:"John Wick: Chapter 4",year:2023},{title:"Spider-Man: No Way Home",year:2021},{title:"Mission: Impossible - Dead Reckoning Part One",year:2023},{title:"Black Widow",year:2021},{title:"Fast X",year:2023},{title:"Extraction",year:2020},{title:"The Suicide Squad",year:2021},{title:"Nobody",year:2021},{title:"The Gray Man",year:2022},{title:"Bullet Train",year:2022},{title:"Extraction 2",year:2023},{title:"Sisu",year:2023},{title:"Ghosted",year:2023},{title:"Everything Everywhere All at Once",year:2022}],
+Adventure:[{title:"Dune",year:2021},{title:"Jungle Cruise",year:2021},{title:"The Lost City",year:2022},{title:"Uncharted",year:2022},{title:"Free Guy",year:2021},{title:"The Adam Project",year:2022},{title:"Indiana Jones and the Dial of Destiny",year:2023},{title:"65",year:2023},{title:"Wish",year:2023},{title:"The Super Mario Bros. Movie",year:2023},{title:"Everything Everywhere All at Once",year:2022},{title:"The Mitchells vs. the Machines",year:2021}],
 Animation:[{title:"Encanto",year:2021},{title:"Luca",year:2021},{title:"Turning Red",year:2022},{title:"Puss in Boots: The Last Wish",year:2022},{title:"Spider-Man: Across the Spider-Verse",year:2023},{title:"The Super Mario Bros. Movie",year:2023},{title:"Wish",year:2023},{title:"Elemental",year:2023},{title:"Soul",year:2020},{title:"Raya and the Last Dragon",year:2021},{title:"The Bad Guys",year:2022},{title:"Migration",year:2023},{title:"Sing 2",year:2021},{title:"Lightyear",year:2022},{title:"Trolls World Tour",year:2020},{title:"The Mitchells vs. the Machines",year:2021}],
-Horror:[{title:"A Quiet Place Part II",year:2021},{title:"Nope",year:2022},{title:"Talk to Me",year:2023},{title:"M3GAN",year:2023},{title:"Scream",year:2022},{title:"Barbarian",year:2022},{title:"Smile",year:2022},{title:"Pearl",year:2022},{title:"The Black Phone",year:2021},{title:"Evil Dead Rise",year:2023},{title:"Freaky",year:2020},{title:"Fresh",year:2022},{title:"Malignant",year:2021},{title:"X",year:2022},{title:"Renfield",year:2023}],
-"Sci-Fi":[{title:"Dune",year:2021},{title:"Dune: Part Two",year:2024},{title:"Everything Everywhere All at Once",year:2022},{title:"Tenet",year:2020},{title:"The Adam Project",year:2022},{title:"Godzilla vs. Kong",year:2021},{title:"Avatar: The Way of Water",year:2022},{title:"Reminiscence",year:2021},{title:"Moonfall",year:2022},{title:"65",year:2023},{title:"Prey",year:2022},{title:"Spiderhead",year:2022},{title:"Finch",year:2021},{title:"Voyagers",year:2021},{title:"Rebel Moon",year:2023}],
-Romance:[{title:"Anyone but You",year:2023},{title:"Marry Me",year:2022},{title:"Purple Hearts",year:2022},{title:"Red, White & Royal Blue",year:2023},{title:"Ticket to Paradise",year:2022},{title:"Past Lives",year:2023},{title:"Rye Lane",year:2023},{title:"Your Place or Mine",year:2023},{title:"The Photograph",year:2020},{title:"Love Hard",year:2021},{title:"The Half of It",year:2020},{title:"The Idea of You",year:2024},{title:"Shotgun Wedding",year:2022},{title:"My Big Fat Greek Wedding 3",year:2023},{title:"Players",year:2024}],
-Thriller:[{title:"Promising Young Woman",year:2020},{title:"The Menu",year:2022},{title:"Sharper",year:2023},{title:"Fair Play",year:2023},{title:"Saltburn",year:2023},{title:"Reptile",year:2023},{title:"Missing",year:2023},{title:"Don't Worry Darling",year:2022},{title:"Emily the Criminal",year:2022},{title:"The Killer",year:2023},{title:"The Invisible Man",year:2020},{title:"The Guilty",year:2021},{title:"Old",year:2021},{title:"No One Will Save You",year:2023},{title:"A Haunting in Venice",year:2023}],
+Comedy:[{title:"Barbie",year:2023},{title:"Free Guy",year:2021},{title:"Ticket to Paradise",year:2022},{title:"The Menu",year:2022},{title:"Glass Onion: A Knives Out Mystery",year:2022},{title:"Don't Look Up",year:2021},{title:"Weird: The Al Yankovic Story",year:2022},{title:"Cocaine Bear",year:2023},{title:"Palm Springs",year:2020},{title:"Bros",year:2022},{title:"No Hard Feelings",year:2023},{title:"Vacation Friends",year:2021},{title:"Dungeons & Dragons: Honor Among Thieves",year:2023},{title:"Joy Ride",year:2023},{title:"Book Club: The Next Chapter",year:2023},{title:"Ghosted",year:2023},{title:"Elemental",year:2023},{title:"Saltburn",year:2023},{title:"Bullet Train",year:2022},{title:"The Mitchells vs. the Machines",year:2021}],
+Crime:[{title:"The Batman",year:2022},{title:"Emily the Criminal",year:2022},{title:"Killers of the Flower Moon",year:2023},{title:"The Card Counter",year:2021},{title:"Nightmare Alley",year:2021},{title:"Reptile",year:2023},{title:"The Little Things",year:2021},{title:"No Sudden Move",year:2021},{title:"Sharper",year:2023},{title:"The Outfit",year:2022},{title:"The Killer",year:2023},{title:"Promising Young Woman",year:2020},{title:"Anatomy of a Fall",year:2023}],
+Documentary:[{title:"My Octopus Teacher",year:2020},{title:"The Social Dilemma",year:2020},{title:"Summer of Soul",year:2021},{title:"Navalny",year:2022},{title:"Fire of Love",year:2022},{title:"20 Days in Mariupol",year:2023},{title:"All the Beauty and the Bloodshed",year:2022},{title:"Stutz",year:2022},{title:"Boys State",year:2020},{title:"Val",year:2021},{title:"Procession",year:2021},{title:"Attica",year:2021},{title:"The Rescue",year:2021},{title:"Moonage Daydream",year:2022},{title:"76 Days",year:2020},{title:"First Cow",year:2020}],
+Drama:[{title:"Nomadland",year:2020},{title:"CODA",year:2021},{title:"The Whale",year:2022},{title:"Oppenheimer",year:2023},{title:"Killers of the Flower Moon",year:2023},{title:"Past Lives",year:2023},{title:"The Fabelmans",year:2022},{title:"Minari",year:2020},{title:"American Fiction",year:2023},{title:"Sound of Metal",year:2020},{title:"Belfast",year:2021},{title:"The Power of the Dog",year:2021},{title:"The Holdovers",year:2023},{title:"Nyad",year:2023},{title:"Fair Play",year:2023},{title:"Saltburn",year:2023},{title:"Talk to Me",year:2023}],
+Family:[{title:"Encanto",year:2021},{title:"Luca",year:2021},{title:"Turning Red",year:2022},{title:"The Super Mario Bros. Movie",year:2023},{title:"Paddington in Peru",year:2024},{title:"Wonka",year:2023},{title:"Soul",year:2020},{title:"Onward",year:2020},{title:"Raya and the Last Dragon",year:2021},{title:"Lightyear",year:2022},{title:"Elemental",year:2023},{title:"Sing 2",year:2021},{title:"Puss in Boots: The Last Wish",year:2022},{title:"Wish",year:2023}],
 Fantasy:[{title:"The Green Knight",year:2021},{title:"Fantastic Beasts: The Secrets of Dumbledore",year:2022},{title:"The Northman",year:2022},{title:"Wonder Woman 1984",year:2020},{title:"Dungeons & Dragons: Honor Among Thieves",year:2023},{title:"Wonka",year:2023},{title:"The Little Mermaid",year:2023},{title:"Cinderella",year:2021},{title:"The School for Good and Evil",year:2022},{title:"Mortal Kombat",year:2021},{title:"Jungle Cruise",year:2021},{title:"Raya and the Last Dragon",year:2021},{title:"Encanto",year:2021},{title:"Puss in Boots: The Last Wish",year:2022},{title:"The Witches",year:2020}],
-Western:[{title:"News of the World",year:2020},{title:"The Harder They Fall",year:2021},{title:"Old Henry",year:2021},{title:"The Power of the Dog",year:2021},{title:"First Cow",year:2020},{title:"Let Him Go",year:2020},{title:"Butcher's Crossing",year:2023},{title:"Horizon: An American Saga",year:2024},{title:"Terror on the Prairie",year:2022}],
-Adventure:[{title:"Dune",year:2021},{title:"Jungle Cruise",year:2021},{title:"The Lost City",year:2022},{title:"Uncharted",year:2022},{title:"Nomadland",year:2020},{title:"Free Guy",year:2021},{title:"The Adam Project",year:2022},{title:"Indiana Jones and the Dial of Destiny",year:2023},{title:"Sisu",year:2023},{title:"Ghosted",year:2023},{title:"Nyad",year:2023},{title:"65",year:2023},{title:"Elemental",year:2023},{title:"Wish",year:2023},{title:"The Super Mario Bros. Movie",year:2023}],
-Crime:[{title:"The Batman",year:2022},{title:"Emily the Criminal",year:2022},{title:"Killers of the Flower Moon",year:2023},{title:"The Card Counter",year:2021},{title:"Nightmare Alley",year:2021},{title:"Reptile",year:2023},{title:"The Little Things",year:2021},{title:"No Sudden Move",year:2021},{title:"Sharper",year:2023},{title:"The Outfit",year:2022},{title:"Fair Play",year:2023},{title:"Saltburn",year:2023},{title:"Bullet Train",year:2022},{title:"The Killer",year:2023},{title:"Promising Young Woman",year:2020}],
-Documentary:[{title:"My Octopus Teacher",year:2020},{title:"The Social Dilemma",year:2020},{title:"Summer of Soul",year:2021},{title:"Navalny",year:2022},{title:"Fire of Love",year:2022},{title:"20 Days in Mariupol",year:2023},{title:"All the Beauty and the Bloodshed",year:2022},{title:"Stutz",year:2022},{title:"Boys State",year:2020},{title:"Val",year:2021},{title:"Procession",year:2021},{title:"Attica",year:2021},{title:"The Rescue",year:2021},{title:"Moonage Daydream",year:2022},{title:"76 Days",year:2020}],
-Family:[{title:"Encanto",year:2021},{title:"Luca",year:2021},{title:"Turning Red",year:2022},{title:"The Super Mario Bros. Movie",year:2023},{title:"Paddington in Peru",year:2024},{title:"Wonka",year:2023},{title:"Soul",year:2020},{title:"Onward",year:2020},{title:"Raya and the Last Dragon",year:2021},{title:"The Mitchells vs. the Machines",year:2021},{title:"Lightyear",year:2022},{title:"Elemental",year:2023},{title:"Sing 2",year:2021},{title:"Puss in Boots: The Last Wish",year:2022},{title:"Wish",year:2023}]
+Horror:[{title:"A Quiet Place Part II",year:2021},{title:"Nope",year:2022},{title:"M3GAN",year:2023},{title:"Scream",year:2022},{title:"Barbarian",year:2022},{title:"Smile",year:2022},{title:"Pearl",year:2022},{title:"The Black Phone",year:2021},{title:"Evil Dead Rise",year:2023},{title:"Freaky",year:2020},{title:"Fresh",year:2022},{title:"Malignant",year:2021},{title:"X",year:2022},{title:"Renfield",year:2023},{title:"The Menu",year:2022},{title:"No One Will Save You",year:2023}],
+Romance:[{title:"Anyone but You",year:2023},{title:"Marry Me",year:2022},{title:"Purple Hearts",year:2022},{title:"Red, White & Royal Blue",year:2023},{title:"Ticket to Paradise",year:2022},{title:"Past Lives",year:2023},{title:"Rye Lane",year:2023},{title:"Your Place or Mine",year:2023},{title:"The Photograph",year:2020},{title:"Love Hard",year:2021},{title:"The Half of It",year:2020},{title:"The Idea of You",year:2024},{title:"Shotgun Wedding",year:2022},{title:"My Big Fat Greek Wedding 3",year:2023},{title:"Players",year:2024},{title:"Ghosted",year:2023},{title:"Elemental",year:2023},{title:"Fair Play",year:2023}],
+"Sci-Fi":[{title:"Dune",year:2021},{title:"Dune: Part Two",year:2024},{title:"Everything Everywhere All at Once",year:2022},{title:"Tenet",year:2020},{title:"The Adam Project",year:2022},{title:"Godzilla vs. Kong",year:2021},{title:"Avatar: The Way of Water",year:2022},{title:"Reminiscence",year:2021},{title:"Moonfall",year:2022},{title:"65",year:2023},{title:"Prey",year:2022},{title:"Spiderhead",year:2022},{title:"Finch",year:2021},{title:"Voyagers",year:2021},{title:"Rebel Moon",year:2023},{title:"No One Will Save You",year:2023}],
+Thriller:[{title:"Promising Young Woman",year:2020},{title:"Sharper",year:2023},{title:"Fair Play",year:2023},{title:"Saltburn",year:2023},{title:"Reptile",year:2023},{title:"Missing",year:2023},{title:"Don't Worry Darling",year:2022},{title:"Emily the Criminal",year:2022},{title:"The Killer",year:2023},{title:"The Invisible Man",year:2020},{title:"The Guilty",year:2021},{title:"Old",year:2021},{title:"A Haunting in Venice",year:2023},{title:"The Batman",year:2022},{title:"Sisu",year:2023},{title:"Bullet Train",year:2022},{title:"Anatomy of a Fall",year:2023}],
+Western:[{title:"News of the World",year:2020},{title:"The Harder They Fall",year:2021},{title:"Old Henry",year:2021},{title:"The Power of the Dog",year:2021},{title:"Let Him Go",year:2020},{title:"Butcher's Crossing",year:2023},{title:"Horizon: An American Saga",year:2024},{title:"Terror on the Prairie",year:2022}]
 }
 };
 
@@ -1160,9 +1153,12 @@ function mergeFreshestTiers(local, shared){
   if ((shared.enrichedAt || 0) > (local.enrichedAt || 0)){
     merged.posterUrl = shared.posterUrl;
     merged.description = shared.description;
-    merged.language = shared.language;
     merged.usRating = shared.usRating;
     merged.enrichedAt = shared.enrichedAt;
+  }
+  if ((shared.languageAt || 0) > (local.languageAt || 0)){
+    merged.language = shared.language;
+    merged.languageAt = shared.languageAt;
   }
   if ((shared.ratedAt || 0) > (local.ratedAt || 0)){
     merged.userRating = shared.userRating;
@@ -1175,13 +1171,15 @@ function mergeFreshestTiers(local, shared){
 }
 
 function applyRecordToMovie(movie, record, tierFlags){
-  const flags = tierFlags || { discoveryFresh: true, enrichmentFresh: true, ratingFresh: true };
+  const flags = tierFlags || { discoveryFresh: true, enrichmentFresh: true, languageFresh: true, ratingFresh: true };
   if (flags.discoveryFresh && record.genres && record.genres.length) movie.genresOverride = record.genres;
   if (flags.enrichmentFresh){
     if (record.posterUrl && !movie.posterUrl) movie.posterUrl = record.posterUrl;
     if (record.description && !movie.description) movie.description = record.description;
-    if (record.language) movie.language = record.language;
     if (record.usRating) movie.usRating = record.usRating;
+  }
+  if (flags.languageFresh){
+    if (record.language) movie.language = record.language;
   }
   if (flags.ratingFresh){
     if (record.userRating != null) movie.userRating = record.userRating;
@@ -2215,40 +2213,6 @@ $('rerunWarmupBtn').addEventListener('click', () => {
   runStartupWarmup(); // the only trigger now — no automatic runs on connect or page load
 });
 
-$('validateGenresBtn').addEventListener('click', async () => {
-  const btn = $('validateGenresBtn');
-  const statusEl = $('validateGenresStatus');
-  const resultsEl = $('validateGenresResults');
-  btn.disabled = true;
-  resultsEl.style.display = 'none';
-  resultsEl.innerHTML = '';
-  const startedAt = Date.now();
-  try{
-    const { totalChecked, mismatches, unresolvable } = await validateBuiltInListGenres((checked, total) => {
-      statusEl.textContent = `Checking… ${checked}/${total}`;
-    });
-    const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-    statusEl.textContent = `Checked ${totalChecked} built-in list entries in ${seconds}s — ${mismatches.length} genre mismatch(es), ${unresolvable.length} title(s) couldn't be resolved.`;
-    if (mismatches.length || unresolvable.length){
-      let html = '';
-      if (mismatches.length){
-        html += '<p class="desc" style="margin-bottom:6px;"><strong style="color:var(--cream);">Genre mismatches</strong> — filed under one genre locally, but Watchmode doesn\'t agree:</p>';
-        html += mismatches.map(m => `<div class="desc" style="margin-bottom:4px;">${escapeHtml(m.title)} (${m.year}) — filed as <strong>${escapeHtml(m.ourGenre)}</strong>, Watchmode says: ${escapeHtml(m.watchmodeGenres.join(', '))}</div>`).join('');
-      }
-      if (unresolvable.length){
-        html += '<p class="desc" style="margin-top:10px; margin-bottom:6px;"><strong style="color:var(--cream);">Could not check</strong> — no Watchmode match or genre data found:</p>';
-        html += unresolvable.map(m => `<div class="desc" style="margin-bottom:4px;">${escapeHtml(m.title)} (${m.year}) — filed as ${escapeHtml(m.ourGenre)} — ${escapeHtml(m.reason)}</div>`).join('');
-      }
-      resultsEl.innerHTML = html;
-      resultsEl.style.display = 'block';
-    }
-  } catch(e){
-    statusEl.textContent = `Genre check failed: ${e.message}`;
-  } finally {
-    btn.disabled = false;
-  }
-});
-
 $('clearCacheBtn').addEventListener('click', async () => {
   if (!confirm(`Clear all ${wmRatingsCache.size} cached movie ratings? Spins will need to re-fetch from Watchmode until the cache rebuilds.`)) return;
   wmRatingsCache.clear();
@@ -2270,7 +2234,6 @@ function renderAdmin(){
   renderAuthUI();
   const versionLabel = $('appVersionLabel');
   if (versionLabel) versionLabel.textContent = APP_VERSION;
-  $('validateGenresBtn').style.display = (wmKey || currentUser) ? 'inline-block' : 'none';
   renderThemeSwatches();
   populateCacheStatsDropdowns();
   updateCacheStats();
@@ -3008,9 +2971,18 @@ async function enrichOneMovie(movie, maxAttempts){
   // knows about (or doesn't know about at all) might be stale. Only
   // consulted while signed in. Per field-group, keeps whichever of
   // local/shared is actually newer rather than an all-or-nothing swap.
+  //
+  // languageAt is its own tier, separate from enrichedAt — enrichOneMovie
+  // is the only place that ever populates language at all (fetchWatchmodeExtras,
+  // the pick-time path, doesn't touch it). Tying language's freshness to
+  // enrichedAt meant a movie enriched at pick-time first would look
+  // "fresh" on enrichedAt and incorrectly skip ever setting language —
+  // leaving it permanently undefined, which the language filter treats as
+  // "Unknown" and silently excludes by default.
   if (currentUser){
     const anyTierNeedsShared = !isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS)
       || !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS)
+      || !isFresh(record.languageAt, WM_ENRICHMENT_STALE_MS)
       || !isFresh(record.ratedAt, WM_RATING_STALE_MS);
     if (anyTierNeedsShared){
       try{
@@ -3022,9 +2994,10 @@ async function enrichOneMovie(movie, maxAttempts){
 
   const discoveryFresh = isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS);
   const enrichmentFresh = isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
+  const languageFresh = isFresh(record.languageAt, WM_ENRICHMENT_STALE_MS);
   const ratingFresh = isFresh(record.ratedAt, WM_RATING_STALE_MS);
 
-  if (discoveryFresh && enrichmentFresh && ratingFresh && ratingCacheHasData(record)){
+  if (discoveryFresh && enrichmentFresh && languageFresh && ratingFresh && ratingCacheHasData(record)){
     // Every tier we might need is fresh, whether from local or the shared
     // merge above — no live call needed at all.
     wmRatingsCache.set(id, record);
@@ -3051,9 +3024,10 @@ async function enrichOneMovie(movie, maxAttempts){
       discoveredAt: now,
       posterUrl: firstString(details.poster, details.poster_url, details.poster_image, details.backdrop),
       description: firstString(details.plot_overview, details.overview, details.description, details.plot),
-      language: normalizeLanguage(firstString(details.original_language, details.language, details.spoken_language_codes && details.spoken_language_codes[0])),
       usRating: firstString(details.us_rating, details.mpaa_rating, details.content_rating, details.rating_certification),
       enrichedAt: now,
+      language: normalizeLanguage(firstString(details.original_language, details.language, details.spoken_language_codes && details.spoken_language_codes[0])),
+      languageAt: now,
       userRating: firstNumber(details.user_rating, details.imdb_rating, details.rating),
       criticScore: firstNumber(details.critic_score, details.critics_score, details.tomatometer),
       ratedAt: now,
@@ -3082,8 +3056,8 @@ async function enrichOneMovie(movie, maxAttempts){
     }
     // Live call succeeded but came back empty — fall back to whichever
     // tiers were actually fresh before we tried, rather than nothing.
-    if (discoveryFresh || enrichmentFresh || ratingFresh){
-      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, ratingFresh });
+    if (discoveryFresh || enrichmentFresh || languageFresh || ratingFresh){
+      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, languageFresh, ratingFresh });
       return { ok: true, hasData: ratingCacheHasData(record) };
     }
     return { ok: true, hasData: false };
@@ -3092,8 +3066,8 @@ async function enrichOneMovie(movie, maxAttempts){
     // Live call failed entirely — still use whatever tiers were fresh
     // going in, rather than surfacing a total failure when we actually
     // had usable (if partial) data on hand.
-    if (discoveryFresh || enrichmentFresh || ratingFresh){
-      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, ratingFresh });
+    if (discoveryFresh || enrichmentFresh || languageFresh || ratingFresh){
+      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, languageFresh, ratingFresh });
       return { ok: true, hasData: ratingCacheHasData(record) };
     }
     return { ok: false, hasData: false, error: e.message };
@@ -3206,54 +3180,6 @@ async function enrichBuiltinListWithWatchmode(movies){
     done++;
     setSpinStatus(`Enriching built-in list… ${done}/${movies.length}`);
   }, 250);
-}
-
-// Diagnostic tool, not part of the normal spin flow — walks every title
-// in the built-in list and checks whether Watchmode's own genre
-// categorization actually agrees with the genre bucket we've filed that
-// title under locally. Matters because the shared database filters
-// purely by Watchmode's genre data (see getSharedMoviesForComboBatch) —
-// a built-in list title whose Watchmode genres don't include the bucket
-// it's filed under here would behave inconsistently between built-in
-// browsing and the shared/live discovery paths. Reuses the exact same
-// resolution chain as normal built-in list enrichment (local cache →
-// shared database → live Watchmode), so a well-warmed cache costs little
-// to nothing extra to run this against.
-async function validateBuiltInListGenres(onProgress){
-  const entries = [];
-  DECADES.forEach(decade => {
-    GENRES.forEach(genre => {
-      (MOVIE_DB[decade][genre] || []).forEach(base => {
-        entries.push({ decade, genre, title: base.title, year: base.year });
-      });
-    });
-  });
-
-  const mismatches = [];
-  const unresolvable = [];
-  let checked = 0;
-
-  await mapWithConcurrency(entries, 1, async (entry) => {
-    const movie = { title: entry.title, year: entry.year, watchmodeId: null };
-    if (!movie.watchmodeId){
-      const wmId = await searchWatchmodeForMovie(movie);
-      if (wmId) movie.watchmodeId = wmId;
-    }
-    if (!movie.watchmodeId){
-      unresolvable.push({ title: entry.title, year: entry.year, ourGenre: entry.genre, reason: 'Could not resolve a Watchmode ID for this title' });
-    } else {
-      const result = await enrichOneMovie(movie, 2);
-      if (!result.hasData || !movie.genresOverride || !movie.genresOverride.length){
-        unresolvable.push({ title: entry.title, year: entry.year, ourGenre: entry.genre, reason: 'No genre data available from Watchmode for this title' });
-      } else if (!movie.genresOverride.includes(entry.genre)){
-        mismatches.push({ title: entry.title, year: entry.year, ourGenre: entry.genre, watchmodeGenres: movie.genresOverride });
-      }
-    }
-    checked++;
-    if (onProgress) onProgress(checked, entries.length);
-  }, 250);
-
-  return { totalChecked: entries.length, mismatches, unresolvable };
 }
 
 function matchesContentRating(movie){
@@ -3399,6 +3325,7 @@ function getCachedMoviesForCombo(decade, genre){
     if (Math.floor(entry.year / 10) * 10 !== decade) return;
     if (!entry.genres || !entry.genres.includes(genre)) return;
     const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
+    const languageFresh = isFresh(entry.languageAt, WM_ENRICHMENT_STALE_MS);
     const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
     results.push({
       title: entry.title,
@@ -3411,7 +3338,7 @@ function getCachedMoviesForCombo(decade, genre){
       criticScore: ratingFresh ? entry.criticScore : null,
       usRating: enrichmentFresh ? entry.usRating : null,
       genresOverride: entry.genres,
-      language: enrichmentFresh ? (entry.language || null) : null,
+      language: languageFresh ? (entry.language || null) : null,
       description: enrichmentFresh ? (entry.description || null) : null
     });
   });
@@ -3463,6 +3390,7 @@ async function getSharedMoviesForComboBatch(decade, genre, batchSize, cursor){
       if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return; // can't trust this record's decade/genre placement once stale
       const id = Number(doc.id) || doc.id;
       const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
+      const languageFresh = isFresh(entry.languageAt, WM_ENRICHMENT_STALE_MS);
       const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
       candidates.push({
         record: entry, // kept alongside the pool-ready shape below so the caller can commit it locally, with its real timestamps intact, if it survives filtering
@@ -3477,7 +3405,7 @@ async function getSharedMoviesForComboBatch(decade, genre, batchSize, cursor){
           criticScore: ratingFresh ? entry.criticScore : null,
           usRating: enrichmentFresh ? entry.usRating : null,
           genresOverride: entry.genres,
-          language: enrichmentFresh ? (entry.language || null) : null,
+          language: languageFresh ? (entry.language || null) : null,
           description: enrichmentFresh ? (entry.description || null) : null
         }
       });
@@ -3892,7 +3820,6 @@ async function confirmPick(movie){
 function mergeDetailsFreshestTiers(local, shared){
   const merged = Object.assign({}, local);
   if ((shared.enrichedAt || 0) > (local.enrichedAt || 0)){
-    merged.trailerUrl = shared.trailerUrl;
     merged.posterUrl = shared.posterUrl;
     merged.genres = shared.genres;
     merged.description = shared.description;
@@ -3902,22 +3829,26 @@ function mergeDetailsFreshestTiers(local, shared){
   if ((shared.ratedAt || 0) > (local.ratedAt || 0)){
     merged.userRating = shared.userRating;
     merged.criticScore = shared.criticScore;
-    merged.streamNames = shared.streamNames;
     merged.ratedAt = shared.ratedAt;
+  }
+  if ((shared.streamingCheckedAt || 0) > (local.streamingCheckedAt || 0)){
+    merged.trailerUrl = shared.trailerUrl;
+    merged.streamNames = shared.streamNames;
+    merged.streamingCheckedAt = shared.streamingCheckedAt;
   }
   return merged;
 }
 
 function recordToExtrasResult(record, tierFlags){
   return {
-    trailerUrl: tierFlags.enrichmentFresh ? (record.trailerUrl ?? null) : null,
+    trailerUrl: tierFlags.streamingFresh ? (record.trailerUrl ?? null) : null,
     posterUrl: tierFlags.enrichmentFresh ? (record.posterUrl ?? null) : null,
     genres: tierFlags.enrichmentFresh ? (record.genres || null) : null,
     description: tierFlags.enrichmentFresh ? (record.description ?? null) : null,
     usRating: tierFlags.enrichmentFresh ? (record.usRating ?? null) : null,
     userRating: tierFlags.ratingFresh ? (record.userRating ?? null) : null,
     criticScore: tierFlags.ratingFresh ? (record.criticScore ?? null) : null,
-    streamNames: tierFlags.ratingFresh ? (record.streamNames || []) : []
+    streamNames: tierFlags.streamingFresh ? (record.streamNames || []) : []
   };
 }
 
@@ -3928,10 +3859,20 @@ async function fetchWatchmodeExtras(movie){
   // Shared, cross-user cache — the SAME collection enrichOneMovie uses for
   // discovery/warmup, since a movie's trailer/poster/rating/streaming
   // data all lives in one place now rather than being split across two
-  // collections with heavy field overlap. Checked whenever either tier is
+  // collections with heavy field overlap. Checked whenever any tier is
   // stale or unknown locally. Only available while signed in.
+  //
+  // streamingCheckedAt is deliberately its own tier, separate from
+  // enrichedAt/ratedAt — enrichOneMovie (the discovery/warmup path) sets
+  // enrichedAt and ratedAt but never touches trailerUrl/streamNames at
+  // all, since it never requests streaming data. Tying trailer/streaming
+  // freshness to those other timestamps meant a movie enriched only
+  // during a spin (never clicked) would look "fresh" on its rating tier
+  // and incorrectly skip ever actually checking streaming availability —
+  // showing a confirmed-empty result for something never actually
+  // checked.
   if (currentUser){
-    const anyTierNeedsShared = !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS) || !isFresh(record.ratedAt, WM_RATING_STALE_MS);
+    const anyTierNeedsShared = !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS) || !isFresh(record.ratedAt, WM_RATING_STALE_MS) || !isFresh(record.streamingCheckedAt, WM_RATING_STALE_MS);
     if (anyTierNeedsShared){
       try{
         const sharedDoc = await fbDb.collection('sharedMovieRatings').doc(String(id)).get();
@@ -3942,15 +3883,16 @@ async function fetchWatchmodeExtras(movie){
 
   const enrichmentFresh = isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
   const ratingFresh = isFresh(record.ratedAt, WM_RATING_STALE_MS);
+  const streamingFresh = isFresh(record.streamingCheckedAt, WM_RATING_STALE_MS);
 
-  if (enrichmentFresh && ratingFresh){
+  if (enrichmentFresh && ratingFresh && streamingFresh){
     wmDetailsCache.set(id, record);
     saveWmDetailsCache();
-    return recordToExtrasResult(record, { enrichmentFresh: true, ratingFresh: true });
+    return recordToExtrasResult(record, { enrichmentFresh: true, ratingFresh: true, streamingFresh: true });
   }
 
   // At least one tier is stale or unknown — a single live call refreshes
-  // both, since they come from the same Watchmode response.
+  // all three, since they come from the same Watchmode response.
   let details = null;
   let trailerUrl = null, posterUrl = null, genres = null, description = null, usRating = null;
   let userRating = null, criticScore = null, streamNames = [];
@@ -3971,9 +3913,11 @@ async function fetchWatchmodeExtras(movie){
     tmdbId = movie.tmdbId || firstNumber(details.tmdb_id) || record.tmdbId || null;
   } catch(e){ console.warn('Watchmode details lookup failed at pick time for', movie.title, e.message); }
 
+  let sourcesCheckSucceeded = false;
   const appendedSources = details && firstArray(details.sources, details.sources_data, details.streaming_sources);
   if (appendedSources){
     streamNames = [...new Set(appendedSources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
+    sourcesCheckSucceeded = true;
   } else if (details) {
     // Fall back to the separate call only if the combined response didn't
     // actually include sources — keeps this working even if Watchmode's
@@ -3982,22 +3926,28 @@ async function fetchWatchmodeExtras(movie){
       const sources = await wmFetch(`/title/${id}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${movie.title}"`);
       if (Array.isArray(sources)){
         streamNames = [...new Set(sources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
+        sourcesCheckSucceeded = true;
       }
     } catch(e){ /* best-effort */ }
   }
 
   const now = Date.now();
-  const gotEnrichment = !!(trailerUrl || posterUrl || (genres && genres.length) || description || usRating);
-  const gotRating = userRating != null || criticScore != null || streamNames.length > 0;
+  const gotEnrichment = !!(posterUrl || (genres && genres.length) || description || usRating);
+  const gotRating = userRating != null || criticScore != null;
+  // True whenever the sources check actually completed — even a
+  // genuinely empty streamNames is a confirmed, real answer ("not
+  // currently available anywhere tracked"), not an unresolved state, and
+  // deserves its own fresh timestamp exactly like a real result would.
+  const gotStreaming = sourcesCheckSucceeded;
 
-  if (gotEnrichment || gotRating){
+  if (gotEnrichment || gotRating || gotStreaming){
     const fresh = Object.assign({}, record);
-    // Populated alongside enrichment/rating any time we do a full live
-    // fetch — this is the same discovery tier enrichOneMovie writes, kept
-    // in sync here too so a document created fresh by this function
-    // (never having gone through discovery/warmup at all) still ends up
-    // with the same complete shape either function would produce.
-    if (gotEnrichment || gotRating){
+    // Populated alongside enrichment/rating/streaming any time we do a
+    // full live fetch — this is the same discovery tier enrichOneMovie
+    // writes, kept in sync here too so a document created fresh by this
+    // function (never having gone through discovery/warmup at all) still
+    // ends up with the same complete shape either function would produce.
+    if (gotEnrichment || gotRating || gotStreaming){
       fresh.title = movie.title;
       fresh.year = movie.year;
       if (genres && genres.length) fresh.genres = genres;
@@ -4006,7 +3956,6 @@ async function fetchWatchmodeExtras(movie){
       fresh.tmdbId = tmdbId;
     }
     if (gotEnrichment){
-      fresh.trailerUrl = trailerUrl;
       fresh.posterUrl = posterUrl;
       fresh.description = description;
       fresh.usRating = usRating;
@@ -4015,8 +3964,12 @@ async function fetchWatchmodeExtras(movie){
     if (gotRating){
       fresh.userRating = userRating;
       fresh.criticScore = criticScore;
-      fresh.streamNames = streamNames;
       fresh.ratedAt = now;
+    }
+    if (gotStreaming){
+      fresh.trailerUrl = trailerUrl;
+      fresh.streamNames = streamNames;
+      fresh.streamingCheckedAt = now;
     }
     wmDetailsCache.set(id, fresh);
     saveWmDetailsCache(); // fire-and-forget — don't block on a local storage write
@@ -4030,13 +3983,14 @@ async function fetchWatchmodeExtras(movie){
     }
     return recordToExtrasResult(fresh, {
       enrichmentFresh: isFresh(fresh.enrichedAt, WM_ENRICHMENT_STALE_MS),
-      ratingFresh: isFresh(fresh.ratedAt, WM_RATING_STALE_MS)
+      ratingFresh: isFresh(fresh.ratedAt, WM_RATING_STALE_MS),
+      streamingFresh: isFresh(fresh.streamingCheckedAt, WM_RATING_STALE_MS)
     });
   }
 
   // Live call returned nothing new — fall back to whichever tiers were
   // actually fresh going in, rather than showing nothing at all.
-  return recordToExtrasResult(record, { enrichmentFresh, ratingFresh });
+  return recordToExtrasResult(record, { enrichmentFresh, ratingFresh, streamingFresh });
 }
 
 function appendTonightExtras(extras, movie){
