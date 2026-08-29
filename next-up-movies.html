@@ -893,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.22.1';
+const APP_VERSION = '1.24.0';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -3587,7 +3587,11 @@ async function runStartupWarmup(){
   for (let i = 0; i < combos.length; i++){
     const [decade, genre] = combos[i];
     try{
-      const pool = await fetchWatchmodeMoviesPage(decade, genre, 1, 10, `Background cache warmup: ${decadeLabel(decade)} ${genre}`);
+      // Same rating-band widening a real spin uses — starts at the top of
+      // your configured rating range and only searches lower if not
+      // enough are found there, so the highest-rated titles for this
+      // combo get cached first rather than just the most popular ones.
+      const pool = await fetchWatchmodeMoviesByRating(decade, genre, 10, new Set(), `Background cache warmup: ${decadeLabel(decade)} ${genre}`);
       const toEnrich = pool.filter(m => !isBlocked(m.title, m.year));
       await enrichBatchWithRatings(toEnrich, { silent: true });
     } catch(e){
@@ -3762,8 +3766,12 @@ function appendModalExtras(extras, movie){
   const bits = [];
   if (extras.streamNames && extras.streamNames.length){
     bits.push(`<div class="genre-chips" style="justify-content:center;">${extras.streamNames.map(n => `<span class="rating-chip">📺 ${escapeHtml(n)}</span>`).join('')}</div>`);
-  } else {
-    bits.push('<span class="hint">Not currently streaming on a tracked service.</span>');
+  }
+  if (extras.buyNames && extras.buyNames.length){
+    bits.push(`<div class="genre-chips" style="justify-content:center; margin-top:6px;">${extras.buyNames.map(n => `<span class="rating-chip">🛒 ${escapeHtml(n)}</span>`).join('')}</div>`);
+  }
+  if (!(extras.streamNames && extras.streamNames.length) && !(extras.buyNames && extras.buyNames.length)){
+    bits.push('<span class="hint">Not currently streaming or available to buy on a tracked service.</span>');
   }
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">▶ Watch Trailer</a>`);
   container.className = '';
@@ -3834,6 +3842,7 @@ function mergeDetailsFreshestTiers(local, shared){
   if ((shared.streamingCheckedAt || 0) > (local.streamingCheckedAt || 0)){
     merged.trailerUrl = shared.trailerUrl;
     merged.streamNames = shared.streamNames;
+    merged.buyNames = shared.buyNames;
     merged.streamingCheckedAt = shared.streamingCheckedAt;
   }
   return merged;
@@ -3848,7 +3857,8 @@ function recordToExtrasResult(record, tierFlags){
     usRating: tierFlags.enrichmentFresh ? (record.usRating ?? null) : null,
     userRating: tierFlags.ratingFresh ? (record.userRating ?? null) : null,
     criticScore: tierFlags.ratingFresh ? (record.criticScore ?? null) : null,
-    streamNames: tierFlags.streamingFresh ? (record.streamNames || []) : []
+    streamNames: tierFlags.streamingFresh ? (record.streamNames || []) : [],
+    buyNames: tierFlags.streamingFresh ? (record.buyNames || []) : []
   };
 }
 
@@ -3895,7 +3905,7 @@ async function fetchWatchmodeExtras(movie){
   // all three, since they come from the same Watchmode response.
   let details = null;
   let trailerUrl = null, posterUrl = null, genres = null, description = null, usRating = null;
-  let userRating = null, criticScore = null, streamNames = [];
+  let userRating = null, criticScore = null, streamNames = [], buyNames = [];
   let imdbId = null, tmdbId = null;
   try{
     // append_to_response=sources bundles streaming availability into this
@@ -3917,6 +3927,7 @@ async function fetchWatchmodeExtras(movie){
   const appendedSources = details && firstArray(details.sources, details.sources_data, details.streaming_sources);
   if (appendedSources){
     streamNames = [...new Set(appendedSources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
+    buyNames = [...new Set(appendedSources.filter(s => s.type === 'buy').map(s => s.name))];
     sourcesCheckSucceeded = true;
   } else if (details) {
     // Fall back to the separate call only if the combined response didn't
@@ -3926,6 +3937,7 @@ async function fetchWatchmodeExtras(movie){
       const sources = await wmFetch(`/title/${id}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${movie.title}"`);
       if (Array.isArray(sources)){
         streamNames = [...new Set(sources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
+        buyNames = [...new Set(sources.filter(s => s.type === 'buy').map(s => s.name))];
         sourcesCheckSucceeded = true;
       }
     } catch(e){ /* best-effort */ }
@@ -3969,6 +3981,7 @@ async function fetchWatchmodeExtras(movie){
     if (gotStreaming){
       fresh.trailerUrl = trailerUrl;
       fresh.streamNames = streamNames;
+      fresh.buyNames = buyNames;
       fresh.streamingCheckedAt = now;
     }
     wmDetailsCache.set(id, fresh);
@@ -4008,6 +4021,7 @@ function appendTonightExtras(extras, movie){
   const bits = [];
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener">▶ Watch Trailer</a>`);
   if (extras.streamNames && extras.streamNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Streaming: ${escapeHtml(extras.streamNames.join(', '))}</span>`);
+  if (extras.buyNames && extras.buyNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Buy: ${escapeHtml(extras.buyNames.join(', '))}</span>`);
   if (bits.length) banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${bits.join(' ')}</div>`);
 }
 
