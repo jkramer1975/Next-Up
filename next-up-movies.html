@@ -893,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.17.1';
+const APP_VERSION = '1.18.0';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -3404,23 +3404,25 @@ async function buildWatchmodePool(decade, genre){
 
     if (currentUser){
       setSpinStatus('Checking shared database…');
-      // Keeps pulling more batches until there's a comfortable surplus of
-      // survivors, not just the bare minimum. Batches arrive ordered by
-      // year (Firestore requires that, since year is also the range
-      // filter — it can't be ordered by rating instead), so stopping the
-      // instant we technically have "enough" risks settling for
-      // early-batch matches while better-rated titles sit unscanned in a
-      // later batch. Gathering roughly double before handing off to the
-      // final sort/trim (which already picks the true top-rated ones)
-      // makes it far more likely the actual best candidates are what you
-      // end up seeing, not just the first sufficient ones found. The hard
-      // cap below (5 batches) still bounds the worst case.
-      const sharedBatchSize = Math.max(maxResults * 3, 15);
-      const maxSharedBatches = 5;
-      const comfortableSurplus = maxResults * 2;
+      // Genuinely exhaustive — keeps pulling batches until the shared data
+      // for this decade+genre actually runs out (or a generous hard cap
+      // is hit), rather than stopping once "enough" survivors are found.
+      // Since the whole accumulated pool gets sorted and trimmed to the
+      // top maxResults only once, at the very end, this naturally means a
+      // higher-rated title found in a later batch replaces a lower-rated
+      // one from an earlier batch — no separate "replace" logic needed,
+      // that's just what sorting the full set does. The trade-off is
+      // exactly what it sounds like: more Firestore reads and more time
+      // per spin, in exchange for actually finding the true best matches
+      // instead of settling for the first sufficient ones.
+      const sharedBatchSize = Math.max(maxResults * 5, 50); // larger batches now that we're not trying to stop early — fewer round trips to cover the same ground
+      const maxSharedBatches = 20; // a generous ceiling (up to ~1000+ candidates), not a "good enough" shortcut — still bounded so a pathologically large combo can't run away entirely
       let sharedCursor = null;
+      let sharedBatchesUsed = 0;
+      const sharedScanStart = Date.now();
       for (let batchNum = 0; batchNum < maxSharedBatches; batchNum++){
         const { candidates, cursor, exhausted } = await getSharedMoviesForComboBatch(decade, genre, sharedBatchSize, sharedCursor);
+        sharedBatchesUsed++;
         candidates.forEach(c => {
           if (!seenIds.has(c.pool.watchmodeId)){
             pool.push(c.pool);
@@ -3430,9 +3432,9 @@ async function buildWatchmodePool(decade, genre){
         });
         sharedCursor = cursor;
         if (exhausted) break; // genuinely nothing more to page through
-        const { survivors: interimSurvivors } = computeFilteredSurvivors(pool);
-        if (interimSurvivors.length >= comfortableSurplus) break;
+        setSpinStatus(`Checking shared database… (${sharedRecordsById.size} candidates so far)`);
       }
+      console.log(`[shared discovery] ${sharedBatchesUsed} batch(es), ${sharedRecordsById.size} candidates, ${Date.now() - sharedScanStart}ms`);
     }
 
     // Some cached entries may come back with their rating tier stale
