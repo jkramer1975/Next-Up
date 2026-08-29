@@ -893,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.17.1';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -3303,29 +3303,41 @@ function getCachedMoviesForCombo(decade, genre){
 // real Firestore query across every signed-in user's contributed movie
 // records for this decade+genre, not just this device's own local cache.
 // Deliberately does NOT filter by rating server-side — everything
-// matching decade+genre gets downloaded, and it's up to the caller
-// (buildWatchmodePool) to run the normal filter pipeline on it and decide
-// what's actually worth keeping. This also means this function no longer
-// writes anything to local storage itself — only genuinely qualifying
-// titles get committed locally, decided by the caller after filtering,
-// not just anything that happened to get downloaded.
+// matching decade+genre gets downloaded in batches, and it's up to the
+// caller (buildWatchmodePool) to run the normal filter pipeline on it and
+// decide what's actually worth keeping. This also means this function no
+// longer writes anything to local storage itself — only genuinely
+// qualifying titles get committed locally, decided by the caller after
+// filtering, not just anything that happened to get downloaded.
+//
+// Supports pagination via an optional cursor (a Firestore document
+// snapshot from a previous call's last result) — a single fixed-size
+// batch has no way to know in advance whether it'll contain enough
+// titles that actually pass your filters, so the caller pulls
+// successive batches, checking after each one, until either enough
+// survive or the data genuinely runs out.
+//
 // Needs a Firestore composite index on (genres array-contains, year
-// range) to actually work — until that index exists, Firestore rejects
-// the query outright. That failure is caught and treated as "no shared
-// data available this time," never as a hard error — the spin still
-// works using local cache and live discovery either way. Fastest way to
-// create the index: trigger this once while signed in with a key
-// connected, then check the browser console for a Firestore error
-// containing a direct link that auto-configures the correct index.
-async function getSharedMoviesForCombo(decade, genre){
-  if (!currentUser) return [];
+// range, ordered by year) to actually work — until that index exists,
+// Firestore rejects the query outright. That failure is caught and
+// treated as "no shared data available this time," never as a hard
+// error — the spin still works using local cache and live discovery
+// either way. Fastest way to create the index: trigger this once while
+// signed in with a key connected, then check the browser console for a
+// Firestore error containing a direct link that auto-configures the
+// correct index.
+async function getSharedMoviesForComboBatch(decade, genre, batchSize, cursor){
+  if (!currentUser) return { candidates: [], cursor: null, exhausted: true };
   try{
-    const snap = await fbDb.collection('sharedMovieRatings')
+    let query = fbDb.collection('sharedMovieRatings')
       .where('genres', 'array-contains', genre)
       .where('year', '>=', decade)
       .where('year', '<=', decade + 9)
-      .limit(maxResults * 5)
-      .get();
+      .orderBy('year')
+      .limit(batchSize);
+    if (cursor) query = query.startAfter(cursor);
+
+    const snap = await query.get();
     const candidates = [];
     snap.forEach(doc => {
       const entry = doc.data();
@@ -3351,10 +3363,14 @@ async function getSharedMoviesForCombo(decade, genre){
         }
       });
     });
-    return candidates;
+    return {
+      candidates,
+      cursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : cursor,
+      exhausted: snap.docs.length < batchSize // fewer than requested means there's nothing left to page through
+    };
   } catch(e){
-    console.warn('Shared discovery query failed (likely missing Firestore index — create one on sharedMovieRatings for genres array-contains + year range) — continuing with local cache and live discovery only', e.message);
-    return [];
+    console.warn('Shared discovery query failed (likely missing Firestore index — create one on sharedMovieRatings for genres array-contains + year range, ordered by year) — continuing with local cache and live discovery only', e.message);
+    return { candidates: [], cursor: null, exhausted: true };
   }
 }
 
@@ -3388,14 +3404,35 @@ async function buildWatchmodePool(decade, genre){
 
     if (currentUser){
       setSpinStatus('Checking shared database…');
-      const sharedCandidates = await getSharedMoviesForCombo(decade, genre);
-      sharedCandidates.forEach(c => {
-        if (!seenIds.has(c.pool.watchmodeId)){
-          pool.push(c.pool);
-          seenIds.add(c.pool.watchmodeId);
-          sharedRecordsById.set(c.pool.watchmodeId, c.record);
-        }
-      });
+      // Keeps pulling more batches until there's a comfortable surplus of
+      // survivors, not just the bare minimum. Batches arrive ordered by
+      // year (Firestore requires that, since year is also the range
+      // filter — it can't be ordered by rating instead), so stopping the
+      // instant we technically have "enough" risks settling for
+      // early-batch matches while better-rated titles sit unscanned in a
+      // later batch. Gathering roughly double before handing off to the
+      // final sort/trim (which already picks the true top-rated ones)
+      // makes it far more likely the actual best candidates are what you
+      // end up seeing, not just the first sufficient ones found. The hard
+      // cap below (5 batches) still bounds the worst case.
+      const sharedBatchSize = Math.max(maxResults * 3, 15);
+      const maxSharedBatches = 5;
+      const comfortableSurplus = maxResults * 2;
+      let sharedCursor = null;
+      for (let batchNum = 0; batchNum < maxSharedBatches; batchNum++){
+        const { candidates, cursor, exhausted } = await getSharedMoviesForComboBatch(decade, genre, sharedBatchSize, sharedCursor);
+        candidates.forEach(c => {
+          if (!seenIds.has(c.pool.watchmodeId)){
+            pool.push(c.pool);
+            seenIds.add(c.pool.watchmodeId);
+            sharedRecordsById.set(c.pool.watchmodeId, c.record);
+          }
+        });
+        sharedCursor = cursor;
+        if (exhausted) break; // genuinely nothing more to page through
+        const { survivors: interimSurvivors } = computeFilteredSurvivors(pool);
+        if (interimSurvivors.length >= comfortableSurplus) break;
+      }
     }
 
     // Some cached entries may come back with their rating tier stale
