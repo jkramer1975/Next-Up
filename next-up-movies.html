@@ -893,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.10.1';
+const APP_VERSION = '1.14.0';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -1128,8 +1128,61 @@ let wmKey = null;        // Watchmode
 let dataSourcePref = 'auto'; // 'auto' | 'builtin'
 let wmGenreMap = null;   // resolved once per key: { "Action": <watchmode genre id>, ... }
 let wmAllGenreNames = null; // full table: { <watchmode genre id>: "Adventure", ... } — covers genres outside our 8 spin categories
+let wmGenreMapResolvedAt = null; // subject to the 90-day global floor, same as everything else — a mapping that's never actually wrong doesn't need a shorter window of its own
+let wmSourceMapResolvedAt = null;
 let wmSourceMap = null;  // resolved once per key: { "Netflix": [<watchmode source id>, ...], ... } — mirrors wmGenreMap
 let wmSourceNames = null; // { "Netflix": ["Netflix"], "Apple TV+": [...raw Watchmode names that matched...] } — purely diagnostic, not used for filtering itself
+
+const WM_DISCOVERY_STALE_MS = 20 * 24 * 60 * 60 * 1000;
+const WM_ENRICHMENT_STALE_MS = 90 * 24 * 60 * 60 * 1000;
+const WM_RATING_STALE_MS = 5 * 24 * 60 * 60 * 1000;
+const WM_GLOBAL_MAX_STALE_MS = 90 * 24 * 60 * 60 * 1000;
+
+function isFresh(timestamp, windowMs){
+  return timestamp != null && timestamp >= Date.now() - windowMs;
+}
+
+function mergeFreshestTiers(local, shared){
+  const merged = Object.assign({}, local);
+  if ((shared.discoveredAt || 0) > (local.discoveredAt || 0)){
+    merged.title = shared.title;
+    merged.year = shared.year;
+    merged.genres = shared.genres;
+    merged.discoveredAt = shared.discoveredAt;
+  }
+  if ((shared.enrichedAt || 0) > (local.enrichedAt || 0)){
+    merged.posterUrl = shared.posterUrl;
+    merged.description = shared.description;
+    merged.language = shared.language;
+    merged.usRating = shared.usRating;
+    merged.enrichedAt = shared.enrichedAt;
+  }
+  if ((shared.ratedAt || 0) > (local.ratedAt || 0)){
+    merged.userRating = shared.userRating;
+    merged.criticScore = shared.criticScore;
+    merged.ratedAt = shared.ratedAt;
+  }
+  merged.imdbId = merged.imdbId || shared.imdbId || null;
+  merged.tmdbId = merged.tmdbId || shared.tmdbId || null;
+  return merged;
+}
+
+function applyRecordToMovie(movie, record, tierFlags){
+  const flags = tierFlags || { discoveryFresh: true, enrichmentFresh: true, ratingFresh: true };
+  if (flags.discoveryFresh && record.genres && record.genres.length) movie.genresOverride = record.genres;
+  if (flags.enrichmentFresh){
+    if (record.posterUrl && !movie.posterUrl) movie.posterUrl = record.posterUrl;
+    if (record.description && !movie.description) movie.description = record.description;
+    if (record.language) movie.language = record.language;
+    if (record.usRating) movie.usRating = record.usRating;
+  }
+  if (flags.ratingFresh){
+    if (record.userRating != null) movie.userRating = record.userRating;
+    if (record.criticScore != null) movie.criticScore = record.criticScore;
+  }
+  if (record.imdbId) movie.imdbId = record.imdbId;
+  if (record.tmdbId) movie.tmdbId = record.tmdbId;
+}
 let enabledStreamingServices = [];
 // When true, streaming availability is entirely left out of the Watchmode
 // request — not just "everything happens to be checked," an explicit,
@@ -1149,9 +1202,8 @@ let ignoreStreamingService = true;
 // default-checked state of the named services.
 let includeFreeServices = true;
 let wmWarmupDone = false;
-const wmDetailsCache = new Map(); // watchmode title id -> {data, fetchedAt} — persisted locally with a staleness check, since streaming availability changes over time unlike ratings/posters
-const WM_DETAILS_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — pick-time data (streaming availability especially) older than this is treated as a miss and re-fetched
-const WM_DETAILS_PRUNE_MS = 30 * 24 * 60 * 60 * 1000; // entries older than this get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
+const wmDetailsCache = new Map(); // watchmode title id -> {trailerUrl, posterUrl, genres, description, usRating, enrichedAt, userRating, criticScore, streamNames, ratedAt} — persisted locally with per-tier staleness, mirroring the enrichment/rating split used for wmRatingsCache
+const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
 const wmRatingsCache = new Map(); // watchmode title id -> {userRating, usRating} only, used for the whole grid (session only)
 const wmSearchCache = new Map(); // "title|year" -> watchmode id (or null for a confirmed no-match), used to enrich the built-in list
 let enabledDecades = DECADES.slice();
@@ -1388,7 +1440,7 @@ async function resetLocalStateToDefaults(){
   // needs it to keep working.
   // These aren't synced themselves, but they're entirely derived from the
   // Watchmode key we just reset — leaving them would be stale/meaningless.
-  for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_source_map', 'watchmode_source_names', 'watchmode_warmup_done']){
+  for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_genre_map_resolved_at', 'watchmode_source_map', 'watchmode_source_names', 'watchmode_source_map_resolved_at', 'watchmode_warmup_done']){
     if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
     else localStorage.setItem('fmn_' + key, JSON.stringify(null));
   }
@@ -1543,8 +1595,10 @@ async function syncWatchmodeKeyToCloud(key, uid){
   }
 }
 async function saveWmGenreMap(){ await saveJSON('watchmode_genre_map', wmGenreMap); }
+async function saveWmGenreMapResolvedAt(){ await saveJSON('watchmode_genre_map_resolved_at', wmGenreMapResolvedAt); }
 async function saveWmAllGenreNames(){ await saveJSON('watchmode_all_genre_names', wmAllGenreNames); }
 async function saveWmSourceMap(){ await saveJSON('watchmode_source_map', wmSourceMap); }
+async function saveWmSourceMapResolvedAt(){ await saveJSON('watchmode_source_map_resolved_at', wmSourceMapResolvedAt); }
 async function saveWmSourceNames(){ await saveJSON('watchmode_source_names', wmSourceNames); }
 async function saveEnabledStreamingServices(){ await saveJSON('enabled_streaming_services', enabledStreamingServices); }
 async function saveIgnoreStreamingService(){ await saveJSON('ignore_streaming_service', ignoreStreamingService); }
@@ -1613,7 +1667,8 @@ async function saveWmDetailsCache(){
   const obj = {};
   const cutoff = Date.now() - WM_DETAILS_PRUNE_MS;
   wmDetailsCache.forEach((v, k) => {
-    if (v && v.fetchedAt && v.fetchedAt >= cutoff) obj[k] = v; // drop long-abandoned entries rather than let this grow forever
+    const newestTouch = Math.max(v?.enrichedAt || 0, v?.ratedAt || 0);
+    if (newestTouch >= cutoff) obj[k] = v; // drop only once BOTH tiers are past the 90-day floor
   });
   await saveJSON('watchmode_details_cache', obj);
 }
@@ -1629,8 +1684,10 @@ async function init(){
   wmKey = await loadJSON('watchmode_api_key', null);
   wmGenreMap = await loadJSON('watchmode_genre_map', null);
   wmAllGenreNames = await loadJSON('watchmode_all_genre_names', null);
+  wmGenreMapResolvedAt = await loadJSON('watchmode_genre_map_resolved_at', null);
   wmSourceMap = await loadJSON('watchmode_source_map', null);
   wmSourceNames = await loadJSON('watchmode_source_names', null);
+  wmSourceMapResolvedAt = await loadJSON('watchmode_source_map_resolved_at', null);
   dataSourcePref = await loadJSON('data_source_pref', 'auto');
   enabledDecades = await loadJSON('enabled_decades', DECADES.slice());
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
@@ -1696,10 +1753,7 @@ async function init(){
   const savedSearchCache = await loadJSON('watchmode_search_cache', {});
   Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
   const savedDetailsCache = await loadJSON('watchmode_details_cache', {});
-  const detailsCutoff = Date.now() - WM_DETAILS_STALE_MS;
-  Object.entries(savedDetailsCache).forEach(([k, v]) => {
-    if (v && v.fetchedAt && v.fetchedAt >= detailsCutoff) wmDetailsCache.set(k, v); // stale entries just aren't loaded — same effect as a miss, no separate cleanup pass needed
-  });
+  Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchWatchmodeExtras, not at load time
   wmWarmupDone = await loadJSON('watchmode_warmup_done', false);
 
   // Migration: a saved genre map from before Fantasy/Western existed won't
@@ -1710,28 +1764,37 @@ async function init(){
   const genreMapNeedsRefresh = wmKey && (
     !wmGenreMap ||
     GENRES.some(g => !(g in wmGenreMap)) ||
-    Object.values(wmGenreMap).some(v => !Array.isArray(v))
+    Object.values(wmGenreMap).some(v => !Array.isArray(v)) ||
+    !isFresh(wmGenreMapResolvedAt, WM_GLOBAL_MAX_STALE_MS)
   );
   if (genreMapNeedsRefresh){
     try{
       const { map, allNames } = await resolveWmGenres();
       wmGenreMap = map;
       wmAllGenreNames = allNames;
+      wmGenreMapResolvedAt = Date.now();
       await saveWmGenreMap();
       await saveWmAllGenreNames();
+      await saveWmGenreMapResolvedAt();
     } catch(e){ console.warn('Could not refresh genre map for newly-added genres', e.message); }
   }
 
   // Same reasoning as the genre map refresh above — anyone who connected a
   // key before this filter existed needs their source map resolved once.
-  const sourceMapNeedsRefresh = wmKey && (!wmSourceMap || STREAMING_SERVICES.some(s => !(s in wmSourceMap)));
+  const sourceMapNeedsRefresh = wmKey && (
+    !wmSourceMap ||
+    STREAMING_SERVICES.some(s => !(s in wmSourceMap)) ||
+    !isFresh(wmSourceMapResolvedAt, WM_GLOBAL_MAX_STALE_MS)
+  );
   if (sourceMapNeedsRefresh){
     try{
       const { map, names } = await resolveWmSources();
       wmSourceMap = map;
       wmSourceNames = names;
+      wmSourceMapResolvedAt = Date.now();
       await saveWmSourceMap();
       await saveWmSourceNames();
+      await saveWmSourceMapResolvedAt();
     } catch(e){ console.warn('Could not refresh streaming source map', e.message); }
   }
 
@@ -2080,14 +2143,18 @@ $('saveWmKeyBtn').addEventListener('click', async () => {
     const missing = GENRES.filter(g => !(g in map));
     wmGenreMap = map;
     wmAllGenreNames = allNames;
+    wmGenreMapResolvedAt = Date.now();
     await saveWmKey();
     await saveWmGenreMap();
     await saveWmAllGenreNames();
+    await saveWmGenreMapResolvedAt();
     const sourceResolved = await resolveWmSources();
     wmSourceMap = sourceResolved.map;
     wmSourceNames = sourceResolved.names;
+    wmSourceMapResolvedAt = Date.now();
     await saveWmSourceMap();
     await saveWmSourceNames();
+    await saveWmSourceMapResolvedAt();
     // First-ever connection — make sure the new key actually gets used,
     // even if "Always use built-in list only" was selected before there
     // was a key to use.
@@ -2120,14 +2187,18 @@ $('removeWmKeyBtn').addEventListener('click', async () => {
   wmKey = null;
   wmGenreMap = null;
   wmAllGenreNames = null;
+  wmGenreMapResolvedAt = null;
   wmSourceMap = null;
   wmSourceNames = null;
+  wmSourceMapResolvedAt = null;
   wmDetailsCache.clear();
   await saveWmKey();
   await saveWmGenreMap();
   await saveWmAllGenreNames();
+  await saveWmGenreMapResolvedAt();
   await saveWmSourceMap();
   await saveWmSourceNames();
+  await saveWmSourceMapResolvedAt();
   await saveWmDetailsCache();
   renderAdmin();
   updateSourceNote();
@@ -2886,56 +2957,97 @@ function movieNeedsRatingData(movie){
 }
 
 async function enrichOneMovie(movie, maxAttempts){
-  const cached = wmRatingsCache.get(movie.watchmodeId);
-  if (ratingCacheHasData(cached)){
-    if (cached.userRating != null) movie.userRating = cached.userRating;
-    if (cached.criticScore != null) movie.criticScore = cached.criticScore;
-    if (cached.usRating) movie.usRating = cached.usRating;
-    if (cached.posterUrl && !movie.posterUrl) movie.posterUrl = cached.posterUrl;
-    if (cached.genres && cached.genres.length) movie.genresOverride = cached.genres;
-    if (cached.language) movie.language = cached.language;
-    if (cached.description && !movie.description) movie.description = cached.description;
+  const id = movie.watchmodeId;
+  let record = wmRatingsCache.get(id) || {};
+
+  // Shared, cross-user cache — checked whenever any tier this device
+  // knows about (or doesn't know about at all) might be stale. Only
+  // consulted while signed in. Per field-group, keeps whichever of
+  // local/shared is actually newer rather than an all-or-nothing swap.
+  if (currentUser){
+    const anyTierNeedsShared = !isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS)
+      || !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS)
+      || !isFresh(record.ratedAt, WM_RATING_STALE_MS);
+    if (anyTierNeedsShared){
+      try{
+        const sharedDoc = await fbDb.collection('sharedMovieRatings').doc(String(id)).get();
+        if (sharedDoc.exists) record = mergeFreshestTiers(record, sharedDoc.data());
+      } catch(e){ console.warn('Shared ratings cache lookup failed, falling back to Watchmode directly', e.message); }
+    }
+  }
+
+  const discoveryFresh = isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS);
+  const enrichmentFresh = isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
+  const ratingFresh = isFresh(record.ratedAt, WM_RATING_STALE_MS);
+
+  if (discoveryFresh && enrichmentFresh && ratingFresh && ratingCacheHasData(record)){
+    // Every tier we might need is fresh, whether from local or the shared
+    // merge above — no live call needed at all.
+    wmRatingsCache.set(id, record);
+    saveWmRatingsCache();
+    applyRecordToMovie(movie, record);
     return { ok: true, hasData: true };
   }
+
+  // At least one tier is stale or was never known — since all three come
+  // from the same Watchmode response, a single live call refreshes
+  // everything at once.
   try{
-    const details = await fetchWatchmodeTitleDetails(movie.watchmodeId, maxAttempts, `Rating/genre lookup: "${movie.title}"`);
+    const details = await fetchWatchmodeTitleDetails(id, maxAttempts, `Rating/genre lookup: "${movie.title}"`);
     // A response that doesn't even look like a title (no title/id at all) is
     // treated as a failure rather than a legitimate "no rating" result —
     // this is what a degraded/throttled 200 OK response looks like.
     if (!details || (details.title == null && details.id == null)){
       throw new Error('Empty or unexpected response from Watchmode');
     }
-    const userRating = firstNumber(details.user_rating, details.imdb_rating, details.rating);
-    const criticScore = firstNumber(details.critic_score, details.critics_score, details.tomatometer);
-    const usRating = firstString(details.us_rating, details.mpaa_rating, details.content_rating, details.rating_certification);
-    const posterUrl = firstString(details.poster, details.poster_url, details.poster_image, details.backdrop);
-    const genres = normalizeGenreList(firstArray(details.genre_names, details.genres));
-    const language = normalizeLanguage(firstString(details.original_language, details.language, details.spoken_language_codes && details.spoken_language_codes[0]));
-    const description = firstString(details.plot_overview, details.overview, details.description, details.plot);
-    const imdbId = movie.imdbId || firstString(details.imdb_id);
-    const tmdbId = movie.tmdbId || firstNumber(details.tmdb_id);
-    const hasData = userRating != null || criticScore != null || !!usRating || (genres && genres.length > 0);
+    const now = Date.now();
+    const fresh = {
+      title: movie.title, year: movie.year,
+      genres: normalizeGenreList(firstArray(details.genre_names, details.genres)),
+      discoveredAt: now,
+      posterUrl: firstString(details.poster, details.poster_url, details.poster_image, details.backdrop),
+      description: firstString(details.plot_overview, details.overview, details.description, details.plot),
+      language: normalizeLanguage(firstString(details.original_language, details.language, details.spoken_language_codes && details.spoken_language_codes[0])),
+      usRating: firstString(details.us_rating, details.mpaa_rating, details.content_rating, details.rating_certification),
+      enrichedAt: now,
+      userRating: firstNumber(details.user_rating, details.imdb_rating, details.rating),
+      criticScore: firstNumber(details.critic_score, details.critics_score, details.tomatometer),
+      ratedAt: now,
+      imdbId: movie.imdbId || firstString(details.imdb_id) || record.imdbId || null,
+      tmdbId: movie.tmdbId || firstNumber(details.tmdb_id) || record.tmdbId || null
+    };
+    const hasData = ratingCacheHasData(fresh);
     // Only cache when there's actually something here — a 200 OK with an
     // empty/degraded body (which is what appears to be happening under
     // load, rather than a clean 429) must NOT get cached, or every future
     // attempt — including our own retry pass below — will just read back
     // the same empty result instead of trying again.
     if (hasData){
-      wmRatingsCache.set(movie.watchmodeId, { title: movie.title, year: movie.year, imdbId: imdbId || null, tmdbId: tmdbId || null, userRating, criticScore, usRating, posterUrl, genres, language, description });
+      wmRatingsCache.set(id, fresh);
       saveWmRatingsCache(); // fire-and-forget — don't block on a local storage write
+      if (currentUser){
+        fbDb.collection('sharedMovieRatings').doc(String(id)).set(fresh)
+          .catch(e => console.warn('Could not write shared ratings cache entry', e.message)); // fire-and-forget — never blocks the enrichment result
+      }
+      applyRecordToMovie(movie, fresh);
+      return { ok: true, hasData: true };
     }
-    if (userRating != null) movie.userRating = userRating;
-    if (criticScore != null) movie.criticScore = criticScore;
-    if (usRating) movie.usRating = usRating;
-    if (posterUrl && !movie.posterUrl) movie.posterUrl = posterUrl;
-    if (genres && genres.length) movie.genresOverride = genres;
-    if (imdbId) movie.imdbId = imdbId;
-    if (tmdbId) movie.tmdbId = tmdbId;
-    movie.language = language;
-    if (description) movie.description = description;
-    return { ok: true, hasData };
+    // Live call succeeded but came back empty — fall back to whichever
+    // tiers were actually fresh before we tried, rather than nothing.
+    if (discoveryFresh || enrichmentFresh || ratingFresh){
+      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, ratingFresh });
+      return { ok: true, hasData: ratingCacheHasData(record) };
+    }
+    return { ok: true, hasData: false };
   } catch(e){
     console.warn('Watchmode detail lookup failed for', movie.title, e.message);
+    // Live call failed entirely — still use whatever tiers were fresh
+    // going in, rather than surfacing a total failure when we actually
+    // had usable (if partial) data on hand.
+    if (discoveryFresh || enrichmentFresh || ratingFresh){
+      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, ratingFresh });
+      return { ok: true, hasData: ratingCacheHasData(record) };
+    }
     return { ok: false, hasData: false, error: e.message };
   }
 }
@@ -2977,8 +3089,9 @@ async function enrichBatchWithRatings(movies, opts){
 // title is never searched for twice.
 async function searchWatchmodeForMovie(movie){
   const searchKey = `${movie.title}|${movie.year}`;
-  if (wmSearchCache.has(searchKey)){
-    return wmSearchCache.get(searchKey);
+  const cached = wmSearchCache.get(searchKey);
+  if (cached && isFresh(cached.cachedAt, WM_GLOBAL_MAX_STALE_MS)){
+    return cached.wmId;
   }
   let wmId = null;
   try{
@@ -2990,11 +3103,10 @@ async function searchWatchmodeForMovie(movie){
     wmId = best ? best.id : null;
   } catch(e){
     console.warn('Watchmode search failed for', movie.title, e.message);
-    wmId = null; // don't cache a failure as a confirmed no-match — worth retrying later
-    wmSearchCache.delete(searchKey);
+    wmSearchCache.delete(searchKey); // don't cache a failure as a confirmed no-match — worth retrying later
     return null;
   }
-  wmSearchCache.set(searchKey, wmId);
+  wmSearchCache.set(searchKey, { wmId, cachedAt: Date.now() });
   saveWmSearchCache(); // fire-and-forget
   return wmId;
 }
@@ -3004,7 +3116,11 @@ async function searchWatchmodeForMovie(movie){
 // result would have. Silently does nothing if there's no connection —
 // the built-in list still displays exactly as before either way.
 async function enrichBuiltinListWithWatchmode(movies){
-  if (!wmKey || !wmGenreMap) return;
+  // Deliberately no wmKey gate here — local cache lookups (and, if
+  // signed in, the shared database) should always be attempted
+  // regardless of whether a key is connected on this device. Only an
+  // actual live Watchmode call needs a key, and enrichOneMovie already
+  // fails that gracefully on its own without one.
   let done = 0;
   await mapWithConcurrency(movies, 1, async (movie) => {
     if (!movie.watchmodeId){
@@ -3015,7 +3131,7 @@ async function enrichBuiltinListWithWatchmode(movies){
       await enrichOneMovie(movie, 2);
     }
     done++;
-    setSpinStatus(`Enriching built-in list via Watchmode… ${done}/${movies.length}`);
+    setSpinStatus(`Enriching built-in list… ${done}/${movies.length}`);
   }, 250);
 }
 
@@ -3154,25 +3270,88 @@ async function fetchWatchmodeMoviesByRating(decade, genre, targetCount, seenIds,
 function getCachedMoviesForCombo(decade, genre){
   const results = [];
   wmRatingsCache.forEach((entry, id) => {
-    if (entry.year == null) return; // cached before year was tracked — can't place it in a decade
+    // Can't trust this record's decade/genre placement at all once its
+    // discovery tier has gone stale — skip it entirely rather than risk
+    // matching it into a combo it may no longer actually belong to.
+    if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return;
+    if (entry.year == null) return;
     if (Math.floor(entry.year / 10) * 10 !== decade) return;
     if (!entry.genres || !entry.genres.includes(genre)) return;
+    const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
+    const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
     results.push({
       title: entry.title,
       year: entry.year,
       watchmodeId: id,
       imdbId: entry.imdbId || null,
       tmdbId: entry.tmdbId || null,
-      posterUrl: entry.posterUrl || null,
-      userRating: entry.userRating,
-      criticScore: entry.criticScore,
-      usRating: entry.usRating,
+      posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
+      userRating: ratingFresh ? entry.userRating : null,
+      criticScore: ratingFresh ? entry.criticScore : null,
+      usRating: enrichmentFresh ? entry.usRating : null,
       genresOverride: entry.genres,
-      language: entry.language || null,
-      description: entry.description || null
+      language: enrichmentFresh ? (entry.language || null) : null,
+      description: enrichmentFresh ? (entry.description || null) : null
     });
   });
   return results;
+}
+
+// The shared-database equivalent of getCachedMoviesForCombo above — a
+// real Firestore query across every signed-in user's contributed movie
+// records for this decade+genre, not just this device's own local cache.
+// This needs a Firestore composite index on (genres array-contains, year
+// range) to actually work — until that index exists, Firestore will
+// reject the query outright. That failure is caught and treated as "no
+// shared data available this time," never as a hard error — the spin
+// still works using local cache and live discovery either way. The
+// fastest way to create the index: trigger this once while signed in
+// with a key connected, then check the browser console for a Firestore
+// error containing a direct link that auto-configures the correct index.
+async function getSharedMoviesForCombo(decade, genre){
+  if (!currentUser) return [];
+  try{
+    const snap = await fbDb.collection('sharedMovieRatings')
+      .where('genres', 'array-contains', genre)
+      .where('year', '>=', decade)
+      .where('year', '<=', decade + 9)
+      .get();
+    const results = [];
+    let mirrored = false;
+    snap.forEach(doc => {
+      const entry = doc.data();
+      if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return; // can't trust this record's decade/genre placement once stale
+      const id = Number(doc.id) || doc.id;
+      // Mirror into local cache — merged with whatever's already there
+      // locally, so a fresher local tier never gets clobbered by an
+      // older shared one.
+      const existingLocal = wmRatingsCache.get(id);
+      const merged = existingLocal ? mergeFreshestTiers(existingLocal, entry) : entry;
+      wmRatingsCache.set(id, merged);
+      mirrored = true;
+      const enrichmentFresh = isFresh(merged.enrichedAt, WM_ENRICHMENT_STALE_MS);
+      const ratingFresh = isFresh(merged.ratedAt, WM_RATING_STALE_MS);
+      results.push({
+        title: merged.title,
+        year: merged.year,
+        watchmodeId: id,
+        imdbId: merged.imdbId || null,
+        tmdbId: merged.tmdbId || null,
+        posterUrl: enrichmentFresh ? (merged.posterUrl || null) : null,
+        userRating: ratingFresh ? merged.userRating : null,
+        criticScore: ratingFresh ? merged.criticScore : null,
+        usRating: enrichmentFresh ? merged.usRating : null,
+        genresOverride: merged.genres,
+        language: enrichmentFresh ? (merged.language || null) : null,
+        description: enrichmentFresh ? (merged.description || null) : null
+      });
+    });
+    if (mirrored) saveWmRatingsCache(); // fire-and-forget — persist the mirrored entries locally too
+    return results;
+  } catch(e){
+    console.warn('Shared discovery query failed (likely missing Firestore index — create one on sharedMovieRatings for genres array-contains + year range) — continuing with local cache and live discovery only', e.message);
+    return [];
+  }
 }
 
 async function buildWatchmodePool(decade, genre){
@@ -3200,6 +3379,28 @@ async function buildWatchmodePool(decade, genre){
       pool.push(m);
       seenIds.add(m.watchmodeId);
     });
+
+    if (currentUser){
+      setSpinStatus('Checking shared database…');
+      const sharedMovies = await getSharedMoviesForCombo(decade, genre);
+      sharedMovies.forEach(m => {
+        if (!seenIds.has(m.watchmodeId)){
+          pool.push(m);
+          seenIds.add(m.watchmodeId);
+        }
+      });
+    }
+
+    // Some cached entries may come back with their rating tier stale
+    // (nulled out by getCachedMoviesForCombo/getSharedMoviesForCombo) even
+    // though their discovery tier is still trusted — those need a fresh
+    // enrichment pass too, not just newly-discovered live candidates
+    // below, or they'd silently skip rating filtering forever instead of
+    // getting current data.
+    const needsFreshRating = pool.filter(m => movieNeedsRatingData(m) && !isBlocked(m.title, m.year));
+    if (needsFreshRating.length){
+      await enrichBatchWithRatings(needsFreshRating);
+    }
   }
 
   let { survivors } = computeFilteredSurvivors(pool);
@@ -3502,17 +3703,73 @@ async function confirmPick(movie){
   }
 }
 
+function mergeDetailsFreshestTiers(local, shared){
+  const merged = Object.assign({}, local);
+  if ((shared.enrichedAt || 0) > (local.enrichedAt || 0)){
+    merged.trailerUrl = shared.trailerUrl;
+    merged.posterUrl = shared.posterUrl;
+    merged.genres = shared.genres;
+    merged.description = shared.description;
+    merged.usRating = shared.usRating;
+    merged.enrichedAt = shared.enrichedAt;
+  }
+  if ((shared.ratedAt || 0) > (local.ratedAt || 0)){
+    merged.userRating = shared.userRating;
+    merged.criticScore = shared.criticScore;
+    merged.streamNames = shared.streamNames;
+    merged.ratedAt = shared.ratedAt;
+  }
+  return merged;
+}
+
+function recordToExtrasResult(record, tierFlags){
+  return {
+    trailerUrl: tierFlags.enrichmentFresh ? (record.trailerUrl ?? null) : null,
+    posterUrl: tierFlags.enrichmentFresh ? (record.posterUrl ?? null) : null,
+    genres: tierFlags.enrichmentFresh ? (record.genres || null) : null,
+    description: tierFlags.enrichmentFresh ? (record.description ?? null) : null,
+    usRating: tierFlags.enrichmentFresh ? (record.usRating ?? null) : null,
+    userRating: tierFlags.ratingFresh ? (record.userRating ?? null) : null,
+    criticScore: tierFlags.ratingFresh ? (record.criticScore ?? null) : null,
+    streamNames: tierFlags.ratingFresh ? (record.streamNames || []) : []
+  };
+}
+
 async function fetchWatchmodeExtras(movie){
-  const cacheKey = movie.watchmodeId;
-  const cached = wmDetailsCache.get(cacheKey);
-  if (cached && cached.fetchedAt >= Date.now() - WM_DETAILS_STALE_MS) return cached.data;
-  let trailerUrl = null, streamNames = [], userRating = null, criticScore = null, usRating = null, posterUrl = null, genres = null, description = null;
+  const id = movie.watchmodeId;
+  let record = wmDetailsCache.get(id) || {};
+
+  // Shared, cross-user cache — checked whenever either tier is stale or
+  // unknown locally. Only available while signed in.
+  if (currentUser){
+    const anyTierNeedsShared = !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS) || !isFresh(record.ratedAt, WM_RATING_STALE_MS);
+    if (anyTierNeedsShared){
+      try{
+        const sharedDoc = await fbDb.collection('sharedMovieCache').doc(String(id)).get();
+        if (sharedDoc.exists) record = mergeDetailsFreshestTiers(record, sharedDoc.data());
+      } catch(e){ console.warn('Shared movie cache lookup failed, falling back to Watchmode directly', e.message); }
+    }
+  }
+
+  const enrichmentFresh = isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
+  const ratingFresh = isFresh(record.ratedAt, WM_RATING_STALE_MS);
+
+  if (enrichmentFresh && ratingFresh){
+    wmDetailsCache.set(id, record);
+    saveWmDetailsCache();
+    return recordToExtrasResult(record, { enrichmentFresh: true, ratingFresh: true });
+  }
+
+  // At least one tier is stale or unknown — a single live call refreshes
+  // both, since they come from the same Watchmode response.
   let details = null;
+  let trailerUrl = null, posterUrl = null, genres = null, description = null, usRating = null;
+  let userRating = null, criticScore = null, streamNames = [];
   try{
     // append_to_response=sources bundles streaming availability into this
     // same request instead of a separate one — cuts pick-time lookups from
     // two calls down to one.
-    details = await wmFetch(`/title/${cacheKey}/details/`, { append_to_response: 'sources' }, 0, 6, `Full details + streaming (on click): "${movie.title}"`);
+    details = await wmFetch(`/title/${id}/details/`, { append_to_response: 'sources' }, 0, 6, `Full details + streaming (on click): "${movie.title}"`);
     trailerUrl = details.trailer || null;
     userRating = firstNumber(details.user_rating, details.imdb_rating, details.rating);
     criticScore = firstNumber(details.critic_score, details.critics_score, details.tomatometer);
@@ -3525,22 +3782,53 @@ async function fetchWatchmodeExtras(movie){
   const appendedSources = details && firstArray(details.sources, details.sources_data, details.streaming_sources);
   if (appendedSources){
     streamNames = [...new Set(appendedSources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
-  } else {
+  } else if (details) {
     // Fall back to the separate call only if the combined response didn't
     // actually include sources — keeps this working even if Watchmode's
     // append_to_response shape differs from what's expected above.
     try{
-      const sources = await wmFetch(`/title/${cacheKey}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${movie.title}"`);
+      const sources = await wmFetch(`/title/${id}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${movie.title}"`);
       if (Array.isArray(sources)){
         streamNames = [...new Set(sources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
       }
     } catch(e){ /* best-effort */ }
   }
 
-  const result = { trailerUrl, streamNames, userRating, criticScore, usRating, posterUrl, genres, description };
-  wmDetailsCache.set(cacheKey, { data: result, fetchedAt: Date.now() });
-  saveWmDetailsCache(); // fire-and-forget — don't block on a local storage write
-  return result;
+  const now = Date.now();
+  const gotEnrichment = !!(trailerUrl || posterUrl || (genres && genres.length) || description || usRating);
+  const gotRating = userRating != null || criticScore != null || streamNames.length > 0;
+
+  if (gotEnrichment || gotRating){
+    const fresh = Object.assign({}, record);
+    if (gotEnrichment){
+      fresh.trailerUrl = trailerUrl;
+      fresh.posterUrl = posterUrl;
+      fresh.genres = genres;
+      fresh.description = description;
+      fresh.usRating = usRating;
+      fresh.enrichedAt = now;
+    }
+    if (gotRating){
+      fresh.userRating = userRating;
+      fresh.criticScore = criticScore;
+      fresh.streamNames = streamNames;
+      fresh.ratedAt = now;
+    }
+    wmDetailsCache.set(id, fresh);
+    saveWmDetailsCache(); // fire-and-forget — don't block on a local storage write
+    if (currentUser){
+      fbDb.collection('sharedMovieCache').doc(String(id)).set(fresh)
+        .catch(e => console.warn('Could not write shared movie cache entry', e.message)); // fire-and-forget — never blocks showing the result
+    }
+    return recordToExtrasResult(fresh, {
+      enrichmentFresh: isFresh(fresh.enrichedAt, WM_ENRICHMENT_STALE_MS),
+      ratingFresh: isFresh(fresh.ratedAt, WM_RATING_STALE_MS)
+    });
+  }
+
+  // Live call returned nothing new — fall back to whichever tiers were
+  // actually fresh going in, rather than showing nothing at all.
+  return recordToExtrasResult(record, { enrichmentFresh, ratingFresh });
 }
 
 function appendTonightExtras(extras, movie){
