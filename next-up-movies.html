@@ -645,6 +645,13 @@
           <button class="btn-danger" id="clearCacheBtn" style="display:none;">Clear Cache</button>
         </div>
 
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Built-In List Genre Check</strong> — checks whether Watchmode's own genre categorization for each built-in list title actually agrees with the decade/genre bucket it's filed under here. Matters because the shared database filters purely by Watchmode's genre data, so a mismatch here could mean a title behaves inconsistently between built-in browsing and the shared/live discovery paths. Checks all 1,083 built-in list entries — takes roughly 4-5 minutes minimum even with a fully warmed cache, longer if live lookups are needed.</p>
+        <div class="row">
+          <button class="btn-ghost" id="validateGenresBtn" style="display:none;">Run Genre Check</button>
+        </div>
+        <div class="hint" id="validateGenresStatus"></div>
+        <div id="validateGenresResults" style="display:none; margin-top:10px; max-height:300px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; padding:10px;"></div>
+
         <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many movies are already cached for a given decade/genre. Those spins should feel noticeably faster since little or no live lookup is needed.</p>
         <div class="row">
           <select id="cacheStatsDecade" style="max-width:140px;">
@@ -893,7 +900,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.19.1';
+const APP_VERSION = '1.20.1';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -928,9 +935,9 @@ Family:[{title:"E.T. the Extra-Terrestrial",year:1982},{title:"The Karate Kid",y
 1990:{
 Action:[{title:"Terminator 2: Judgment Day",year:1991},{title:"Die Hard with a Vengeance",year:1995},{title:"Speed",year:1994},{title:"The Matrix",year:1999},{title:"True Lies",year:1994},{title:"Con Air",year:1997},{title:"Face/Off",year:1997},{title:"Mission: Impossible",year:1996},{title:"GoldenEye",year:1995},{title:"Point Break",year:1991},{title:"The Rock",year:1996},{title:"Air Force One",year:1997},{title:"Die Hard 2",year:1990},{title:"Under Siege",year:1992},{title:"Broken Arrow",year:1996},{title:"Tomorrow Never Dies",year:1997}],
 Comedy:[{title:"Home Alone",year:1990},{title:"Dumb and Dumber",year:1994},{title:"Groundhog Day",year:1993},{title:"Wayne's World",year:1992},{title:"Mrs. Doubtfire",year:1993},{title:"There's Something About Mary",year:1998},{title:"Austin Powers: International Man of Mystery",year:1997},{title:"The Big Lebowski",year:1998},{title:"Clueless",year:1995},{title:"Liar Liar",year:1997},{title:"Happy Gilmore",year:1996},{title:"Home Alone 2: Lost in New York",year:1992},{title:"Billy Madison",year:1995},{title:"The Waterboy",year:1998},{title:"Tommy Boy",year:1995},{title:"Grumpy Old Men",year:1993},{title:"My Cousin Vinny",year:1992}],
-Drama:[{title:"Forrest Gump",year:1994},{title:"The Shawshank Redemption",year:1994},{title:"Good Will Hunting",year:1997},{title:"Schindler's List",year:1993},{title:"American Beauty",year:1999},{title:"The Green Mile",year:1999},{title:"As Good as It Gets",year:1997},{title:"Dead Man Walking",year:1995},{title:"Philadelphia",year:1993},{title:"Braveheart",year:1995},{title:"The English Patient",year:1996},{title:"The Insider",year:1999},{title:"Boogie Nights",year:1997},{title:"Magnolia",year:1999},{title:"Leaving Las Vegas",year:1995}],
+Drama:[{title:"Forrest Gump",year:1994},{title:"The Shawshank Redemption",year:1994},{title:"Good Will Hunting",year:1997},{title:"Schindler's List",year:1993},{title:"American Beauty",year:1999},{title:"The Green Mile",year:1999},{title:"As Good as It Gets",year:1997},{title:"Dead Man Walking",year:1995},{title:"Philadelphia",year:1993},{title:"Braveheart",year:1995},{title:"The English Patient",year:1996},{title:"The Insider",year:1999},{title:"Boogie Nights",year:1997},{title:"Magnolia",year:1999},{title:"Leaving Las Vegas",year:1995},{title:"The Silence of the Lambs",year:1991}],
 Animation:[{title:"The Lion King",year:1994},{title:"Toy Story",year:1995},{title:"Beauty and the Beast",year:1991},{title:"Aladdin",year:1992},{title:"Mulan",year:1998},{title:"A Bug's Life",year:1998},{title:"Antz",year:1998},{title:"The Prince of Egypt",year:1998},{title:"Pocahontas",year:1995},{title:"Hercules",year:1997},{title:"Toy Story 2",year:1999},{title:"Princess Mononoke",year:1997},{title:"The Iron Giant",year:1999},{title:"James and the Giant Peach",year:1996},{title:"The Nightmare Before Christmas",year:1993},{title:"Anastasia",year:1997},{title:"The Hunchback of Notre Dame",year:1996},{title:"The Rescuers Down Under",year:1990}],
-Horror:[{title:"Scream",year:1996},{title:"The Silence of the Lambs",year:1991},{title:"Interview with the Vampire",year:1994},{title:"Candyman",year:1992},{title:"Event Horizon",year:1997},{title:"The Blair Witch Project",year:1999},{title:"Sleepy Hollow",year:1999},{title:"Misery",year:1990},{title:"I Know What You Did Last Summer",year:1997},{title:"Bram Stoker's Dracula",year:1992},{title:"Urban Legend",year:1998},{title:"The Frighteners",year:1996},{title:"Species",year:1995},{title:"Arachnophobia",year:1990},{title:"Scream 2",year:1997}],
+Horror:[{title:"Scream",year:1996},{title:"Interview with the Vampire",year:1994},{title:"Candyman",year:1992},{title:"Event Horizon",year:1997},{title:"The Blair Witch Project",year:1999},{title:"Sleepy Hollow",year:1999},{title:"Misery",year:1990},{title:"I Know What You Did Last Summer",year:1997},{title:"Bram Stoker's Dracula",year:1992},{title:"Urban Legend",year:1998},{title:"The Frighteners",year:1996},{title:"Species",year:1995},{title:"Arachnophobia",year:1990},{title:"Scream 2",year:1997}],
 "Sci-Fi":[{title:"Jurassic Park",year:1993},{title:"The Matrix",year:1999},{title:"Independence Day",year:1996},{title:"Men in Black",year:1997},{title:"Twelve Monkeys",year:1995},{title:"Gattaca",year:1997},{title:"Total Recall",year:1990},{title:"Stargate",year:1994},{title:"The Fifth Element",year:1997},{title:"Starship Troopers",year:1997},{title:"Contact",year:1997},{title:"Waterworld",year:1995},{title:"Deep Impact",year:1998},{title:"Armageddon",year:1998},{title:"The Truman Show",year:1998},{title:"Dark City",year:1998}],
 Romance:[{title:"Pretty Woman",year:1990},{title:"Sleepless in Seattle",year:1993},{title:"Titanic",year:1997},{title:"Notting Hill",year:1999},{title:"While You Were Sleeping",year:1995},{title:"You've Got Mail",year:1998},{title:"Ghost",year:1990},{title:"Jerry Maguire",year:1996},{title:"10 Things I Hate About You",year:1999},{title:"My Best Friend's Wedding",year:1997},{title:"French Kiss",year:1995},{title:"Sabrina",year:1995},{title:"Runaway Bride",year:1999},{title:"Four Weddings and a Funeral",year:1994},{title:"Only You",year:1994}],
 Thriller:[{title:"The Silence of the Lambs",year:1991},{title:"Se7en",year:1995},{title:"The Usual Suspects",year:1995},{title:"L.A. Confidential",year:1997},{title:"Fargo",year:1996},{title:"The Sixth Sense",year:1999},{title:"Heat",year:1995},{title:"Basic Instinct",year:1992},{title:"The Fugitive",year:1993},{title:"Primal Fear",year:1996},{title:"Kiss the Girls",year:1997},{title:"The Talented Mr. Ripley",year:1999},{title:"The Game",year:1997},{title:"Cape Fear",year:1991},{title:"Copycat",year:1995}],
@@ -2208,6 +2215,40 @@ $('rerunWarmupBtn').addEventListener('click', () => {
   runStartupWarmup(); // the only trigger now — no automatic runs on connect or page load
 });
 
+$('validateGenresBtn').addEventListener('click', async () => {
+  const btn = $('validateGenresBtn');
+  const statusEl = $('validateGenresStatus');
+  const resultsEl = $('validateGenresResults');
+  btn.disabled = true;
+  resultsEl.style.display = 'none';
+  resultsEl.innerHTML = '';
+  const startedAt = Date.now();
+  try{
+    const { totalChecked, mismatches, unresolvable } = await validateBuiltInListGenres((checked, total) => {
+      statusEl.textContent = `Checking… ${checked}/${total}`;
+    });
+    const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+    statusEl.textContent = `Checked ${totalChecked} built-in list entries in ${seconds}s — ${mismatches.length} genre mismatch(es), ${unresolvable.length} title(s) couldn't be resolved.`;
+    if (mismatches.length || unresolvable.length){
+      let html = '';
+      if (mismatches.length){
+        html += '<p class="desc" style="margin-bottom:6px;"><strong style="color:var(--cream);">Genre mismatches</strong> — filed under one genre locally, but Watchmode doesn\'t agree:</p>';
+        html += mismatches.map(m => `<div class="desc" style="margin-bottom:4px;">${escapeHtml(m.title)} (${m.year}) — filed as <strong>${escapeHtml(m.ourGenre)}</strong>, Watchmode says: ${escapeHtml(m.watchmodeGenres.join(', '))}</div>`).join('');
+      }
+      if (unresolvable.length){
+        html += '<p class="desc" style="margin-top:10px; margin-bottom:6px;"><strong style="color:var(--cream);">Could not check</strong> — no Watchmode match or genre data found:</p>';
+        html += unresolvable.map(m => `<div class="desc" style="margin-bottom:4px;">${escapeHtml(m.title)} (${m.year}) — filed as ${escapeHtml(m.ourGenre)} — ${escapeHtml(m.reason)}</div>`).join('');
+      }
+      resultsEl.innerHTML = html;
+      resultsEl.style.display = 'block';
+    }
+  } catch(e){
+    statusEl.textContent = `Genre check failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $('clearCacheBtn').addEventListener('click', async () => {
   if (!confirm(`Clear all ${wmRatingsCache.size} cached movie ratings? Spins will need to re-fetch from Watchmode until the cache rebuilds.`)) return;
   wmRatingsCache.clear();
@@ -2229,6 +2270,7 @@ function renderAdmin(){
   renderAuthUI();
   const versionLabel = $('appVersionLabel');
   if (versionLabel) versionLabel.textContent = APP_VERSION;
+  $('validateGenresBtn').style.display = (wmKey || currentUser) ? 'inline-block' : 'none';
   renderThemeSwatches();
   populateCacheStatsDropdowns();
   updateCacheStats();
@@ -3164,6 +3206,54 @@ async function enrichBuiltinListWithWatchmode(movies){
     done++;
     setSpinStatus(`Enriching built-in list… ${done}/${movies.length}`);
   }, 250);
+}
+
+// Diagnostic tool, not part of the normal spin flow — walks every title
+// in the built-in list and checks whether Watchmode's own genre
+// categorization actually agrees with the genre bucket we've filed that
+// title under locally. Matters because the shared database filters
+// purely by Watchmode's genre data (see getSharedMoviesForComboBatch) —
+// a built-in list title whose Watchmode genres don't include the bucket
+// it's filed under here would behave inconsistently between built-in
+// browsing and the shared/live discovery paths. Reuses the exact same
+// resolution chain as normal built-in list enrichment (local cache →
+// shared database → live Watchmode), so a well-warmed cache costs little
+// to nothing extra to run this against.
+async function validateBuiltInListGenres(onProgress){
+  const entries = [];
+  DECADES.forEach(decade => {
+    GENRES.forEach(genre => {
+      (MOVIE_DB[decade][genre] || []).forEach(base => {
+        entries.push({ decade, genre, title: base.title, year: base.year });
+      });
+    });
+  });
+
+  const mismatches = [];
+  const unresolvable = [];
+  let checked = 0;
+
+  await mapWithConcurrency(entries, 1, async (entry) => {
+    const movie = { title: entry.title, year: entry.year, watchmodeId: null };
+    if (!movie.watchmodeId){
+      const wmId = await searchWatchmodeForMovie(movie);
+      if (wmId) movie.watchmodeId = wmId;
+    }
+    if (!movie.watchmodeId){
+      unresolvable.push({ title: entry.title, year: entry.year, ourGenre: entry.genre, reason: 'Could not resolve a Watchmode ID for this title' });
+    } else {
+      const result = await enrichOneMovie(movie, 2);
+      if (!result.hasData || !movie.genresOverride || !movie.genresOverride.length){
+        unresolvable.push({ title: entry.title, year: entry.year, ourGenre: entry.genre, reason: 'No genre data available from Watchmode for this title' });
+      } else if (!movie.genresOverride.includes(entry.genre)){
+        mismatches.push({ title: entry.title, year: entry.year, ourGenre: entry.genre, watchmodeGenres: movie.genresOverride });
+      }
+    }
+    checked++;
+    if (onProgress) onProgress(checked, entries.length);
+  }, 250);
+
+  return { totalChecked: entries.length, mismatches, unresolvable };
 }
 
 function matchesContentRating(movie){
