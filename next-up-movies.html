@@ -893,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.16.0';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -2867,12 +2867,14 @@ function computeFilteredSurvivors(pool){
     return b.criticScore - a.criticScore;
   });
 
+  const allQualified = survivors.slice(); // everything that passed real content criteria, before the display-only max-results trim below
+
   if (survivors.length > maxResults){
     const overflow = survivors.slice(maxResults);
     overflow.forEach(m => filteredOut.push({ movie: m, reason: `Exceeded Max Results (${maxResults}) — kept the higher-rated titles instead` }));
-    return { survivors: survivors.slice(0, maxResults), filteredOut };
+    return { survivors: survivors.slice(0, maxResults), filteredOut, allQualified };
   }
-  return { survivors, filteredOut };
+  return { survivors, filteredOut, allQualified };
 }
 
 function applyFiltersAndRender(){
@@ -3300,14 +3302,21 @@ function getCachedMoviesForCombo(decade, genre){
 // The shared-database equivalent of getCachedMoviesForCombo above — a
 // real Firestore query across every signed-in user's contributed movie
 // records for this decade+genre, not just this device's own local cache.
-// This needs a Firestore composite index on (genres array-contains, year
-// range) to actually work — until that index exists, Firestore will
-// reject the query outright. That failure is caught and treated as "no
-// shared data available this time," never as a hard error — the spin
-// still works using local cache and live discovery either way. The
-// fastest way to create the index: trigger this once while signed in
-// with a key connected, then check the browser console for a Firestore
-// error containing a direct link that auto-configures the correct index.
+// Deliberately does NOT filter by rating server-side — everything
+// matching decade+genre gets downloaded, and it's up to the caller
+// (buildWatchmodePool) to run the normal filter pipeline on it and decide
+// what's actually worth keeping. This also means this function no longer
+// writes anything to local storage itself — only genuinely qualifying
+// titles get committed locally, decided by the caller after filtering,
+// not just anything that happened to get downloaded.
+// Needs a Firestore composite index on (genres array-contains, year
+// range) to actually work — until that index exists, Firestore rejects
+// the query outright. That failure is caught and treated as "no shared
+// data available this time," never as a hard error — the spin still
+// works using local cache and live discovery either way. Fastest way to
+// create the index: trigger this once while signed in with a key
+// connected, then check the browser console for a Firestore error
+// containing a direct link that auto-configures the correct index.
 async function getSharedMoviesForCombo(decade, genre){
   if (!currentUser) return [];
   try{
@@ -3315,39 +3324,34 @@ async function getSharedMoviesForCombo(decade, genre){
       .where('genres', 'array-contains', genre)
       .where('year', '>=', decade)
       .where('year', '<=', decade + 9)
+      .limit(maxResults * 5)
       .get();
-    const results = [];
-    let mirrored = false;
+    const candidates = [];
     snap.forEach(doc => {
       const entry = doc.data();
       if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return; // can't trust this record's decade/genre placement once stale
       const id = Number(doc.id) || doc.id;
-      // Mirror into local cache — merged with whatever's already there
-      // locally, so a fresher local tier never gets clobbered by an
-      // older shared one.
-      const existingLocal = wmRatingsCache.get(id);
-      const merged = existingLocal ? mergeFreshestTiers(existingLocal, entry) : entry;
-      wmRatingsCache.set(id, merged);
-      mirrored = true;
-      const enrichmentFresh = isFresh(merged.enrichedAt, WM_ENRICHMENT_STALE_MS);
-      const ratingFresh = isFresh(merged.ratedAt, WM_RATING_STALE_MS);
-      results.push({
-        title: merged.title,
-        year: merged.year,
-        watchmodeId: id,
-        imdbId: merged.imdbId || null,
-        tmdbId: merged.tmdbId || null,
-        posterUrl: enrichmentFresh ? (merged.posterUrl || null) : null,
-        userRating: ratingFresh ? merged.userRating : null,
-        criticScore: ratingFresh ? merged.criticScore : null,
-        usRating: enrichmentFresh ? merged.usRating : null,
-        genresOverride: merged.genres,
-        language: enrichmentFresh ? (merged.language || null) : null,
-        description: enrichmentFresh ? (merged.description || null) : null
+      const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
+      const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
+      candidates.push({
+        record: entry, // kept alongside the pool-ready shape below so the caller can commit it locally, with its real timestamps intact, if it survives filtering
+        pool: {
+          title: entry.title,
+          year: entry.year,
+          watchmodeId: id,
+          imdbId: entry.imdbId || null,
+          tmdbId: entry.tmdbId || null,
+          posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
+          userRating: ratingFresh ? entry.userRating : null,
+          criticScore: ratingFresh ? entry.criticScore : null,
+          usRating: enrichmentFresh ? entry.usRating : null,
+          genresOverride: entry.genres,
+          language: enrichmentFresh ? (entry.language || null) : null,
+          description: enrichmentFresh ? (entry.description || null) : null
+        }
       });
     });
-    if (mirrored) saveWmRatingsCache(); // fire-and-forget — persist the mirrored entries locally too
-    return results;
+    return candidates;
   } catch(e){
     console.warn('Shared discovery query failed (likely missing Firestore index — create one on sharedMovieRatings for genres array-contains + year range) — continuing with local cache and live discovery only', e.message);
     return [];
@@ -3374,6 +3378,8 @@ async function buildWatchmodePool(decade, genre){
   setSpinStatus('Checking local cache…');
   const seenIds = new Set();
   let pool = [];
+  const sharedRecordsById = new Map(); // watchmodeId -> raw shared record, kept only long enough to decide what's worth committing locally after filtering
+
   if (ignoreStreamingService){
     getCachedMoviesForCombo(decade, genre).forEach(m => {
       pool.push(m);
@@ -3382,11 +3388,12 @@ async function buildWatchmodePool(decade, genre){
 
     if (currentUser){
       setSpinStatus('Checking shared database…');
-      const sharedMovies = await getSharedMoviesForCombo(decade, genre);
-      sharedMovies.forEach(m => {
-        if (!seenIds.has(m.watchmodeId)){
-          pool.push(m);
-          seenIds.add(m.watchmodeId);
+      const sharedCandidates = await getSharedMoviesForCombo(decade, genre);
+      sharedCandidates.forEach(c => {
+        if (!seenIds.has(c.pool.watchmodeId)){
+          pool.push(c.pool);
+          seenIds.add(c.pool.watchmodeId);
+          sharedRecordsById.set(c.pool.watchmodeId, c.record);
         }
       });
     }
@@ -3403,7 +3410,28 @@ async function buildWatchmodePool(decade, genre){
     }
   }
 
-  let { survivors } = computeFilteredSurvivors(pool);
+  let { survivors, allQualified } = computeFilteredSurvivors(pool);
+
+  // Now that filtering has actually run, commit to local storage only the
+  // shared candidates that genuinely qualified — not everything that was
+  // merely downloaded. A title that failed content rating, language, or
+  // rating criteria for THIS spin isn't stored locally at all; if a later
+  // spin has looser filters, it'll simply be re-downloaded from the
+  // shared database then; that's a deliberate trade for not accumulating
+  // local storage for titles that didn't actually match what you wanted.
+  if (sharedRecordsById.size){
+    const qualifiedIds = new Set(allQualified.map(m => m.watchmodeId));
+    let committedAny = false;
+    sharedRecordsById.forEach((record, id) => {
+      if (!qualifiedIds.has(id)) return;
+      const existingLocal = wmRatingsCache.get(id);
+      const merged = existingLocal ? mergeFreshestTiers(existingLocal, record) : record;
+      wmRatingsCache.set(id, merged);
+      committedAny = true;
+    });
+    if (committedAny) saveWmRatingsCache(); // fire-and-forget
+  }
+
   let didLiveFetch = false;
 
   // Only reach for live discovery if the cache alone doesn't cover Max
