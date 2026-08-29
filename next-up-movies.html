@@ -893,7 +893,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.19.1';
 
 const SYNCED_KEYS = new Set([
   'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
@@ -3028,7 +3028,11 @@ async function enrichOneMovie(movie, maxAttempts){
       wmRatingsCache.set(id, fresh);
       saveWmRatingsCache(); // fire-and-forget — don't block on a local storage write
       if (currentUser){
-        fbDb.collection('sharedMovieRatings').doc(String(id)).set(fresh)
+        // merge:true — fetchWatchmodeExtras also writes to this same
+        // document now (trailerUrl/streamNames specifically); merging
+        // means this write can't erase those fields, since this function
+        // doesn't know about them at all.
+        fbDb.collection('sharedMovieRatings').doc(String(id)).set(fresh, { merge: true })
           .catch(e => console.warn('Could not write shared ratings cache entry', e.message)); // fire-and-forget — never blocks the enrichment result
       }
       applyRecordToMovie(movie, fresh);
@@ -3095,6 +3099,31 @@ async function searchWatchmodeForMovie(movie){
   if (cached && isFresh(cached.cachedAt, WM_GLOBAL_MAX_STALE_MS)){
     return cached.wmId;
   }
+
+  // Shared database lookup by title+year — checked before ever needing a
+  // live, key-authenticated search. This is what lets built-in list
+  // enrichment actually work for a signed-in user even without a
+  // Watchmode key connected at all: a title/year match here gives us the
+  // Watchmode ID directly, since that's the document's own ID in the
+  // shared collection.
+  if (currentUser){
+    try{
+      const snap = await fbDb.collection('sharedMovieRatings')
+        .where('title', '==', movie.title)
+        .where('year', '==', movie.year)
+        .limit(1)
+        .get();
+      if (!snap.empty){
+        const wmId = Number(snap.docs[0].id) || snap.docs[0].id;
+        wmSearchCache.set(searchKey, { wmId, cachedAt: Date.now() });
+        saveWmSearchCache();
+        return wmId;
+      }
+    } catch(e){ console.warn('Shared database title/year lookup failed (may need a Firestore index on title+year) — falling back to live search if a key is connected', e.message); }
+  }
+
+  if (!wmKey) return null; // nothing more we can try without a live, keyed search
+
   let wmId = null;
   try{
     const data = await wmFetch('/search/', { search_field: 'name', search_value: movie.title }, 0, 3, `Built-in list search: "${movie.title}"`);
@@ -3806,13 +3835,16 @@ async function fetchWatchmodeExtras(movie){
   const id = movie.watchmodeId;
   let record = wmDetailsCache.get(id) || {};
 
-  // Shared, cross-user cache — checked whenever either tier is stale or
-  // unknown locally. Only available while signed in.
+  // Shared, cross-user cache — the SAME collection enrichOneMovie uses for
+  // discovery/warmup, since a movie's trailer/poster/rating/streaming
+  // data all lives in one place now rather than being split across two
+  // collections with heavy field overlap. Checked whenever either tier is
+  // stale or unknown locally. Only available while signed in.
   if (currentUser){
     const anyTierNeedsShared = !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS) || !isFresh(record.ratedAt, WM_RATING_STALE_MS);
     if (anyTierNeedsShared){
       try{
-        const sharedDoc = await fbDb.collection('sharedMovieCache').doc(String(id)).get();
+        const sharedDoc = await fbDb.collection('sharedMovieRatings').doc(String(id)).get();
         if (sharedDoc.exists) record = mergeDetailsFreshestTiers(record, sharedDoc.data());
       } catch(e){ console.warn('Shared movie cache lookup failed, falling back to Watchmode directly', e.message); }
     }
@@ -3832,6 +3864,7 @@ async function fetchWatchmodeExtras(movie){
   let details = null;
   let trailerUrl = null, posterUrl = null, genres = null, description = null, usRating = null;
   let userRating = null, criticScore = null, streamNames = [];
+  let imdbId = null, tmdbId = null;
   try{
     // append_to_response=sources bundles streaming availability into this
     // same request instead of a separate one — cuts pick-time lookups from
@@ -3844,6 +3877,8 @@ async function fetchWatchmodeExtras(movie){
     posterUrl = firstString(details.poster, details.poster_url, details.poster_image, details.backdrop);
     genres = normalizeGenreList(firstArray(details.genre_names, details.genres));
     description = firstString(details.plot_overview, details.overview, details.description, details.plot);
+    imdbId = movie.imdbId || firstString(details.imdb_id) || record.imdbId || null;
+    tmdbId = movie.tmdbId || firstNumber(details.tmdb_id) || record.tmdbId || null;
   } catch(e){ console.warn('Watchmode details lookup failed at pick time for', movie.title, e.message); }
 
   const appendedSources = details && firstArray(details.sources, details.sources_data, details.streaming_sources);
@@ -3867,10 +3902,22 @@ async function fetchWatchmodeExtras(movie){
 
   if (gotEnrichment || gotRating){
     const fresh = Object.assign({}, record);
+    // Populated alongside enrichment/rating any time we do a full live
+    // fetch — this is the same discovery tier enrichOneMovie writes, kept
+    // in sync here too so a document created fresh by this function
+    // (never having gone through discovery/warmup at all) still ends up
+    // with the same complete shape either function would produce.
+    if (gotEnrichment || gotRating){
+      fresh.title = movie.title;
+      fresh.year = movie.year;
+      if (genres && genres.length) fresh.genres = genres;
+      fresh.discoveredAt = now;
+      fresh.imdbId = imdbId;
+      fresh.tmdbId = tmdbId;
+    }
     if (gotEnrichment){
       fresh.trailerUrl = trailerUrl;
       fresh.posterUrl = posterUrl;
-      fresh.genres = genres;
       fresh.description = description;
       fresh.usRating = usRating;
       fresh.enrichedAt = now;
@@ -3884,7 +3931,11 @@ async function fetchWatchmodeExtras(movie){
     wmDetailsCache.set(id, fresh);
     saveWmDetailsCache(); // fire-and-forget — don't block on a local storage write
     if (currentUser){
-      fbDb.collection('sharedMovieCache').doc(String(id)).set(fresh)
+      // merge:true — this write only owns trailerUrl/streamNames beyond
+      // what enrichOneMovie already writes; merging means it can't
+      // accidentally erase fields the other function is responsible for,
+      // and vice versa, since both now target the same document.
+      fbDb.collection('sharedMovieRatings').doc(String(id)).set(fresh, { merge: true })
         .catch(e => console.warn('Could not write shared movie cache entry', e.message)); // fire-and-forget — never blocks showing the result
     }
     return recordToExtrasResult(fresh, {
