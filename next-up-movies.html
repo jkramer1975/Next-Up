@@ -96,7 +96,7 @@
     font-family: var(--font-mono); font-size: 11px;
   }
   .version-badge{
-    position: fixed; bottom: 10px; right: 12px; z-index: 40;
+    position: absolute; bottom: 6px; right: 10px;
     font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3px;
     color: var(--muted); opacity: 0.55; pointer-events: none;
   }
@@ -493,10 +493,19 @@
     display:flex; align-items:center; justify-content:center; padding: 20px; z-index: 50;
   }
   .modal{
+    position: relative;
     background: var(--surface); border:1px solid var(--line); border-radius: 10px;
     padding: 26px; max-width: 380px; width:100%; text-align:center;
     max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
+  .force-refresh-btn{
+    position: absolute; top: 8px; right: 8px;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 12px; padding: 4px 9px; font-size: 11px; cursor: pointer;
+    font-family: var(--font-mono);
+  }
+  .force-refresh-btn:hover{ border-color: var(--amber); color: var(--amber); }
+  .force-refresh-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
   .modal img{ width: 120px; border-radius: 6px; margin-bottom: 12px; }
   .modal .m-icon{ font-size: 42px; margin-bottom: 8px; }
   .modal h3{ font-family: var(--font-display); font-size: 26px; margin: 0 0 4px; letter-spacing: 0.5px; }
@@ -510,7 +519,6 @@
 </style>
 </head>
 <body>
-<div class="version-badge" id="versionBadge"></div>
 <div class="app">
   <div class="wrap">
 
@@ -530,6 +538,7 @@
       <div class="tagline">Spin for a random decade + genre, then whoever's turn it is picks from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
+      <div class="version-badge" id="versionBadge"></div>
     </div>
 
     <div class="tabs">
@@ -899,7 +908,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.25.1';
+const APP_VERSION = '1.26.1';
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1126,6 +1135,7 @@ let picks = [];
 let crew = [];
 let turnIndex = 0;
 let currentBatch = [];
+const forceRefreshedThisSpin = new Set(); // watchmodeIds already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
 let lastFilteredOut = []; // [{movie, reason}] — cleared/rebuilt each spin
 let lastFullPool = []; // every movie fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
 let currentChoice = null;
@@ -2756,6 +2766,7 @@ async function spin(){
   $('enrichStatusNote').textContent = '';
   setSpinStatus('');
   apiCallLog = [];
+  forceRefreshedThisSpin.clear();
 
   const decadePool = DECADES.filter(d => enabledDecades.includes(d));
   const genrePool = GENRES.filter(g => enabledGenres.includes(g));
@@ -3717,9 +3728,13 @@ function openConfirm(movie){
     ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(movie.title)} poster">`
     : `<div class="m-icon" id="modalPoster">🎬</div>`;
   const showStreamingLookup = currentSource === 'watchmode' && movie.watchmodeId;
+  const canForceRefresh = !!wmKey && !!movie.watchmodeId;
+  const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(movie.watchmodeId);
+  const showExtrasContainer = showStreamingLookup || canForceRefresh;
   root.innerHTML = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
+        ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from Watchmode'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
         ${posterHtml}
         <h3>${escapeHtml(movie.title)}</h3>
         <p>${movie.year || '—'} · ${currentChoice.genre}</p>
@@ -3727,7 +3742,7 @@ function openConfirm(movie){
         <div id="modalGenres">${genreChipsHtml(movie)}</div>
         <p id="modalDescription" class="modal-description" style="${movie.description ? '' : 'display:none;'}">${escapeHtml(movie.description || '')}</p>
         <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener" style="display:inline-block; margin: 10px 0;">🔗 View on ${movieLinkLabel(movie)} / find trailer</a>
-        ${showStreamingLookup ? '<div id="modalExtras" class="hint">Checking where to stream…</div>' : ''}
+        ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showStreamingLookup ? 'Checking where to stream…' : ''}</div>` : ''}
         <p style="margin-top:6px;">Lock this in for tonight? It'll be marked watched and won't be selectable again.</p>
         <div class="row">
           <button class="btn-ghost" id="cancelPick">Cancel</button>
@@ -3739,6 +3754,37 @@ function openConfirm(movie){
   $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
   $('cancelPick').addEventListener('click', closeModal);
   $('confirmPick').addEventListener('click', () => confirmPick(movie));
+
+  if (canForceRefresh && !alreadyRefreshedThisSpin){
+    $('forceRefreshBtn').addEventListener('click', async () => {
+      const btn = $('forceRefreshBtn');
+      btn.disabled = true;
+      btn.textContent = '⟳ Refreshing…';
+      const extrasEl = document.getElementById('modalExtras');
+      if (extrasEl) extrasEl.textContent = 'Checking where to stream…';
+      try{
+        const extras = await fetchWatchmodeExtras(movie, true); // true = bypass every cache, local and shared
+        appendModalExtras(extras, movie);
+      } finally {
+        // Marked used here, not just on success — the API call already
+        // went out and the quota's already spent whether or not it
+        // ultimately threw, and this keeps the tracking set and what the
+        // button visually shows always in sync if the modal is reopened
+        // later in the same spin.
+        forceRefreshedThisSpin.add(movie.watchmodeId);
+        // Only touch the button if the modal (and this button) is still
+        // open — it may have been closed while the live call was in
+        // flight. Once used, it stays permanently marked "Refreshed" for
+        // the rest of this spin, even on error, since the point is
+        // limiting API calls, not retrying until something useful comes
+        // back.
+        if (document.getElementById('forceRefreshBtn')){
+          btn.disabled = true;
+          btn.textContent = '✓ Refreshed';
+        }
+      }
+    });
+  }
 
   if (showStreamingLookup){
     fetchWatchmodeExtras(movie).then(extras => appendModalExtras(extras, movie));
@@ -3886,15 +3932,18 @@ function recordToExtrasResult(record, tierFlags){
   };
 }
 
-async function fetchWatchmodeExtras(movie){
+async function fetchWatchmodeExtras(movie, forceRefresh){
   const id = movie.watchmodeId;
-  let record = wmDetailsCache.get(id) || {};
+  let record = forceRefresh ? {} : (wmDetailsCache.get(id) || {});
 
   // Shared, cross-user cache — the SAME collection enrichOneMovie uses for
   // discovery/warmup, since a movie's trailer/poster/rating/streaming
   // data all lives in one place now rather than being split across two
   // collections with heavy field overlap. Checked whenever any tier is
-  // stale or unknown locally. Only available while signed in.
+  // stale or unknown locally. Only available while signed in. Skipped
+  // entirely when forceRefresh is set — the whole point of a forced
+  // refresh is to bypass every cache, local or shared, not just the
+  // ones that happen to look stale.
   //
   // streamingCheckedAt is deliberately its own tier, separate from
   // enrichedAt/ratedAt — enrichOneMovie (the discovery/warmup path) sets
@@ -3905,7 +3954,7 @@ async function fetchWatchmodeExtras(movie){
   // and incorrectly skip ever actually checking streaming availability —
   // showing a confirmed-empty result for something never actually
   // checked.
-  if (currentUser){
+  if (currentUser && !forceRefresh){
     const anyTierNeedsShared = !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS) || !isFresh(record.ratedAt, WM_RATING_STALE_MS) || !isFresh(record.streamingCheckedAt, WM_RATING_STALE_MS);
     if (anyTierNeedsShared){
       try{
