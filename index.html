@@ -44,6 +44,8 @@
 <title>Next Up</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg: #14141a;
@@ -64,11 +66,40 @@
     margin:0; background: var(--bg); color: var(--cream);
     font-family: var(--font-body);
     min-height: 100vh;
-    display:flex; align-items:center; justify-content:center;
     padding: 24px 16px;
   }
   .landing{
-    max-width: 480px; width:100%;
+    max-width: 480px; width:100%; margin: 0 auto;
+  }
+  .account-corner{
+    display: flex; justify-content: flex-end; align-items:center;
+    margin-bottom: 10px;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .account-corner button{
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
+    border-radius: 14px; padding: 5px 12px; cursor: pointer;
+  }
+  .account-corner button:hover{ border-color: var(--amber); }
+  .account-corner .signed-in-pill{
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px 6px 4px 10px;
+  }
+  .account-corner .signed-in-name{ color: var(--muted); max-width: 160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .account-corner .signout-x{
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px;
+    padding: 2px 4px; border-radius: 50%; line-height:1;
+  }
+  .account-corner .signout-x:hover{ color: var(--velvet, #a13446); border: none; }
+  .auth-status{
+    text-align:center; font-size: 11.5px; color: var(--muted); margin-top: 4px;
+  }
+  .version-badge{
+    position: absolute; bottom: 6px; right: 10px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3px;
+    color: var(--muted); opacity: 0.55; pointer-events: none;
   }
   .marquee{
     position: relative;
@@ -118,11 +149,23 @@
 </head>
 <body>
   <div class="landing">
+    <div class="account-corner" id="accountCorner">
+      <div id="authSignedOut">
+        <button id="signInBtn">Sign in with Google</button>
+      </div>
+      <div id="authSignedIn" class="signed-in-pill" style="display:none;">
+        <span class="signed-in-name" id="authName"></span>
+        <button class="signout-x" id="signOutBtn" title="Sign out">✕</button>
+      </div>
+    </div>
+
     <div class="marquee">
       <div class="sprockets"></div>
       <h1>NEXT UP</h1>
       <div class="tagline">Pick something to spin up.</div>
+      <div class="version-badge" id="versionBadge"></div>
     </div>
+    <div class="auth-status" id="authStatus" style="display:none;"></div>
 
     <div class="app-list">
       <a class="app-card" href="next-up-movies.html">
@@ -154,6 +197,95 @@
 
     <div class="footer-note">Next Up Suite — a free, independent project</div>
   </div>
+<script>
+const INDEX_VERSION = '1.0.0'; // tracked independently from next-up-movies.html's own version — this is a separate file
+document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
+
+/* Same Firebase project as next-up-movies.html ("Next Up Suite") — shared
+   across the whole app suite. Only Auth is needed here; this page has no
+   app-specific data of its own to read or write, so Firestore isn't
+   loaded at all. Signing in here persists at the origin level, so it
+   carries over automatically once you navigate into Movies (or any
+   future section) — no extra syncing needed on this page. */
+const firebaseConfig = {
+  apiKey: "AIzaSyADAPuMongfa8YII9PY39DWNeWuMnFknLc",
+  authDomain: "next-up-suite.firebaseapp.com",
+  projectId: "next-up-suite",
+  storageBucket: "next-up-suite.firebasestorage.app",
+  messagingSenderId: "517680626452",
+  appId: "1:517680626452:web:37b6ef5f9324d4beb36001",
+  measurementId: "G-44NFR9FPGX"
+};
+firebase.initializeApp(firebaseConfig);
+const fbAuth = firebase.auth();
+
+function showAuthStatus(msg){
+  const el = document.getElementById('authStatus');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+fbAuth.onAuthStateChanged((user) => {
+  if (user){
+    document.getElementById('authSignedOut').style.display = 'none';
+    document.getElementById('authSignedIn').style.display = 'flex';
+    document.getElementById('authName').textContent = user.displayName || user.email || 'Signed in';
+    showAuthStatus('');
+  } else {
+    document.getElementById('authSignedOut').style.display = 'block';
+    document.getElementById('authSignedIn').style.display = 'none';
+  }
+});
+
+function signInWithGoogle(){
+  // Same dual-path pattern as next-up-movies.html: native Android
+  // Credential Manager when running inside the app's WebView (Google
+  // actively blocks OAuth popups inside an embedded WebView), otherwise
+  // the normal browser popup flow.
+  const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signIn === 'function';
+  if (hasNativeBridge){
+    showAuthStatus('Opening Google sign-in…');
+    Android.signIn(); // result arrives async via window.onNativeGoogleSignIn below
+    return;
+  }
+  if (location.protocol === 'file:'){
+    showAuthStatus('Google Sign-In needs the app loaded from a real web address (https://…) — it can\'t work when opening this file directly. Try it from the hosted version instead.');
+    return;
+  }
+  showAuthStatus('Opening sign-in…');
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).catch(e => {
+    console.warn('Google sign-in failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+}
+
+// Called by the native Android side (MainActivity.kt) after it gets a
+// Google credential outside the WebView — same contract next-up-movies.html
+// uses. Payload is a JSON string: {success:true, idToken} or {success:false, error}.
+window.onNativeGoogleSignIn = function(payloadStr){
+  let payload;
+  try{ payload = JSON.parse(payloadStr); }
+  catch(e){ showAuthStatus('Sign-in failed: unexpected response from the app.'); return; }
+
+  if (!payload.success){
+    showAuthStatus('Sign-in failed: ' + (payload.error || 'unknown error'));
+    return;
+  }
+  const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
+  fbAuth.signInWithCredential(credential).catch(e => {
+    console.warn('Firebase sign-in with native credential failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+};
+
+document.getElementById('signInBtn').addEventListener('click', signInWithGoogle);
+document.getElementById('signOutBtn').addEventListener('click', () => {
+  const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signOutNative === 'function';
+  if (hasNativeBridge) Android.signOutNative();
+  fbAuth.signOut();
+});
+</script>
 <script>
 // Registers the service worker — same mechanism as next-up-movies.html,
 // kept in sync manually. Since this is now the actual entry point for the
