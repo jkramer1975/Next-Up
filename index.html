@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+// Applies the saved color theme before first paint, matching the exact
+// same mechanism used in next-up-movies.html — kept in sync manually
+// since this is a separate file. If you ever add a new theme there,
+// add it here too.
+(function(){
+  try{
+    var THEME_VARS = {
+      amber:    { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#f2a93b', amberRgb:'242,169,59', amberDim:'#a8752b', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      crimson:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#e2545f', amberRgb:'226,84,95', amberDim:'#9c3a42', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      emerald:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#4fbf8b', amberRgb:'79,191,139', amberDim:'#35805e', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      sapphire: { bg:'#12141a', surface:'#1c1f27', surface2:'#242833', amber:'#5b9fe3', amberRgb:'91,159,227', amberDim:'#3d6d9c', cream:'#e9edf5', muted:'#8b93a3', line:'#2e3340' },
+      violet:   { bg:'#16131a', surface:'#211d27', surface2:'#2a2433', amber:'#b98af0', amberRgb:'185,138,240', amberDim:'#7d5aa6', cream:'#efe7f5', muted:'#948b9e', line:'#38313f' },
+      popcorn:  { bg:'#f4ede0', surface:'#ffffff', surface2:'#f2e8d4', amber:'#d9822b', amberRgb:'217,130,43', amberDim:'#a85f18', cream:'#241a08', muted:'#7a6c54', line:'#ddd0b8' }
+    };
+    var saved = localStorage.getItem('fmn_color_theme');
+    var name = saved ? JSON.parse(saved) : 'amber';
+    var t = THEME_VARS[name] || THEME_VARS.amber;
+    var s = document.documentElement.style;
+    s.setProperty('--bg', t.bg);
+    s.setProperty('--surface', t.surface);
+    s.setProperty('--surface-2', t.surface2);
+    s.setProperty('--amber', t.amber);
+    s.setProperty('--amber-rgb', t.amberRgb);
+    s.setProperty('--amber-dim', t.amberDim);
+    s.setProperty('--cream', t.cream);
+    s.setProperty('--muted', t.muted);
+    s.setProperty('--line', t.line);
+  } catch(e){ /* falls back to the default theme in the stylesheet below */ }
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14141a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Next Up">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Next Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #14141a;
+    --surface: #1e1e27;
+    --surface-2: #262633;
+    --amber: #f2a93b;
+    --amber-rgb: 242,169,59;
+    --amber-dim: #a8752b;
+    --cream: #efe7da;
+    --muted: #8b8b98;
+    --line: #34343f;
+    --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0; background: var(--bg); color: var(--cream);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    display:flex; align-items:center; justify-content:center;
+    padding: 24px 16px;
+  }
+  .landing{
+    max-width: 480px; width:100%;
+  }
+  .marquee{
+    position: relative;
+    text-align:center;
+    padding: 26px 12px 30px;
+    margin-bottom: 24px;
+    background: linear-gradient(180deg, var(--surface), var(--bg));
+    border-radius: 6px;
+    border: 1px solid var(--line);
+  }
+  .sprockets{
+    position:absolute; top:0; left:0; right:0; height:10px;
+    background-image: radial-gradient(circle, var(--line) 1.5px, transparent 1.6px);
+    background-size: 16px 10px; background-position: 8px 4px;
+    opacity: 0.6;
+  }
+  h1{
+    font-family: var(--font-display); font-size: 46px; letter-spacing: 1px;
+    margin: 4px 0 6px; color: var(--cream);
+  }
+  .tagline{
+    font-family: var(--font-body); font-size: 13px; color: var(--muted);
+  }
+  .app-list{ display:flex; flex-direction:column; gap: 12px; }
+  .app-card{
+    display:flex; align-items:center; gap: 14px;
+    background: var(--surface); border:1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px; text-decoration:none; color: inherit;
+    transition: border-color 0.15s;
+  }
+  .app-card:hover{ border-color: var(--amber); }
+  .app-card .icon{ font-size: 30px; line-height:1; flex-shrink:0; width: 34px; text-align:center; }
+  .app-card .title{ font-family: var(--font-display); font-size: 20px; letter-spacing: 0.5px; }
+  .app-card .desc{ font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .app-card.disabled{
+    opacity: 0.5; cursor: default; pointer-events: none;
+  }
+  .app-card .badge{
+    margin-left:auto; font-family: var(--font-mono); font-size: 10px;
+    color: var(--muted); border:1px solid var(--line); border-radius: 10px;
+    padding: 3px 8px; flex-shrink:0; white-space:nowrap;
+  }
+  .footer-note{
+    text-align:center; margin-top: 20px; font-size: 11.5px; color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <div class="landing">
+    <div class="marquee">
+      <div class="sprockets"></div>
+      <h1>NEXT UP</h1>
+      <div class="tagline">Pick something to spin up.</div>
+    </div>
+
+    <div class="app-list">
+      <a class="app-card" href="next-up-movies.html">
+        <div class="icon">🎬</div>
+        <div>
+          <div class="title">Movies</div>
+          <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
+        </div>
+      </a>
+
+      <div class="app-card disabled">
+        <div class="icon">📺</div>
+        <div>
+          <div class="title">TV Shows</div>
+          <div class="desc">Same idea, for series instead of movies.</div>
+        </div>
+        <div class="badge">Coming soon</div>
+      </div>
+
+      <div class="app-card disabled">
+        <div class="icon">📚</div>
+        <div>
+          <div class="title">Book Selection</div>
+          <div class="desc">Same idea, for your next read.</div>
+        </div>
+        <div class="badge">Coming soon</div>
+      </div>
+    </div>
+
+    <div class="footer-note">Next Up Suite — a free, independent project</div>
+  </div>
+<script>
+// Registers the service worker — same mechanism as next-up-movies.html,
+// kept in sync manually. Since this is now the actual entry point for the
+// suite, it needs its own registration call rather than relying on the
+// movies page happening to register it first.
+if ('serviceWorker' in navigator && location.protocol !== 'file:'){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then((registration) => {
+      registration.update().catch(() => {});
+    }).catch((e) => console.warn('Service worker registration failed', e));
+
+    let hasReloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hasReloadedForUpdate) return;
+      hasReloadedForUpdate = true;
+      location.reload();
+    });
+  });
+}
+</script>
+</body>
+</html>

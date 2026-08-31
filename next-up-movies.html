@@ -91,10 +91,17 @@
     border: 1px solid var(--line);
   }
   .account-corner{
-    display: flex; justify-content: flex-end;
+    display: flex; justify-content: space-between; align-items:center;
     margin-bottom: 10px;
     font-family: var(--font-mono); font-size: 11px;
   }
+  .home-link{
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
+    border-radius: 14px; padding: 5px 12px; cursor: pointer;
+    text-decoration:none; display:inline-flex; align-items:center; gap:5px;
+  }
+  .home-link:hover{ border-color: var(--amber); color: var(--amber); }
   .version-badge{
     position: absolute; bottom: 6px; right: 10px;
     font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3px;
@@ -523,6 +530,7 @@
   <div class="wrap">
 
     <div class="account-corner" id="accountCorner">
+      <a class="home-link" href="index.html" title="Back to Next Up home">🏠 Home</a>
       <div id="authSignedOut">
         <button id="signInBtn">Sign in with Google</button>
       </div>
@@ -908,7 +916,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.26.1';
+const APP_VERSION = '1.27.0';
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([

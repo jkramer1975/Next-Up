@@ -1,8 +1,8 @@
 {
-  "name": "Next Up - Movies",
+  "name": "Next Up",
   "short_name": "Next Up",
-  "description": "Spin for a random decade + genre, then pick from the list — with live ratings, filters, and a persistent watch history.",
-  "start_url": "./next-up-movies.html",
+  "description": "A suite of spin-the-wheel pickers — movies now, more coming — with live ratings, filters, and a persistent watch history.",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
