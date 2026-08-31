@@ -864,7 +864,7 @@
           <select id="editListDecade"></select>
           <select id="editListGenre"></select>
         </div>
-        <div id="editListMovies" class="crew-list" style="margin-top:14px;"></div>
+        <div id="editListShows" class="crew-list" style="margin-top:14px;"></div>
         <div class="row" style="margin-top:12px;">
           <input type="text" id="editListTitleInput" placeholder="Show title">
           <input type="text" id="editListYearInput" placeholder="Year" style="flex: 0 1 100px;">
@@ -916,12 +916,12 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.2.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
+const APP_VERSION = '0.3.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
-  'family_crew', 'turn_index', 'movie_picks', 'blocked_movies',
-  'custom_movie_additions', 'custom_movie_removals', 'enabled_decades',
+  'family_crew', 'turn_index', 'show_picks', 'blocked_shows',
+  'custom_show_additions', 'custom_show_removals', 'enabled_decades',
   'enabled_genres', 'enabled_content_ratings', 'enabled_languages',
   'enabled_streaming_services', 'ignore_streaming_service', 'include_free_services',
   'min_rating', 'max_rating_ceiling', 'require_critic_score',
@@ -979,7 +979,7 @@ function comboKey(decade, genre){ return `${decade}|${genre}`; }
 // applied — anything they've removed hidden, anything they've added
 // appended. SHOW_DB itself is never modified; this is the only place that
 // should be read from when the built-in list is actually used for a spin.
-function getEffectiveMovieList(decade, genre){
+function getEffectiveShowList(decade, genre){
   const base = (SHOW_DB[decade] && SHOW_DB[decade][genre]) || [];
   const key = comboKey(decade, genre);
   const removed = new Set(customRemovals[key] || []);
@@ -1099,7 +1099,7 @@ let crew = [];
 let turnIndex = 0;
 let currentBatch = [];
 const forceRefreshedThisSpin = new Set(); // watchmodeIds already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
-let lastFilteredOut = []; // [{movie, reason}] — cleared/rebuilt each spin
+let lastFilteredOut = []; // [{show, reason}] — cleared/rebuilt each spin
 let lastFullPool = []; // every show fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
 let currentChoice = null;
 let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
@@ -1150,23 +1150,23 @@ function mergeFreshestTiers(local, shared){
   return merged;
 }
 
-function applyRecordToMovie(movie, record, tierFlags){
+function applyRecordToShow(show, record, tierFlags){
   const flags = tierFlags || { discoveryFresh: true, enrichmentFresh: true, languageFresh: true, ratingFresh: true };
-  if (flags.discoveryFresh && record.genres && record.genres.length) movie.genresOverride = record.genres;
+  if (flags.discoveryFresh && record.genres && record.genres.length) show.genresOverride = record.genres;
   if (flags.enrichmentFresh){
-    if (record.posterUrl && !movie.posterUrl) movie.posterUrl = record.posterUrl;
-    if (record.description && !movie.description) movie.description = record.description;
-    if (record.usRating) movie.usRating = record.usRating;
+    if (record.posterUrl && !show.posterUrl) show.posterUrl = record.posterUrl;
+    if (record.description && !show.description) show.description = record.description;
+    if (record.usRating) show.usRating = record.usRating;
   }
   if (flags.languageFresh){
-    if (record.language) movie.language = record.language;
+    if (record.language) show.language = record.language;
   }
   if (flags.ratingFresh){
-    if (record.userRating != null) movie.userRating = record.userRating;
-    if (record.criticScore != null) movie.criticScore = record.criticScore;
+    if (record.userRating != null) show.userRating = record.userRating;
+    if (record.criticScore != null) show.criticScore = record.criticScore;
   }
-  if (record.imdbId) movie.imdbId = record.imdbId;
-  if (record.tmdbId) movie.tmdbId = record.tmdbId;
+  if (record.imdbId) show.imdbId = record.imdbId;
+  if (record.tmdbId) show.tmdbId = record.tmdbId;
 }
 let enabledStreamingServices = [];
 // When true, streaming availability is entirely left out of the Watchmode
@@ -1242,7 +1242,7 @@ const DEFAULT_EXPLICIT_KEYWORDS = [
   'adult film', 'adult entertainment', 'sex industry', 'hentai', 'nsfw'
 ];
 let customExplicitKeywords = []; // user-added, on top of the built-in list above
-let blockedMovies = []; // {title, year|null}
+let blockedShows = []; // {title, year|null}
 let customAdditions = {}; // "decade|genre" -> [{title, year}] — user-added built-in-list entries
 let customRemovals = {}; // "decade|genre" -> ["title|year", ...] — built-in entries the user has hidden
 let maxResults = MAX_RESULTS_DEFAULT;
@@ -1381,10 +1381,10 @@ window.onNativeGoogleSignIn = function(payloadStr){
 const SYNCED_KEY_DEFAULTS = {
   family_crew: () => [],
   turn_index: () => 0,
-  movie_picks: () => [],
-  blocked_movies: () => [],
-  custom_movie_additions: () => ({}),
-  custom_movie_removals: () => ({}),
+  show_picks: () => [],
+  blocked_shows: () => [],
+  custom_show_additions: () => ({}),
+  custom_show_removals: () => ({}),
   enabled_decades: () => DECADES.slice(),
   enabled_genres: () => GENRES.slice(),
   enabled_content_ratings: () => CONTENT_RATINGS.slice(),
@@ -1554,7 +1554,7 @@ function renderAuthUI(){
   }
 }
 
-async function savePicks(){ await saveJSON('movie_picks', picks); }
+async function savePicks(){ await saveJSON('show_picks', picks); }
 async function saveCrew(){ await saveJSON('family_crew', crew); }
 async function saveTurnIndex(){ await saveJSON('turn_index', turnIndex); }
 async function saveWmKey(){
@@ -1634,9 +1634,9 @@ function renderThemeSwatches(){
 }
 async function saveFilterExplicitContent(){ await saveJSON('filter_explicit_content', filterExplicitContent); }
 async function saveCustomExplicitKeywords(){ await saveJSON('custom_explicit_keywords', customExplicitKeywords); }
-async function saveBlockedMovies(){ await saveJSON('blocked_movies', blockedMovies); }
-async function saveCustomAdditions(){ await saveJSON('custom_movie_additions', customAdditions); }
-async function saveCustomRemovals(){ await saveJSON('custom_movie_removals', customRemovals); }
+async function saveBlockedShows(){ await saveJSON('blocked_shows', blockedShows); }
+async function saveCustomAdditions(){ await saveJSON('custom_show_additions', customAdditions); }
+async function saveCustomRemovals(){ await saveJSON('custom_show_removals', customRemovals); }
 async function saveMaxResults(){ await saveJSON('max_results', maxResults); }
 async function saveWmRatingsCache(){
   const obj = {};
@@ -1663,7 +1663,7 @@ async function saveWmWarmupDone(){ await saveJSON('watchmode_warmup_done', wmWar
    Init
    ================================================================== */
 async function init(){
-  picks = await loadJSON('movie_picks', []);
+  picks = await loadJSON('show_picks', []);
   crew = await loadJSON('family_crew', []);
   turnIndex = await loadJSON('turn_index', 0);
   wmKey = await loadJSON('watchmode_api_key', null);
@@ -1729,9 +1729,9 @@ async function init(){
     await saveCustomExplicitKeywords();
   }
   enabledLanguages = await loadJSON('enabled_languages', ['English']);
-  blockedMovies = await loadJSON('blocked_movies', []);
-  customAdditions = await loadJSON('custom_movie_additions', {});
-  customRemovals = await loadJSON('custom_movie_removals', {});
+  blockedShows = await loadJSON('blocked_shows', []);
+  customAdditions = await loadJSON('custom_show_additions', {});
+  customRemovals = await loadJSON('custom_show_removals', {});
   maxResults = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, await loadJSON('max_results', MAX_RESULTS_DEFAULT)));
   const savedRatingsCache = await loadJSON('watchmode_ratings_cache', {});
   Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
@@ -2356,8 +2356,8 @@ function renderAdmin(){
 }
 
 function renderBlockList(){
-  $('blockEmptyHint').style.display = blockedMovies.length ? 'none' : 'block';
-  $('blockList').innerHTML = blockedMovies.map((b, i) => `
+  $('blockEmptyHint').style.display = blockedShows.length ? 'none' : 'block';
+  $('blockList').innerHTML = blockedShows.map((b, i) => `
     <div class="crew-item">
       <span class="crew-name">${escapeHtml(b.title)} <span class="hint" style="margin:0;">${b.year ? '(' + b.year + ')' : '(any year)'}</span></span>
       <div class="crew-actions">
@@ -2366,30 +2366,30 @@ function renderBlockList(){
     </div>
   `).join('');
   $('blockList').querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => removeBlockedMovie(Number(btn.dataset.idx)));
+    btn.addEventListener('click', () => removeBlockedShow(Number(btn.dataset.idx)));
   });
 }
 
-async function addBlockedMovie(){
+async function addBlockedShow(){
   const title = $('blockTitleInput').value.trim();
   const yearRaw = $('blockYearInput').value.trim();
   if (!title) return;
   const year = yearRaw ? Number(yearRaw) : null;
-  blockedMovies.push({ title, year: (year && !isNaN(year)) ? year : null });
+  blockedShows.push({ title, year: (year && !isNaN(year)) ? year : null });
   $('blockTitleInput').value = '';
   $('blockYearInput').value = '';
   renderBlockList();
-  await saveBlockedMovies();
+  await saveBlockedShows();
 }
 
-async function removeBlockedMovie(idx){
-  blockedMovies.splice(idx, 1);
+async function removeBlockedShow(idx){
+  blockedShows.splice(idx, 1);
   renderBlockList();
-  await saveBlockedMovies();
+  await saveBlockedShows();
 }
 
 function isBlocked(title, year){
-  return blockedMovies.some(b =>
+  return blockedShows.some(b =>
     b.title.toLowerCase() === (title || '').toLowerCase() && (b.year == null || b.year === year)
   );
 }
@@ -2430,7 +2430,7 @@ function renderEditList(){
   });
   additions.forEach(m => rows.push({ title: m.title, year: m.year, source: 'custom' }));
 
-  $('editListMovies').innerHTML = rows.map((m, i) => `
+  $('editListShows').innerHTML = rows.map((m, i) => `
     <div class="crew-item">
       <span class="crew-name">${escapeHtml(m.title)} <span class="hint" style="margin:0;">(${m.year})${m.source === 'custom' ? ' · added by you' : ''}</span></span>
       <div class="crew-actions">
@@ -2438,7 +2438,7 @@ function renderEditList(){
       </div>
     </div>
   `).join('');
-  $('editListMovies').querySelectorAll('button[data-idx]').forEach(btn => {
+  $('editListShows').querySelectorAll('button[data-idx]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const row = rows[Number(btn.dataset.idx)];
       if (row.source === 'builtin'){
@@ -2454,7 +2454,7 @@ function renderEditList(){
   });
 }
 
-async function addEditListMovie(){
+async function addEditListShow(){
   const title = $('editListTitleInput').value.trim();
   const yearRaw = $('editListYearInput').value.trim();
   const year = Number(yearRaw);
@@ -2477,8 +2477,8 @@ async function addEditListMovie(){
 
 $('editListDecade').addEventListener('change', renderEditList);
 $('editListGenre').addEventListener('change', renderEditList);
-$('editListAddBtn').addEventListener('click', addEditListMovie);
-$('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListMovie(); });
+$('editListAddBtn').addEventListener('click', addEditListShow);
+$('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListShow(); });
 $('editListResetBtn').addEventListener('click', async () => {
   const decade = Number($('editListDecade').value);
   const genre = $('editListGenre').value;
@@ -2491,8 +2491,8 @@ $('editListResetBtn').addEventListener('click', async () => {
   renderEditList();
 });
 
-$('blockAddBtn').addEventListener('click', addBlockedMovie);
-$('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedMovie(); });
+$('blockAddBtn').addEventListener('click', addBlockedShow);
+$('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedShow(); });
 
 $('decadesAllBtn').addEventListener('click', async () => { enabledDecades = DECADES.slice(); renderAdmin(); await saveEnabledDecades(); });
 $('decadesNoneBtn').addEventListener('click', async () => { enabledDecades = []; renderAdmin(); await saveEnabledDecades(); });
@@ -2776,14 +2776,14 @@ async function spin(){
       currentSource = 'watchmode';
       setSpinStatus('');
     } catch(e){
-      lastFullPool = getEffectiveMovieList(finalDecade, finalGenre);
+      lastFullPool = getEffectiveShowList(finalDecade, finalGenre);
       currentSource = 'builtin';
       setSpinStatus('');
       $('spinError').textContent = 'Watchmode request failed (' + e.message + ') — showing the built-in list instead.';
       $('spinError').style.display = 'block';
     }
   } else {
-    lastFullPool = getEffectiveMovieList(finalDecade, finalGenre);
+    lastFullPool = getEffectiveShowList(finalDecade, finalGenre);
     currentSource = 'builtin';
     try{
       await enrichBuiltinListWithWatchmode(lastFullPool);
@@ -2810,32 +2810,32 @@ function computeFilteredSurvivors(pool){
   const filteredOut = [];
   pool.forEach(m => {
     if (isBlocked(m.title, m.year)){
-      filteredOut.push({ movie: m, reason: 'Blocked' });
+      filteredOut.push({ show: m, reason: 'Blocked' });
       return;
     }
     if (!matchesExplicitContentFilter(m)){
-      filteredOut.push({ movie: m, reason: 'Excluded by explicit content filter' });
+      filteredOut.push({ show: m, reason: 'Excluded by explicit content filter' });
       return;
     }
     if (!matchesContentRating(m)){
-      filteredOut.push({ movie: m, reason: m.usRating ? `Content rating "${m.usRating}" excluded` : 'No content rating available (excluded by filter)' });
+      filteredOut.push({ show: m, reason: m.usRating ? `Content rating "${m.usRating}" excluded` : 'No content rating available (excluded by filter)' });
       return;
     }
     if (!matchesLanguage(m)){
       const lang = m.language ? normalizeLanguage(m.language) : 'Unknown';
-      filteredOut.push({ movie: m, reason: `Language "${lang}" excluded` });
+      filteredOut.push({ show: m, reason: `Language "${lang}" excluded` });
       return;
     }
     if (!matchesMinRating(m)){
-      filteredOut.push({ movie: m, reason: `Rating ${m.userRating.toFixed(1)} below your ${minRating.toFixed(1)}+ minimum` });
+      filteredOut.push({ show: m, reason: `Rating ${m.userRating.toFixed(1)} below your ${minRating.toFixed(1)}+ minimum` });
       return;
     }
     if (!matchesMaxRating(m)){
-      filteredOut.push({ movie: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
+      filteredOut.push({ show: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
       return;
     }
     if (!matchesCriticScoreRequirement(m)){
-      filteredOut.push({ movie: m, reason: 'No critic score available (required by filter)' });
+      filteredOut.push({ show: m, reason: 'No critic score available (required by filter)' });
       return;
     }
     survivors.push(m);
@@ -2857,7 +2857,7 @@ function computeFilteredSurvivors(pool){
 
   if (survivors.length > maxResults){
     const overflow = survivors.slice(maxResults);
-    overflow.forEach(m => filteredOut.push({ movie: m, reason: `Exceeded Max Results (${maxResults}) — kept the higher-rated titles instead` }));
+    overflow.forEach(m => filteredOut.push({ show: m, reason: `Exceeded Max Results (${maxResults}) — kept the higher-rated titles instead` }));
     return { survivors: survivors.slice(0, maxResults), filteredOut, allQualified };
   }
   return { survivors, filteredOut, allQualified };
@@ -2947,12 +2947,12 @@ function ratingCacheHasData(cached){
   return !!cached && (cached.userRating != null || cached.criticScore != null || cached.usRating || (cached.genres && cached.genres.length));
 }
 
-function movieNeedsRatingData(movie){
-  return movie.userRating == null && movie.criticScore == null && !movie.usRating;
+function showNeedsRatingData(show){
+  return show.userRating == null && show.criticScore == null && !show.usRating;
 }
 
-async function enrichOneMovie(movie, maxAttempts){
-  const id = movie.watchmodeId;
+async function enrichOneShow(show, maxAttempts){
+  const id = show.watchmodeId;
   let record = wmRatingsCache.get(id) || {};
 
   // Shared, cross-user cache — checked whenever any tier this device
@@ -2960,7 +2960,7 @@ async function enrichOneMovie(movie, maxAttempts){
   // consulted while signed in. Per field-group, keeps whichever of
   // local/shared is actually newer rather than an all-or-nothing swap.
   //
-  // languageAt is its own tier, separate from enrichedAt — enrichOneMovie
+  // languageAt is its own tier, separate from enrichedAt — enrichOneShow
   // is the only place that ever populates language at all (fetchWatchmodeExtras,
   // the pick-time path, doesn't touch it). Tying language's freshness to
   // enrichedAt meant a show enriched at pick-time first would look
@@ -2990,7 +2990,7 @@ async function enrichOneMovie(movie, maxAttempts){
     // merge above — no live call needed at all.
     wmRatingsCache.set(id, record);
     saveWmRatingsCache();
-    applyRecordToMovie(movie, record);
+    applyRecordToShow(show, record);
     return { ok: true, hasData: true };
   }
 
@@ -2998,7 +2998,7 @@ async function enrichOneMovie(movie, maxAttempts){
   // from the same Watchmode response, a single live call refreshes
   // everything at once.
   try{
-    const details = await fetchWatchmodeTitleDetails(id, maxAttempts, `Rating/genre lookup: "${movie.title}"`);
+    const details = await fetchWatchmodeTitleDetails(id, maxAttempts, `Rating/genre lookup: "${show.title}"`);
     // A response that doesn't even look like a title (no title/id at all) is
     // treated as a failure rather than a legitimate "no rating" result —
     // this is what a degraded/throttled 200 OK response looks like.
@@ -3007,7 +3007,7 @@ async function enrichOneMovie(movie, maxAttempts){
     }
     const now = Date.now();
     const fresh = {
-      title: movie.title, year: movie.year,
+      title: show.title, year: show.year,
       genres: normalizeGenreList(firstArray(details.genre_names, details.genres)),
       discoveredAt: now,
       posterUrl: firstString(details.poster, details.poster_url, details.poster_image, details.backdrop),
@@ -3019,8 +3019,8 @@ async function enrichOneMovie(movie, maxAttempts){
       userRating: firstNumber(details.user_rating, details.imdb_rating, details.rating),
       criticScore: firstNumber(details.critic_score, details.critics_score, details.tomatometer),
       ratedAt: now,
-      imdbId: movie.imdbId || firstString(details.imdb_id) || record.imdbId || null,
-      tmdbId: movie.tmdbId || firstNumber(details.tmdb_id) || record.tmdbId || null
+      imdbId: show.imdbId || firstString(details.imdb_id) || record.imdbId || null,
+      tmdbId: show.tmdbId || firstNumber(details.tmdb_id) || record.tmdbId || null
     };
     const hasData = ratingCacheHasData(fresh);
     // Only cache when there's actually something here — a 200 OK with an
@@ -3039,30 +3039,30 @@ async function enrichOneMovie(movie, maxAttempts){
         fbDb.collection('sharedShowRatings').doc(String(id)).set(fresh, { merge: true })
           .catch(e => console.warn('Could not write shared ratings cache entry', e.message)); // fire-and-forget — never blocks the enrichment result
       }
-      applyRecordToMovie(movie, fresh);
+      applyRecordToShow(show, fresh);
       return { ok: true, hasData: true };
     }
     // Live call succeeded but came back empty — fall back to whichever
     // tiers were actually fresh before we tried, rather than nothing.
     if (discoveryFresh || enrichmentFresh || languageFresh || ratingFresh){
-      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, languageFresh, ratingFresh });
+      applyRecordToShow(show, record, { discoveryFresh, enrichmentFresh, languageFresh, ratingFresh });
       return { ok: true, hasData: ratingCacheHasData(record) };
     }
     return { ok: true, hasData: false };
   } catch(e){
-    console.warn('Watchmode detail lookup failed for', movie.title, e.message);
+    console.warn('Watchmode detail lookup failed for', show.title, e.message);
     // Live call failed entirely — still use whatever tiers were fresh
     // going in, rather than surfacing a total failure when we actually
     // had usable (if partial) data on hand.
     if (discoveryFresh || enrichmentFresh || languageFresh || ratingFresh){
-      applyRecordToMovie(movie, record, { discoveryFresh, enrichmentFresh, languageFresh, ratingFresh });
+      applyRecordToShow(show, record, { discoveryFresh, enrichmentFresh, languageFresh, ratingFresh });
       return { ok: true, hasData: ratingCacheHasData(record) };
     }
     return { ok: false, hasData: false, error: e.message };
   }
 }
 
-async function enrichBatchWithRatings(movies, opts){
+async function enrichBatchWithRatings(shows, opts){
   const silent = opts && opts.silent;
   // Experimenting with concurrency 3 (was 1, then 2 — confirmed fine). Every
   // request still passes through the same global adaptive throttle
@@ -3072,20 +3072,20 @@ async function enrichBatchWithRatings(movies, opts){
   // beyond what 2 already got — the throttle will just queue the third lane
   // behind the others — but it's safe to try. Drop back down if 429s creep up.
   let done = 0, missing = 0, firstError = null;
-  await mapWithConcurrency(movies, 3, async (movie) => {
-    const result = await enrichOneMovie(movie, 6);
+  await mapWithConcurrency(shows, 3, async (show) => {
+    const result = await enrichOneShow(show, 6);
     done++;
     if (!result.ok || !result.hasData){
       missing++;
       if (result.error && !firstError) firstError = result.error;
     }
-    if (!silent) setSpinStatus(`Fetching ratings… ${done}/${movies.length}`);
+    if (!silent) setSpinStatus(`Fetching ratings… ${done}/${shows.length}`);
   });
 
   if (silent) return;
   if (missing){
     $('enrichStatusNote').textContent =
-      `Ratings loaded for ${movies.length - missing}/${movies.length}.` +
+      `Ratings loaded for ${shows.length - missing}/${shows.length}.` +
       (firstError ? ` (${firstError})` : ' (Watchmode may simply have no rating on file for the rest.)') +
       ` Anything missing fills in automatically when you click into it.`;
   } else {
@@ -3094,11 +3094,11 @@ async function enrichBatchWithRatings(movies, opts){
 }
 
 // Looks up a single built-in list title on Watchmode by name, picks the
-// best match (same title's type=movie, matching year if possible), and
+// best match (same title's type=show, matching year if possible), and
 // caches the resolved ID (or the confirmed absence of one) so the same
 // title is never searched for twice.
-async function searchWatchmodeForMovie(movie){
-  const searchKey = `${movie.title}|${movie.year}`;
+async function searchWatchmodeForShow(show){
+  const searchKey = `${show.title}|${show.year}`;
   const cached = wmSearchCache.get(searchKey);
   if (cached && isFresh(cached.cachedAt, WM_GLOBAL_MAX_STALE_MS)){
     return cached.wmId;
@@ -3113,8 +3113,8 @@ async function searchWatchmodeForMovie(movie){
   if (currentUser){
     try{
       const snap = await fbDb.collection('sharedShowRatings')
-        .where('title', '==', movie.title)
-        .where('year', '==', movie.year)
+        .where('title', '==', show.title)
+        .where('year', '==', show.year)
         .limit(1)
         .get();
       if (!snap.empty){
@@ -3130,17 +3130,17 @@ async function searchWatchmodeForMovie(movie){
 
   let wmId = null;
   try{
-    const data = await wmFetch('/search/', { search_field: 'name', search_value: movie.title }, 0, 3, `Built-in list search: "${movie.title}"`);
+    const data = await wmFetch('/search/', { search_field: 'name', search_value: show.title }, 0, 3, `Built-in list search: "${show.title}"`);
     const results = data.title_results || data.results || [];
-    // Same unverified-value caveat as fetchWatchmodeMoviesPage above —
+    // Same unverified-value caveat as fetchWatchmodeShowsPage above —
     // 'tv_series' is an educated guess for what Watchmode's search
     // results actually label TV entries as.
     const showResults = results.filter(r => !r.type || r.type === 'tv_series');
-    const yearMatch = showResults.find(r => Number(r.year) === movie.year);
+    const yearMatch = showResults.find(r => Number(r.year) === show.year);
     const best = yearMatch || showResults[0];
     wmId = best ? best.id : null;
   } catch(e){
-    console.warn('Watchmode search failed for', movie.title, e.message);
+    console.warn('Watchmode search failed for', show.title, e.message);
     wmSearchCache.delete(searchKey); // don't cache a failure as a confirmed no-match — worth retrying later
     return null;
   }
@@ -3153,56 +3153,56 @@ async function searchWatchmodeForMovie(movie){
 // title with the same ratings/poster/genres/description a live Watchmode
 // result would have. Silently does nothing if there's no connection —
 // the built-in list still displays exactly as before either way.
-async function enrichBuiltinListWithWatchmode(movies){
+async function enrichBuiltinListWithWatchmode(shows){
   // Deliberately no wmKey gate here — local cache lookups (and, if
   // signed in, the shared database) should always be attempted
   // regardless of whether a key is connected on this device. Only an
-  // actual live Watchmode call needs a key, and enrichOneMovie already
+  // actual live Watchmode call needs a key, and enrichOneShow already
   // fails that gracefully on its own without one.
   let done = 0;
-  await mapWithConcurrency(movies, 1, async (movie) => {
-    if (!movie.watchmodeId){
-      const wmId = await searchWatchmodeForMovie(movie);
-      if (wmId) movie.watchmodeId = wmId;
+  await mapWithConcurrency(shows, 1, async (show) => {
+    if (!show.watchmodeId){
+      const wmId = await searchWatchmodeForShow(show);
+      if (wmId) show.watchmodeId = wmId;
     }
-    if (movie.watchmodeId){
-      await enrichOneMovie(movie, 2);
+    if (show.watchmodeId){
+      await enrichOneShow(show, 2);
     }
     done++;
-    setSpinStatus(`Enriching built-in list… ${done}/${movies.length}`);
+    setSpinStatus(`Enriching built-in list… ${done}/${shows.length}`);
   }, 250);
 }
 
-function matchesContentRating(movie){
+function matchesContentRating(show){
   // "No rating data" and "confirmed Not Rated" are different things, and
   // now separately toggleable — someone might want to exclude actual NC-17
   // titles but still see titles Watchmode just hasn't rated at all, or
   // vice versa.
-  if (!movie.usRating) return enabledContentRatings.includes('NO_DATA');
-  const rating = CONTENT_RATINGS.includes(movie.usRating) ? movie.usRating : 'NR';
+  if (!show.usRating) return enabledContentRatings.includes('NO_DATA');
+  const rating = CONTENT_RATINGS.includes(show.usRating) ? show.usRating : 'NR';
   return enabledContentRatings.includes(rating);
 }
 
-function matchesMinRating(movie){
+function matchesMinRating(show){
   if (!minRating) return true;
-  if (movie.userRating == null) return true; // no data — don't punish it
-  return movie.userRating >= minRating;
+  if (show.userRating == null) return true; // no data — don't punish it
+  return show.userRating >= minRating;
 }
 
-function matchesMaxRating(movie){
+function matchesMaxRating(show){
   if (!maxRating) return true;
-  if (movie.userRating == null) return true; // no data — don't punish it
-  return movie.userRating <= maxRating;
+  if (show.userRating == null) return true; // no data — don't punish it
+  return show.userRating <= maxRating;
 }
 
-function matchesCriticScoreRequirement(movie){
+function matchesCriticScoreRequirement(show){
   if (!requireCriticScore) return true;
   // Same reasoning as the Language filter: this requirement actively
   // demands data rather than passing through when it's missing, so it must
   // be scoped to Watchmode results — otherwise it would wipe out the
   // entire built-in list fallback, which has no critic score data at all.
   if (currentSource !== 'watchmode') return true;
-  return movie.criticScore != null;
+  return show.criticScore != null;
 }
 
 // Best-effort only — a text match on title/description, not a content
@@ -3211,26 +3211,26 @@ function matchesCriticScoreRequirement(movie){
 // one of these words clinically, for instance). No source-scoping needed
 // here, unlike the filters above — a title with no description simply
 // can't match anything, so it passes through either way.
-function matchesExplicitContentFilter(movie){
+function matchesExplicitContentFilter(show){
   if (!filterExplicitContent) return true;
   const allKeywords = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords);
   if (!allKeywords.length) return true;
-  const haystack = `${movie.title || ''} ${movie.description || ''}`.toLowerCase();
+  const haystack = `${show.title || ''} ${show.description || ''}`.toLowerCase();
   return !allKeywords.some(kw => kw && haystack.includes(kw.toLowerCase()));
 }
 
-function matchesLanguage(movie){
+function matchesLanguage(show){
   // Unlike the other filters, this one deliberately does NOT pass through
   // missing data by default (English-only means unrecognized-language
   // titles are excluded too, on purpose) — which means it must be scoped to
   // Watchmode results specifically. The built-in list has no language data
   // at all, and would otherwise get wiped out entirely by the default.
   if (currentSource !== 'watchmode') return true;
-  const lang = movie.language ? normalizeLanguage(movie.language) : 'Unknown';
+  const lang = show.language ? normalizeLanguage(show.language) : 'Unknown';
   return enabledLanguages.includes(lang);
 }
 
-async function fetchWatchmodeMoviesPage(startYear, genreName, page, limit, reason, userRatingLow, userRatingHigh){
+async function fetchWatchmodeShowsPage(startYear, genreName, page, limit, reason, userRatingLow, userRatingHigh){
   const genreIds = wmGenreMap[genreName]; // array of one or more Watchmode genre IDs
   const startDate = Number(`${startYear}0101`);
   const endYear = Math.min(startYear + 9, CURRENT_YEAR);
@@ -3279,14 +3279,14 @@ async function fetchWatchmodeMoviesPage(startYear, genreName, page, limit, reaso
 // goes — until either enough have been found or the floor reaches your
 // configured Minimum Rating. "Any" for either Min or Max Rating (value 0)
 // falls back to the practical 0–10 scale bounds.
-async function fetchWatchmodeMoviesByRating(decade, genre, targetCount, seenIds, reasonPrefix){
+async function fetchWatchmodeShowsByRating(decade, genre, targetCount, seenIds, reasonPrefix){
   const ceiling = maxRating || 10;
   const floor = minRating || 0;
   const collected = [];
   let low = Math.max(floor, ceiling - 1);
   while (true){
     setSpinStatus(`${reasonPrefix} — searching rated ${low.toFixed(1)}–${ceiling.toFixed(1)}…`);
-    const batch = await fetchWatchmodeMoviesPage(decade, genre, 1, targetCount, `${reasonPrefix}: rated ${low}-${ceiling}`, low, ceiling);
+    const batch = await fetchWatchmodeShowsPage(decade, genre, 1, targetCount, `${reasonPrefix}: rated ${low}-${ceiling}`, low, ceiling);
     batch.forEach(m => {
       if (!seenIds.has(m.watchmodeId) && !collected.some(c => c.watchmodeId === m.watchmodeId)){
         collected.push(m);
@@ -3311,7 +3311,7 @@ async function fetchWatchmodeMoviesByRating(decade, genre, targetCount, seenIds,
 // entry's real Watchmode-assigned genre list (stored when it was first
 // cached), not "which spin found it," so a title tagged both Horror and
 // Thriller correctly shows up for either.
-function getCachedMoviesForCombo(decade, genre){
+function getCachedShowsForCombo(decade, genre){
   const results = [];
   wmRatingsCache.forEach((entry, id) => {
     // Can't trust this record's decade/genre placement at all once its
@@ -3342,7 +3342,7 @@ function getCachedMoviesForCombo(decade, genre){
   return results;
 }
 
-// The shared-database equivalent of getCachedMoviesForCombo above — a
+// The shared-database equivalent of getCachedShowsForCombo above — a
 // real Firestore query across every signed-in user's contributed show
 // records for this decade+genre, not just this device's own local cache.
 // Deliberately does NOT filter by rating server-side — everything
@@ -3369,7 +3369,7 @@ function getCachedMoviesForCombo(decade, genre){
 // signed in with a key connected, then check the browser console for a
 // Firestore error containing a direct link that auto-configures the
 // correct index.
-async function getSharedMoviesForComboBatch(decade, genre, batchSize, cursor){
+async function getSharedShowsForComboBatch(decade, genre, batchSize, cursor){
   if (!currentUser) return { candidates: [], cursor: null, exhausted: true };
   try{
     let query = fbDb.collection('sharedShowRatings')
@@ -3441,7 +3441,7 @@ async function buildWatchmodePool(decade, genre){
   const sharedRecordsById = new Map(); // watchmodeId -> raw shared record, kept only long enough to decide what's worth committing locally after filtering
 
   if (ignoreStreamingService){
-    getCachedMoviesForCombo(decade, genre).forEach(m => {
+    getCachedShowsForCombo(decade, genre).forEach(m => {
       pool.push(m);
       seenIds.add(m.watchmodeId);
     });
@@ -3465,7 +3465,7 @@ async function buildWatchmodePool(decade, genre){
       let sharedBatchesUsed = 0;
       const sharedScanStart = Date.now();
       for (let batchNum = 0; batchNum < maxSharedBatches; batchNum++){
-        const { candidates, cursor, exhausted } = await getSharedMoviesForComboBatch(decade, genre, sharedBatchSize, sharedCursor);
+        const { candidates, cursor, exhausted } = await getSharedShowsForComboBatch(decade, genre, sharedBatchSize, sharedCursor);
         sharedBatchesUsed++;
         candidates.forEach(c => {
           if (!seenIds.has(c.pool.watchmodeId)){
@@ -3482,12 +3482,12 @@ async function buildWatchmodePool(decade, genre){
     }
 
     // Some cached entries may come back with their rating tier stale
-    // (nulled out by getCachedMoviesForCombo/getSharedMoviesForCombo) even
+    // (nulled out by getCachedShowsForCombo/getSharedShowsForCombo) even
     // though their discovery tier is still trusted — those need a fresh
     // enrichment pass too, not just newly-discovered live candidates
     // below, or they'd silently skip rating filtering forever instead of
     // getting current data.
-    const needsFreshRating = pool.filter(m => movieNeedsRatingData(m) && !isBlocked(m.title, m.year));
+    const needsFreshRating = pool.filter(m => showNeedsRatingData(m) && !isBlocked(m.title, m.year));
     if (needsFreshRating.length){
       await enrichBatchWithRatings(needsFreshRating);
     }
@@ -3519,14 +3519,14 @@ async function buildWatchmodePool(decade, genre){
 
   // Only reach for live discovery if the cache alone doesn't cover Max
   // Results after filtering — searched by rating band (see
-  // fetchWatchmodeMoviesByRating above), so this already keeps widening on
+  // fetchWatchmodeShowsByRating above), so this already keeps widening on
   // its own until either enough titles are found or your configured
   // Minimum Rating is reached, replacing the old separate shortfall-retry
   // loop that used to sit here.
   if (survivors.length < maxResults){
     const needed = maxResults - survivors.length;
     didLiveFetch = true;
-    const fresh = await fetchWatchmodeMoviesByRating(decade, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
+    const fresh = await fetchWatchmodeShowsByRating(decade, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
     fresh.forEach(m => seenIds.add(m.watchmodeId));
     pool = pool.concat(fresh);
     await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)));
@@ -3545,7 +3545,7 @@ async function buildWatchmodePool(decade, genre){
   if (didLiveFetch && pool.length < hardCap && allCached(pool)){
     const growBy = Math.min(hardCap, pool.length + 5) - pool.length;
     if (growBy > 0){
-      const fresh = await fetchWatchmodeMoviesByRating(decade, genre, growBy, seenIds, 'Free growth (fully cached so far)');
+      const fresh = await fetchWatchmodeShowsByRating(decade, genre, growBy, seenIds, 'Free growth (fully cached so far)');
       if (fresh.length){
         fresh.forEach(m => seenIds.add(m.watchmodeId));
         pool = pool.concat(fresh);
@@ -3588,7 +3588,7 @@ async function runStartupWarmup(){
       // your configured rating range and only searches lower if not
       // enough are found there, so the highest-rated titles for this
       // combo get cached first rather than just the most popular ones.
-      const pool = await fetchWatchmodeMoviesByRating(decade, genre, 10, new Set(), `Background cache warmup: ${decadeLabel(decade)} ${genre}`);
+      const pool = await fetchWatchmodeShowsByRating(decade, genre, 10, new Set(), `Background cache warmup: ${decadeLabel(decade)} ${genre}`);
       const toEnrich = pool.filter(m => !isBlocked(m.title, m.year));
       await enrichBatchWithRatings(toEnrich, { silent: true });
     } catch(e){
@@ -3607,36 +3607,38 @@ async function runStartupWarmup(){
    ================================================================== */
 function isPicked(title, year){ return picks.some(p => p.title === title && p.year === year); }
 
-function movieGenres(movie){
-  if (movie.genresOverride && movie.genresOverride.length) return movie.genresOverride;
-  const key = `${movie.title}|${movie.year}`;
+function showGenres(show){
+  if (show.genresOverride && show.genresOverride.length) return show.genresOverride;
+  const key = `${show.title}|${show.year}`;
   if (EXTRA_GENRES[key]) return EXTRA_GENRES[key];
   return currentChoice ? [currentChoice.genre] : [];
 }
 
-function movieTmdbLink(movie){
-  if (movie.imdbId) return `https://www.imdb.com/title/${movie.imdbId}/`;
-  if (movie.tmdbId) return `https://www.themoviedb.org/movie/${movie.tmdbId}`;
-  return `https://www.imdb.com/find/?q=${encodeURIComponent(movie.title)}`;
+function showTmdbLink(show){
+  if (show.imdbId) return `https://www.imdb.com/title/${show.imdbId}/`;
+  // TMDB's URL scheme uses /tv/ for TV series (distinct from /movie/ for
+  // movies) — confirmed via TMDB's own property definitions, not a guess.
+  if (show.tmdbId) return `https://www.themoviedb.org/tv/${show.tmdbId}`;
+  return `https://www.imdb.com/find/?q=${encodeURIComponent(show.title)}`;
 }
 
-function moviePosterUrl(movie){
-  return movie.posterUrl || null;
+function showPosterUrl(show){
+  return show.posterUrl || null;
 }
 
-function movieLinkLabel(movie){ return movie.imdbId ? 'IMDb' : (movie.tmdbId ? 'TMDB' : 'Search'); }
+function showLinkLabel(show){ return show.imdbId ? 'IMDb' : (show.tmdbId ? 'TMDB' : 'Search'); }
 
-function genreChipsHtml(movie){
-  const genres = movieGenres(movie);
+function genreChipsHtml(show){
+  const genres = showGenres(show);
   if (!genres.length) return '';
   return `<div class="genre-chips">${genres.map(g => `<span class="genre-chip">${escapeHtml(g)}</span>`).join('')}</div>`;
 }
 
-function ratingChipsHtml(movie){
+function ratingChipsHtml(show){
   const chips = [];
-  if (movie.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${movie.userRating.toFixed(1)}</span>`);
-  if (movie.criticScore != null) chips.push(`<span class="rating-chip" title="Critic score">📊 Critic ${movie.criticScore}%</span>`);
-  if (movie.usRating) chips.push(`<span class="rating-chip" title="US content rating">🎟 ${escapeHtml(movie.usRating)}</span>`);
+  if (show.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${show.userRating.toFixed(1)}</span>`);
+  if (show.criticScore != null) chips.push(`<span class="rating-chip" title="Critic score">📊 Critic ${show.criticScore}%</span>`);
+  if (show.usRating) chips.push(`<span class="rating-chip" title="US content rating">🎟 ${escapeHtml(show.usRating)}</span>`);
   if (!chips.length) return '';
   return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
 }
@@ -3651,8 +3653,8 @@ function renderResults(){
   grid.innerHTML = '';
   $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
 
-  currentBatch.forEach((movie, i) => {
-    const picked = isPicked(movie.title, movie.year);
+  currentBatch.forEach((show, i) => {
+    const picked = isPicked(show.title, show.year);
     const card = document.createElement('div');
     card.className = 'poster-card' + (picked ? ' disabled' : '');
     card.dataset.idx = i;
@@ -3661,12 +3663,12 @@ function renderResults(){
       ${watchedTagHtml}
       <div class="poster-meta">
         <div class="p-num">${String(i + 1).padStart(2, '0')}</div>
-        <div class="p-title-row"><div class="p-title">${escapeHtml(movie.title)}</div></div>
-        <div class="p-year">${movie.year || '—'}</div>
-        <div class="rating-row">${ratingChipsHtml(movie)}</div>
-        <div class="genre-row">${genreChipsHtml(movie)}</div>
+        <div class="p-title-row"><div class="p-title">${escapeHtml(show.title)}</div></div>
+        <div class="p-year">${show.year || '—'}</div>
+        <div class="rating-row">${ratingChipsHtml(show)}</div>
+        <div class="genre-row">${genreChipsHtml(show)}</div>
         <div class="meta-footer">
-          <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener" title="View on ${movieLinkLabel(movie)}">🔗 ${movieLinkLabel(movie)}</a>
+          <a class="tmdb-link" href="${showTmdbLink(show)}" target="_blank" rel="noopener" title="View on ${showLinkLabel(show)}">🔗 ${showLinkLabel(show)}</a>
           <button class="block-card-btn" title="Block this show">⛔</button>
         </div>
       </div>
@@ -3674,18 +3676,18 @@ function renderResults(){
     card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
     card.querySelector('.block-card-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      blockMovieFromGrid(movie);
+      blockShowFromGrid(show);
     });
-    if (!picked) card.addEventListener('click', () => openConfirm(movie));
+    if (!picked) card.addEventListener('click', () => openConfirm(show));
     grid.appendChild(card);
   });
 }
 
-async function blockMovieFromGrid(movie){
-  if (!confirm(`Block "${movie.title}" (${movie.year || '—'}) so it never shows up in a spin again?`)) return;
-  blockedMovies.push({ title: movie.title, year: movie.year || null });
-  await saveBlockedMovies();
-  currentBatch = currentBatch.filter(m => !(m.title === movie.title && m.year === movie.year));
+async function blockShowFromGrid(show){
+  if (!confirm(`Block "${show.title}" (${show.year || '—'}) so it never shows up in a spin again?`)) return;
+  blockedShows.push({ title: show.title, year: show.year || null });
+  await saveBlockedShows();
+  currentBatch = currentBatch.filter(m => !(m.title === show.title && m.year === show.year));
   renderResults();
   renderBlockList();
 }
@@ -3693,39 +3695,39 @@ async function blockMovieFromGrid(movie){
 /* ==================================================================
    Confirm pick modal
    ================================================================== */
-function openConfirm(movie){
+function openConfirm(show){
   const root = $('modalRoot');
-  const posterUrl = moviePosterUrl(movie);
+  const posterUrl = showPosterUrl(show);
   const posterHtml = posterUrl
-    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(movie.title)} poster">`
+    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(show.title)} poster">`
     : `<div class="m-icon" id="modalPoster">🎬</div>`;
-  const showStreamingLookup = currentSource === 'watchmode' && movie.watchmodeId;
-  const canForceRefresh = !!wmKey && !!movie.watchmodeId;
-  const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(movie.watchmodeId);
+  const showStreamingLookup = currentSource === 'watchmode' && show.watchmodeId;
+  const canForceRefresh = !!wmKey && !!show.watchmodeId;
+  const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(show.watchmodeId);
   const showExtrasContainer = showStreamingLookup || canForceRefresh;
   root.innerHTML = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
         ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from Watchmode'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
         ${posterHtml}
-        <h3>${escapeHtml(movie.title)}</h3>
-        <p>${movie.year || '—'} · ${currentChoice.genre}</p>
-        <div id="modalRatings">${ratingChipsHtml(movie)}</div>
-        <div id="modalGenres">${genreChipsHtml(movie)}</div>
-        <p id="modalDescription" class="modal-description" style="${movie.description ? '' : 'display:none;'}">${escapeHtml(movie.description || '')}</p>
-        <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener" style="display:inline-block; margin: 10px 0;">🔗 View on ${movieLinkLabel(movie)} / find trailer</a>
+        <h3>${escapeHtml(show.title)}</h3>
+        <p>${show.year || '—'} · ${currentChoice.genre}</p>
+        <div id="modalRatings">${ratingChipsHtml(show)}</div>
+        <div id="modalGenres">${genreChipsHtml(show)}</div>
+        <p id="modalDescription" class="modal-description" style="${show.description ? '' : 'display:none;'}">${escapeHtml(show.description || '')}</p>
+        <a class="tmdb-link" href="${showTmdbLink(show)}" target="_blank" rel="noopener" style="display:inline-block; margin: 10px 0;">🔗 View on ${showLinkLabel(show)} / find trailer</a>
         ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showStreamingLookup ? 'Checking where to stream…' : ''}</div>` : ''}
         <p style="margin-top:6px;">Lock this in for tonight? It'll be marked watched and won't be selectable again.</p>
         <div class="row">
           <button class="btn-ghost" id="cancelPick">Cancel</button>
-          <button class="btn-primary" id="confirmPick">Pick This Movie</button>
+          <button class="btn-primary" id="confirmPick">Pick This Show</button>
         </div>
       </div>
     </div>
   `;
   $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
   $('cancelPick').addEventListener('click', closeModal);
-  $('confirmPick').addEventListener('click', () => confirmPick(movie));
+  $('confirmPick').addEventListener('click', () => confirmPick(show));
 
   if (canForceRefresh && !alreadyRefreshedThisSpin){
     $('forceRefreshBtn').addEventListener('click', async () => {
@@ -3735,15 +3737,15 @@ function openConfirm(movie){
       const extrasEl = document.getElementById('modalExtras');
       if (extrasEl) extrasEl.textContent = 'Checking where to stream…';
       try{
-        const extras = await fetchWatchmodeExtras(movie, true); // true = bypass every cache, local and shared
-        appendModalExtras(extras, movie);
+        const extras = await fetchWatchmodeExtras(show, true); // true = bypass every cache, local and shared
+        appendModalExtras(extras, show);
       } finally {
         // Marked used here, not just on success — the API call already
         // went out and the quota's already spent whether or not it
         // ultimately threw, and this keeps the tracking set and what the
         // button visually shows always in sync if the modal is reopened
         // later in the same spin.
-        forceRefreshedThisSpin.add(movie.watchmodeId);
+        forceRefreshedThisSpin.add(show.watchmodeId);
         // Only touch the button if the modal (and this button) is still
         // open — it may have been closed while the live call was in
         // flight. Once used, it stays permanently marked "Refreshed" for
@@ -3759,39 +3761,39 @@ function openConfirm(movie){
   }
 
   if (showStreamingLookup){
-    fetchWatchmodeExtras(movie).then(extras => appendModalExtras(extras, movie));
+    fetchWatchmodeExtras(show).then(extras => appendModalExtras(extras, show));
   }
 }
 
-function appendModalExtras(extras, movie){
-  if (movie.userRating == null && extras.userRating != null) movie.userRating = extras.userRating;
-  if (movie.criticScore == null && extras.criticScore != null) movie.criticScore = extras.criticScore;
-  if (!movie.usRating && extras.usRating) movie.usRating = extras.usRating;
-  if (!movie.posterUrl && extras.posterUrl) movie.posterUrl = extras.posterUrl;
-  if (extras.genres && extras.genres.length) movie.genresOverride = extras.genres;
-  if (!movie.description && extras.description) movie.description = extras.description;
+function appendModalExtras(extras, show){
+  if (show.userRating == null && extras.userRating != null) show.userRating = extras.userRating;
+  if (show.criticScore == null && extras.criticScore != null) show.criticScore = extras.criticScore;
+  if (!show.usRating && extras.usRating) show.usRating = extras.usRating;
+  if (!show.posterUrl && extras.posterUrl) show.posterUrl = extras.posterUrl;
+  if (extras.genres && extras.genres.length) show.genresOverride = extras.genres;
+  if (!show.description && extras.description) show.description = extras.description;
 
-  backfillGridCard(movie);
+  backfillGridCard(show);
 
   const container = document.getElementById('modalExtras');
   if (!container) return; // modal already closed — data above is still backfilled to the grid
 
   const ratingsBox = document.getElementById('modalRatings');
-  if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(movie);
+  if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(show);
   const genresBox = document.getElementById('modalGenres');
-  if (genresBox) genresBox.innerHTML = genreChipsHtml(movie);
+  if (genresBox) genresBox.innerHTML = genreChipsHtml(show);
   const descBox = document.getElementById('modalDescription');
-  if (descBox && movie.description){
-    descBox.textContent = movie.description;
+  if (descBox && show.description){
+    descBox.textContent = show.description;
     descBox.style.display = '';
   }
 
   const posterEl = document.getElementById('modalPoster');
-  if (posterEl && posterEl.tagName !== 'IMG' && movie.posterUrl){
+  if (posterEl && posterEl.tagName !== 'IMG' && show.posterUrl){
     const img = document.createElement('img');
     img.id = 'modalPoster';
-    img.src = movie.posterUrl;
-    img.alt = movie.title + ' poster';
+    img.src = show.posterUrl;
+    img.alt = show.title + ' poster';
     posterEl.replaceWith(img);
   }
 
@@ -3822,15 +3824,15 @@ function renderOfferSection(label, emoji, items){
 // click-triggered (or pick-triggered) Watchmode lookup fills in data the
 // eager batch enrichment missed, so the main grid reflects it without
 // needing a full re-render.
-function backfillGridCard(movie){
-  const idx = currentBatch.indexOf(movie);
+function backfillGridCard(show){
+  const idx = currentBatch.indexOf(show);
   if (idx === -1) return; // a new spin has replaced the batch since
   const card = document.querySelector(`.poster-card[data-idx="${idx}"]`);
   if (!card) return;
   const ratingRow = card.querySelector('.rating-row');
-  if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(movie);
+  if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(show);
   const genreRow = card.querySelector('.genre-row');
-  if (genreRow) genreRow.innerHTML = genreChipsHtml(movie);
+  if (genreRow) genreRow.innerHTML = genreChipsHtml(show);
 }
 
 function closeModal(){ $('modalRoot').innerHTML = ''; }
@@ -3846,22 +3848,22 @@ window.handleNativeBackPress = function(){
   return false;
 };
 
-async function confirmPick(movie){
+async function confirmPick(show){
   const picker = crew.length ? crew[turnIndex] : 'Unknown';
   picks.push({
-    title: movie.title, year: movie.year,
+    title: show.title, year: show.year,
     decade: decadeLabel(currentChoice.decade), genre: currentChoice.genre,
     picker: picker, pickedAt: new Date().toISOString().slice(0, 10)
   });
   closeModal();
-  showTonightBanner(movie, picker);
+  showTonightBanner(show, picker);
   renderResults();
   renderHistory();
   await savePicks();
   await advanceTurn();
 
-  if (currentSource === 'watchmode' && movie.watchmodeId){
-    fetchWatchmodeExtras(movie).then(extras => appendTonightExtras(extras, movie));
+  if (currentSource === 'watchmode' && show.watchmodeId){
+    fetchWatchmodeExtras(show).then(extras => appendTonightExtras(extras, show));
   }
 }
 
@@ -3904,11 +3906,11 @@ function recordToExtrasResult(record, tierFlags){
   };
 }
 
-async function fetchWatchmodeExtras(movie, forceRefresh){
-  const id = movie.watchmodeId;
+async function fetchWatchmodeExtras(show, forceRefresh){
+  const id = show.watchmodeId;
   let record = forceRefresh ? {} : (wmDetailsCache.get(id) || {});
 
-  // Shared, cross-user cache — the SAME collection enrichOneMovie uses for
+  // Shared, cross-user cache — the SAME collection enrichOneShow uses for
   // discovery/warmup, since a show's trailer/poster/rating/streaming
   // data all lives in one place now rather than being split across two
   // collections with heavy field overlap. Checked whenever any tier is
@@ -3918,7 +3920,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
   // ones that happen to look stale.
   //
   // streamingCheckedAt is deliberately its own tier, separate from
-  // enrichedAt/ratedAt — enrichOneMovie (the discovery/warmup path) sets
+  // enrichedAt/ratedAt — enrichOneShow (the discovery/warmup path) sets
   // enrichedAt and ratedAt but never touches trailerUrl/streamNames at
   // all, since it never requests streaming data. Tying trailer/streaming
   // freshness to those other timestamps meant a show enriched only
@@ -3956,7 +3958,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
     // append_to_response=sources bundles streaming availability into this
     // same request instead of a separate one — cuts pick-time lookups from
     // two calls down to one.
-    details = await wmFetch(`/title/${id}/details/`, { append_to_response: 'sources' }, 0, 6, `Full details + streaming (on click): "${movie.title}"`);
+    details = await wmFetch(`/title/${id}/details/`, { append_to_response: 'sources' }, 0, 6, `Full details + streaming (on click): "${show.title}"`);
     trailerUrl = details.trailer || null;
     userRating = firstNumber(details.user_rating, details.imdb_rating, details.rating);
     criticScore = firstNumber(details.critic_score, details.critics_score, details.tomatometer);
@@ -3964,9 +3966,9 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
     posterUrl = firstString(details.poster, details.poster_url, details.poster_image, details.backdrop);
     genres = normalizeGenreList(firstArray(details.genre_names, details.genres));
     description = firstString(details.plot_overview, details.overview, details.description, details.plot);
-    imdbId = movie.imdbId || firstString(details.imdb_id) || record.imdbId || null;
-    tmdbId = movie.tmdbId || firstNumber(details.tmdb_id) || record.tmdbId || null;
-  } catch(e){ console.warn('Watchmode details lookup failed at pick time for', movie.title, e.message); }
+    imdbId = show.imdbId || firstString(details.imdb_id) || record.imdbId || null;
+    tmdbId = show.tmdbId || firstNumber(details.tmdb_id) || record.tmdbId || null;
+  } catch(e){ console.warn('Watchmode details lookup failed at pick time for', show.title, e.message); }
 
   let sourcesCheckSucceeded = false;
   const appendedSources = details && firstArray(details.sources, details.sources_data, details.streaming_sources);
@@ -3980,7 +3982,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
     // actually include sources — keeps this working even if Watchmode's
     // append_to_response shape differs from what's expected above.
     try{
-      const sources = await wmFetch(`/title/${id}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${movie.title}"`);
+      const sources = await wmFetch(`/title/${id}/sources/`, { regions: 'US' }, 0, 6, `Streaming availability on click (fallback): "${show.title}"`);
       if (Array.isArray(sources)){
         streamNames = [...new Set(sources.filter(s => s.type === 'sub' || s.type === 'free').map(s => s.name))];
         rentNames = extractNames(sources, 'rent');
@@ -4002,13 +4004,13 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
   if (gotEnrichment || gotRating || gotStreaming){
     const fresh = Object.assign({}, record);
     // Populated alongside enrichment/rating/streaming any time we do a
-    // full live fetch — this is the same discovery tier enrichOneMovie
+    // full live fetch — this is the same discovery tier enrichOneShow
     // writes, kept in sync here too so a document created fresh by this
     // function (never having gone through discovery/warmup at all) still
     // ends up with the same complete shape either function would produce.
     if (gotEnrichment || gotRating || gotStreaming){
-      fresh.title = movie.title;
-      fresh.year = movie.year;
+      fresh.title = show.title;
+      fresh.year = show.year;
       if (genres && genres.length) fresh.genres = genres;
       fresh.discoveredAt = now;
       fresh.imdbId = imdbId;
@@ -4036,7 +4038,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
     saveWmDetailsCache(); // fire-and-forget — don't block on a local storage write
     if (currentUser){
       // merge:true — this write only owns trailerUrl/streamNames beyond
-      // what enrichOneMovie already writes; merging means it can't
+      // what enrichOneShow already writes; merging means it can't
       // accidentally erase fields the other function is responsible for,
       // and vice versa, since both now target the same document.
       fbDb.collection('sharedShowRatings').doc(String(id)).set(fresh, { merge: true })
@@ -4054,17 +4056,17 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
   return recordToExtrasResult(record, { enrichmentFresh, ratingFresh, streamingFresh });
 }
 
-function appendTonightExtras(extras, movie){
+function appendTonightExtras(extras, show){
   // Fill in rating data if the grid view didn't already have it.
-  if (movie.userRating == null && extras.userRating != null) movie.userRating = extras.userRating;
-  if (movie.criticScore == null && extras.criticScore != null) movie.criticScore = extras.criticScore;
-  if (!movie.usRating && extras.usRating) movie.usRating = extras.usRating;
-  if (extras.genres && extras.genres.length) movie.genresOverride = extras.genres;
-  backfillGridCard(movie);
+  if (show.userRating == null && extras.userRating != null) show.userRating = extras.userRating;
+  if (show.criticScore == null && extras.criticScore != null) show.criticScore = extras.criticScore;
+  if (!show.usRating && extras.usRating) show.usRating = extras.usRating;
+  if (extras.genres && extras.genres.length) show.genresOverride = extras.genres;
+  backfillGridCard(show);
 
   const banner = document.querySelector('#tonightBanner .tonight > div');
   if (!banner) return; // user already spun again / banner no longer showing
-  const ratings = ratingChipsHtml(movie);
+  const ratings = ratingChipsHtml(show);
   if (ratings) banner.querySelector('h3').insertAdjacentHTML('afterend', ratings);
   const bits = [];
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener">▶ Watch Trailer</a>`);
@@ -4074,18 +4076,18 @@ function appendTonightExtras(extras, movie){
   if (bits.length) banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${bits.join(' ')}</div>`);
 }
 
-function showTonightBanner(movie, picker){
-  const posterUrl = moviePosterUrl(movie);
+function showTonightBanner(show, picker){
+  const posterUrl = showPosterUrl(show);
   const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🍿</div>';
   $('tonightBanner').innerHTML = `
     <div class="tonight">
       ${posterHtml}
       <div>
         <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
-        <h3>${escapeHtml(movie.title)}</h3>
-        ${ratingChipsHtml(movie)}
-        <p>${movie.year || '—'} · ${currentChoice.genre} · Enjoy the show</p>
-        <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener">🔗 Find trailer on ${movieLinkLabel(movie)}</a>
+        <h3>${escapeHtml(show.title)}</h3>
+        ${ratingChipsHtml(show)}
+        <p>${show.year || '—'} · ${currentChoice.genre} · Enjoy the show</p>
+        <a class="tmdb-link" href="${showTmdbLink(show)}" target="_blank" rel="noopener">🔗 Find trailer on ${showLinkLabel(show)}</a>
       </div>
     </div>
   `;
@@ -4128,16 +4130,16 @@ function renderFilteredOut(){
   row.style.display = 'block';
   $('filteredOutToggleBtn').textContent = `Show ${lastFilteredOut.length} Filtered Out`;
   panel.style.display = 'none';
-  $('filteredOutList').innerHTML = lastFilteredOut.map(({ movie, reason }, i) => `
+  $('filteredOutList').innerHTML = lastFilteredOut.map(({ show, reason }, i) => `
     <div class="history-item clickable" data-idx="${i}" title="Click for details — you can still pick this show">
-      <span class="h-name">${escapeHtml(movie.title)} <span class="h-meta">(${movie.year || '—'})</span></span>
+      <span class="h-name">${escapeHtml(show.title)} <span class="h-meta">(${show.year || '—'})</span></span>
       <span class="h-meta">${escapeHtml(reason)}</span>
     </div>
   `).join('');
   $('filteredOutList').querySelectorAll('.history-item[data-idx]').forEach(el => {
     el.addEventListener('click', () => {
       const entry = lastFilteredOut[Number(el.dataset.idx)];
-      if (entry) openConfirm(entry.movie);
+      if (entry) openConfirm(entry.show);
     });
   });
 }
