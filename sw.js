@@ -1,4 +1,4 @@
-const CACHE_NAME = 'next-up-movies-v42';
+const CACHE_NAME = 'next-up-movies-v43';
 const APP_SHELL = [
   'index.html',
   'next-up-movies.html',

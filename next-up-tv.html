@@ -551,8 +551,8 @@
 
     <div class="tabs">
       <button class="tab-btn active" id="tabMainBtn">🎬 Next Up</button>
-      <button class="tab-btn" id="tabFiltersBtn">🎯 Movie Filters</button>
-      <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Movie List</button>
+      <button class="tab-btn" id="tabFiltersBtn">🎯 Show Filters</button>
+      <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Show List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -560,7 +560,7 @@
     <div id="mainTab">
 
       <div class="card">
-        <h2>Movie Crew</h2>
+        <h2>TV Crew</h2>
         <p class="desc">Add everyone who takes a turn picking. The app tracks whose turn is next and moves to the next person automatically after each pick.</p>
         <div class="row">
           <input type="text" id="crewInput" placeholder="Add a family member's name">
@@ -654,7 +654,7 @@
 
       <div class="card" id="wmConnectionCard">
         <h2>Watchmode Connection <span id="wmStatusPill" class="status-pill status-off">NOT CONNECTED</span></h2>
-        <p class="desc">Optional. If you connect a free Watchmode API key, spins pull live movie lists filtered by decade + genre straight from Watchmode, with posters, trailer links, and (when a title is picked) which streaming service it's on. Without one, the app uses its built-in curated list. Don't have a key yet? <a href="https://api.watchmode.com/requestApiKey" target="_blank" rel="noopener">Request a free one here</a> — 2,500 requests/month, no credit card required.</p>
+        <p class="desc">Optional. If you connect a free Watchmode API key, spins pull live show lists filtered by decade + genre straight from Watchmode, with posters, trailer links, and (when a title is picked) which streaming service it's on. Without one, the app uses its built-in curated list. Don't have a key yet? <a href="https://api.watchmode.com/requestApiKey" target="_blank" rel="noopener">Request a free one here</a> — 2,500 requests/month, no credit card required.</p>
         <div class="row">
           <input type="password" id="wmKeyInput" placeholder="Paste your Watchmode API key">
           <button class="btn-primary" id="saveWmKeyBtn">Save & Test</button>
@@ -668,7 +668,7 @@
           <button class="btn-danger" id="clearCacheBtn" style="display:none;">Clear Cache</button>
         </div>
 
-        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many movies are already cached for a given decade/genre. Those spins should feel noticeably faster since little or no live lookup is needed.</p>
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many shows are already cached for a given decade/genre. Those spins should feel noticeably faster since little or no live lookup is needed.</p>
         <div class="row">
           <select id="cacheStatsDecade" style="max-width:140px;">
             <option value="all">All Decades</option>
@@ -715,12 +715,12 @@
 
     </div>
 
-    <!-- ===================== MOVIE FILTERS TAB ===================== -->
+    <!-- ===================== SHOW FILTERS TAB ===================== -->
     <div id="filtersTab" style="display:none;">
 
       <div class="card" id="rerunFiltersCard" style="display:none;">
         <h2>Apply Changes</h2>
-        <p class="desc">Changed something above after already spinning? Re-run your filters against the same fetched movies — no new spin, no new API calls, just re-checks who currently passes.</p>
+        <p class="desc">Changed something above after already spinning? Re-run your filters against the same fetched shows — no new spin, no new API calls, just re-checks who currently passes.</p>
         <button class="btn-primary" id="rerunFiltersBtn">🔄 Re-run Filters</button>
       </div>
 
@@ -830,7 +830,7 @@
         <h2>Explicit Content Filter</h2>
         <p class="desc">Best-effort only — this checks a title and description against a list of keywords, it doesn't actually analyze the film itself. It can miss titles with no telling words in their description, and can very occasionally flag something legitimate. There's a built-in list of common terms included automatically (its contents aren't shown here); you can add your own on top of it below. Matching is case-insensitive and checks for the phrase anywhere in the text.</p>
         <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
-          <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Movies With Explicit Content
+          <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Shows With Explicit Content
         </label>
         <div class="row">
           <input type="text" id="explicitKeywordInput" placeholder="Add a keyword or phrase">
@@ -841,32 +841,32 @@
       </div>
 
       <div class="card">
-        <h2>Blocked Movies</h2>
+        <h2>Blocked Shows</h2>
         <p class="desc">Titles here never show up in a spin, from either source. Leave year blank to block every version/remake of that title.</p>
         <div class="row">
-          <input type="text" id="blockTitleInput" placeholder="Movie title">
+          <input type="text" id="blockTitleInput" placeholder="Show title">
           <input type="text" id="blockYearInput" placeholder="Year (optional)" style="flex: 0 1 140px;">
           <button class="btn-primary" id="blockAddBtn">Block</button>
         </div>
         <div id="blockList" class="crew-list"></div>
-        <div class="hint" id="blockEmptyHint" style="display:none;">No blocked movies.</div>
+        <div class="hint" id="blockEmptyHint" style="display:none;">No blocked shows.</div>
       </div>
 
     </div>
 
-    <!-- ===================== BUILT-IN MOVIE LIST TAB ===================== -->
+    <!-- ===================== BUILT-IN SHOW LIST TAB ===================== -->
     <div id="builtinTab" style="display:none;">
 
       <div class="card">
         <h2>Edit Built-in List</h2>
-        <p class="desc">Add or remove movies from the built-in list for one decade + genre. Used whenever the built-in list is the active source (no Watchmode key, or "Always use built-in list" selected in Admin). If Watchmode is connected, these titles now also get looked up automatically for ratings, posters, and genres — same as a live Watchmode spin, just for a fixed list instead of a live search.</p>
+        <p class="desc">Add or remove shows from the built-in list for one decade + genre. Used whenever the built-in list is the active source (no Watchmode key, or "Always use built-in list" selected in Admin). If Watchmode is connected, these titles now also get looked up automatically for ratings, posters, and genres — same as a live Watchmode spin, just for a fixed list instead of a live search.</p>
         <div class="row">
           <select id="editListDecade"></select>
           <select id="editListGenre"></select>
         </div>
         <div id="editListMovies" class="crew-list" style="margin-top:14px;"></div>
         <div class="row" style="margin-top:12px;">
-          <input type="text" id="editListTitleInput" placeholder="Movie title">
+          <input type="text" id="editListTitleInput" placeholder="Show title">
           <input type="text" id="editListYearInput" placeholder="Year" style="flex: 0 1 100px;">
           <button class="btn-primary" id="editListAddBtn">Add</button>
         </div>
@@ -916,7 +916,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.1.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
+const APP_VERSION = '0.2.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -934,7 +934,7 @@ const SYNCED_KEYS = new Set([
    Starter set only — a modest, well-known selection to get the spin
    mechanic working end to end. Expanding this to real scale, and
    running a genre-accuracy pass against Watchmode's actual TV genre
-   data (the same way we did for the movie list), are explicit,
+   data (the same way we did for the show list), are explicit,
    separate next steps — not done yet.
    ================================================================== */
 const SHOW_DB = {
@@ -1100,7 +1100,7 @@ let turnIndex = 0;
 let currentBatch = [];
 const forceRefreshedThisSpin = new Set(); // watchmodeIds already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
 let lastFilteredOut = []; // [{movie, reason}] — cleared/rebuilt each spin
-let lastFullPool = []; // every movie fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
+let lastFullPool = []; // every show fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
 let currentChoice = null;
 let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
 
@@ -1297,7 +1297,7 @@ async function saveJSON(key, value){
 async function syncKeyToCloud(key, value){
   try{
     await fbDb.collection('users').doc(currentUser.uid)
-      .collection('nextUpApps').doc('movies')
+      .collection('nextUpApps').doc('tv')
       .set({ [key]: value }, { merge: true });
   } catch(e){
     console.warn('Cloud sync failed for ' + key, e.message);
@@ -1321,8 +1321,8 @@ async function syncKeyToCloud(key, value){
 // path) so an explicit sign-in and the auth-state listener firing for
 // that same event can't both trigger a sync.
 function triggerSyncOnce(user){
-  if (sessionStorage.getItem('nextup_resynced_this_session')) return;
-  sessionStorage.setItem('nextup_resynced_this_session', '1');
+  if (sessionStorage.getItem('nextup_resynced_this_session_tv')) return;
+  sessionStorage.setItem('nextup_resynced_this_session_tv', '1');
   syncOnSignIn(user);
 }
 
@@ -1406,7 +1406,7 @@ const SYNCED_KEY_DEFAULTS = {
 // signing out actually behave like signing out, rather than leaving
 // whatever was last synced sitting in local storage for the next person
 // to use this device/browser. Deliberately leaves the ratings/search
-// cache alone — that's not personal data, just cached movie metadata, and
+// cache alone — that's not personal data, just cached show metadata, and
 // clearing it would only cost the next connection extra API calls to
 // rebuild for no real benefit.
 async function resetLocalStateToDefaults(){
@@ -1440,7 +1440,7 @@ async function signOutOfGoogle(){
   if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
     Android.signOutNative();
   }
-  sessionStorage.removeItem('nextup_resynced_this_session'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
+  sessionStorage.removeItem('nextup_resynced_this_session_tv'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
   showAuthStatus('Signed out — resetting to defaults…');
   await resetLocalStateToDefaults();
   location.reload(); // same pattern as sign-in — the reliable way to get every part of the app to re-read the reset state
@@ -1494,7 +1494,7 @@ async function syncOnSignIn(user){
       }
     }
 
-    const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('movies');
+    const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('tv');
     const snap = await ref.get();
     if (snap.exists){
       const data = snap.data();
@@ -1563,9 +1563,9 @@ async function saveWmKey(){
 }
 
 // The Watchmode key is intentionally NOT part of SYNCED_KEYS / the
-// per-app nextUpApps/movies document — it's account-level, shared across
+// per-app nextUpApps/tv document — it's account-level, shared across
 // every app in the suite, so it lives at users/{uid}/sharedSettings/watchmode
-// instead. Connecting it in one app (Movies, or later TV/Books) makes it
+// instead. Connecting it in one app (Movies, TV, or later Books) makes it
 // available in all of them automatically, since they'd all read from this
 // same shared location.
 async function syncWatchmodeKeyToCloud(key, uid){
@@ -2194,7 +2194,7 @@ $('rerunWarmupBtn').addEventListener('click', () => {
 });
 
 $('clearCacheBtn').addEventListener('click', async () => {
-  if (!confirm(`Clear all ${wmRatingsCache.size} cached movie ratings? Spins will need to re-fetch from Watchmode until the cache rebuilds.`)) return;
+  if (!confirm(`Clear all ${wmRatingsCache.size} cached show ratings? Spins will need to re-fetch from Watchmode until the cache rebuilds.`)) return;
   wmRatingsCache.clear();
   await saveWmRatingsCache();
   wmWarmupDone = false;
@@ -2654,7 +2654,7 @@ function updateCacheStats(){
     }
     count++;
   });
-  let text = `${count} movie${count === 1 ? '' : 's'} cached for ${decadeSel === 'all' ? 'all decades' : decadeLabel(Number(decadeSel))} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
+  let text = `${count} show${count === 1 ? '' : 's'} cached for ${decadeSel === 'all' ? 'all decades' : decadeLabel(Number(decadeSel))} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
   if (decadeSel !== 'all' && missingYearData){
     text += ` (${missingYearData} cached entries from before this feature can't be counted by decade until re-fetched.)`;
   }
@@ -2920,7 +2920,7 @@ function normalizeGenreList(arr){
 }
 
 // Runs `worker` over `items` with at most `limit` in flight at once, and a
-// small pause between each item in a lane, so a 50-movie batch spreads its
+// small pause between each item in a lane, so a 50-show batch spreads its
 // requests out over several seconds instead of bursting all at once.
 async function mapWithConcurrency(items, limit, worker, paceMs){
   let cursor = 0;
@@ -2963,7 +2963,7 @@ async function enrichOneMovie(movie, maxAttempts){
   // languageAt is its own tier, separate from enrichedAt — enrichOneMovie
   // is the only place that ever populates language at all (fetchWatchmodeExtras,
   // the pick-time path, doesn't touch it). Tying language's freshness to
-  // enrichedAt meant a movie enriched at pick-time first would look
+  // enrichedAt meant a show enriched at pick-time first would look
   // "fresh" on enrichedAt and incorrectly skip ever setting language —
   // leaving it permanently undefined, which the language filter treats as
   // "Unknown" and silently excludes by default.
@@ -3306,7 +3306,7 @@ async function fetchWatchmodeMoviesByRating(decade, genre, targetCount, seenIds,
 // regardless of size, so this costs nothing extra by itself; what costs
 // something is enrichment, which only ever runs on titles we haven't
 // already fetched+enriched this round.
-// Reconstructs movie objects directly from the persistent cache for one
+// Reconstructs show objects directly from the persistent cache for one
 // decade/genre combo — no API call involved. Genre matching uses each
 // entry's real Watchmode-assigned genre list (stored when it was first
 // cached), not "which spin found it," so a title tagged both Horror and
@@ -3343,7 +3343,7 @@ function getCachedMoviesForCombo(decade, genre){
 }
 
 // The shared-database equivalent of getCachedMoviesForCombo above — a
-// real Firestore query across every signed-in user's contributed movie
+// real Firestore query across every signed-in user's contributed show
 // records for this decade+genre, not just this device's own local cache.
 // Deliberately does NOT filter by rating server-side — everything
 // matching decade+genre gets downloaded in batches, and it's up to the
@@ -3643,7 +3643,7 @@ function ratingChipsHtml(movie){
 
 function renderResults(){
   $('resultsTitle').textContent = `${decadeLabel(currentChoice.decade)} ${currentChoice.genre}`;
-  $('resultsCount').textContent = `${currentBatch.length} movie${currentBatch.length === 1 ? '' : 's'}`;
+  $('resultsCount').textContent = `${currentBatch.length} show${currentBatch.length === 1 ? '' : 's'}`;
   $('resultsArea').style.display = 'block';
   updateSourceNote();
 
@@ -3667,7 +3667,7 @@ function renderResults(){
         <div class="genre-row">${genreChipsHtml(movie)}</div>
         <div class="meta-footer">
           <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener" title="View on ${movieLinkLabel(movie)}">🔗 ${movieLinkLabel(movie)}</a>
-          <button class="block-card-btn" title="Block this movie">⛔</button>
+          <button class="block-card-btn" title="Block this show">⛔</button>
         </div>
       </div>
     `;
@@ -3818,7 +3818,7 @@ function renderOfferSection(label, emoji, items){
   return `<div style="margin-top:8px;"><div class="hint" style="margin-bottom:4px;">${escapeHtml(label)}</div><div class="genre-chips" style="justify-content:center;">${chips}</div></div>`;
 }
 
-// Updates a movie's already-rendered grid card in place — used once a
+// Updates a show's already-rendered grid card in place — used once a
 // click-triggered (or pick-triggered) Watchmode lookup fills in data the
 // eager batch enrichment missed, so the main grid reflects it without
 // needing a full re-render.
@@ -3909,7 +3909,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
   let record = forceRefresh ? {} : (wmDetailsCache.get(id) || {});
 
   // Shared, cross-user cache — the SAME collection enrichOneMovie uses for
-  // discovery/warmup, since a movie's trailer/poster/rating/streaming
+  // discovery/warmup, since a show's trailer/poster/rating/streaming
   // data all lives in one place now rather than being split across two
   // collections with heavy field overlap. Checked whenever any tier is
   // stale or unknown locally. Only available while signed in. Skipped
@@ -3921,7 +3921,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
   // enrichedAt/ratedAt — enrichOneMovie (the discovery/warmup path) sets
   // enrichedAt and ratedAt but never touches trailerUrl/streamNames at
   // all, since it never requests streaming data. Tying trailer/streaming
-  // freshness to those other timestamps meant a movie enriched only
+  // freshness to those other timestamps meant a show enriched only
   // during a spin (never clicked) would look "fresh" on its rating tier
   // and incorrectly skip ever actually checking streaming availability —
   // showing a confirmed-empty result for something never actually
@@ -3932,7 +3932,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
       try{
         const sharedDoc = await fbDb.collection('sharedShowRatings').doc(String(id)).get();
         if (sharedDoc.exists) record = mergeDetailsFreshestTiers(record, sharedDoc.data());
-      } catch(e){ console.warn('Shared movie cache lookup failed, falling back to Watchmode directly', e.message); }
+      } catch(e){ console.warn('Shared show cache lookup failed, falling back to Watchmode directly', e.message); }
     }
   }
 
@@ -4040,7 +4040,7 @@ async function fetchWatchmodeExtras(movie, forceRefresh){
       // accidentally erase fields the other function is responsible for,
       // and vice versa, since both now target the same document.
       fbDb.collection('sharedShowRatings').doc(String(id)).set(fresh, { merge: true })
-        .catch(e => console.warn('Could not write shared movie cache entry', e.message)); // fire-and-forget — never blocks showing the result
+        .catch(e => console.warn('Could not write shared show cache entry', e.message)); // fire-and-forget — never blocks showing the result
     }
     return recordToExtrasResult(fresh, {
       enrichmentFresh: isFresh(fresh.enrichedAt, WM_ENRICHMENT_STALE_MS),
@@ -4129,7 +4129,7 @@ function renderFilteredOut(){
   $('filteredOutToggleBtn').textContent = `Show ${lastFilteredOut.length} Filtered Out`;
   panel.style.display = 'none';
   $('filteredOutList').innerHTML = lastFilteredOut.map(({ movie, reason }, i) => `
-    <div class="history-item clickable" data-idx="${i}" title="Click for details — you can still pick this movie">
+    <div class="history-item clickable" data-idx="${i}" title="Click for details — you can still pick this show">
       <span class="h-name">${escapeHtml(movie.title)} <span class="h-meta">(${movie.year || '—'})</span></span>
       <span class="h-meta">${escapeHtml(reason)}</span>
     </div>
@@ -4144,7 +4144,7 @@ function renderFilteredOut(){
 
 function renderHistory(){
   const list = $('historyList');
-  if (!picks.length){ list.innerHTML = '<div class="empty-note">No movies picked yet.</div>'; return; }
+  if (!picks.length){ list.innerHTML = '<div class="empty-note">No shows picked yet.</div>'; return; }
   // Walk picks in reverse (newest first) but keep track of each item's
   // real index in the underlying array so removal targets the right one.
   const rows = picks.map((p, idx) => ({ p, idx })).reverse();
@@ -4173,7 +4173,7 @@ async function removePickAt(idx){
 }
 
 $('clearHistoryBtn').addEventListener('click', async () => {
-  if (!confirm('Clear all past picks? Every movie will become pickable again.')) return;
+  if (!confirm('Clear all past picks? Every show will become pickable again.')) return;
   picks = [];
   renderHistory();
   if (currentBatch.length) renderResults();

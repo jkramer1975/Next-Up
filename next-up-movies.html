@@ -916,7 +916,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.27.0';
+const APP_VERSION = '1.27.1';
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1366,8 +1366,8 @@ async function syncKeyToCloud(key, value){
 // path) so an explicit sign-in and the auth-state listener firing for
 // that same event can't both trigger a sync.
 function triggerSyncOnce(user){
-  if (sessionStorage.getItem('nextup_resynced_this_session')) return;
-  sessionStorage.setItem('nextup_resynced_this_session', '1');
+  if (sessionStorage.getItem('nextup_resynced_this_session_movies')) return;
+  sessionStorage.setItem('nextup_resynced_this_session_movies', '1');
   syncOnSignIn(user);
 }
 
@@ -1485,7 +1485,7 @@ async function signOutOfGoogle(){
   if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
     Android.signOutNative();
   }
-  sessionStorage.removeItem('nextup_resynced_this_session'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
+  sessionStorage.removeItem('nextup_resynced_this_session_movies'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
   showAuthStatus('Signed out — resetting to defaults…');
   await resetLocalStateToDefaults();
   location.reload(); // same pattern as sign-in — the reliable way to get every part of the app to re-read the reset state
