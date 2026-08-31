@@ -559,27 +559,6 @@
     <!-- ===================== MAIN TAB ===================== -->
     <div id="mainTab">
 
-      <div class="card">
-        <h2>TV Crew</h2>
-        <p class="desc">Add everyone who takes a turn picking. The app tracks whose turn is next and moves to the next person automatically after each pick.</p>
-        <div class="row">
-          <input type="text" id="crewInput" placeholder="Add a family member's name">
-          <button class="btn-primary" id="addCrewBtn">Add</button>
-          <button class="btn-ghost" id="shuffleCrewBtn">🎲 Shuffle Order</button>
-        </div>
-        <div id="crewList" class="crew-list"></div>
-        <div class="hint" id="crewEmptyHint" style="display:none;">Add at least one name to start tracking whose turn it is.</div>
-      </div>
-
-      <div id="upNextBox" class="up-next-box" style="display:none;">
-        <div class="clapper">🎬</div>
-        <div>
-          <div class="u-eyebrow">UP NEXT</div>
-          <div class="u-name" id="upNextName">—</div>
-        </div>
-        <select id="upNextOverride"></select>
-      </div>
-
       <div class="reel-stage">
         <div class="reel" id="decadeReel">
           <div class="reel-label">DECADE</div>
@@ -916,11 +895,11 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
+const APP_VERSION = '0.5.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
-  'family_crew', 'turn_index', 'show_picks', 'blocked_shows',
+  'show_picks', 'blocked_shows',
   'custom_show_additions', 'custom_show_removals', 'enabled_decades',
   'enabled_genres', 'enabled_content_ratings', 'enabled_languages',
   'enabled_streaming_services', 'ignore_streaming_service', 'include_free_services',
@@ -1095,8 +1074,7 @@ const WATCHMODE_BASE = 'https://api.watchmode.com/v1';
    State
    ================================================================== */
 let picks = [];
-let crew = [];
-let turnIndex = 0;
+let crew = []; // populated from the shared, cross-app local storage key — see loadSharedCrew()
 let currentBatch = [];
 const forceRefreshedThisSpin = new Set(); // watchmodeIds already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
 let lastFilteredOut = []; // [{show, reason}] — cleared/rebuilt each spin
@@ -1379,8 +1357,6 @@ window.onNativeGoogleSignIn = function(payloadStr){
 // signing out genuinely looks like a first-ever run, not an arbitrary
 // blank state.
 const SYNCED_KEY_DEFAULTS = {
-  family_crew: () => [],
-  turn_index: () => 0,
   show_picks: () => [],
   blocked_shows: () => [],
   custom_show_additions: () => ({}),
@@ -1555,8 +1531,6 @@ function renderAuthUI(){
 }
 
 async function savePicks(){ await saveJSON('show_picks', picks); }
-async function saveCrew(){ await saveJSON('family_crew', crew); }
-async function saveTurnIndex(){ await saveJSON('turn_index', turnIndex); }
 async function saveWmKey(){
   await saveJSON('watchmode_api_key', wmKey);
   if (currentUser) syncWatchmodeKeyToCloud(wmKey); // fire-and-forget — shared across the whole "Next Up" suite, not just this app
@@ -1664,8 +1638,7 @@ async function saveWmWarmupDone(){ await saveJSON('watchmode_warmup_done', wmWar
    ================================================================== */
 async function init(){
   picks = await loadJSON('show_picks', []);
-  crew = await loadJSON('family_crew', []);
-  turnIndex = await loadJSON('turn_index', 0);
+  loadSharedCrew();
   wmKey = await loadJSON('watchmode_api_key', null);
   wmGenreMap = await loadJSON('watchmode_genre_map', null);
   wmAllGenreNames = await loadJSON('watchmode_all_genre_names', null);
@@ -1783,8 +1756,6 @@ async function init(){
     } catch(e){ console.warn('Could not refresh streaming source map', e.message); }
   }
 
-  renderCrew();
-  renderUpNext();
   renderHistory();
   renderAdmin();
   updateSourceNote();
@@ -1820,106 +1791,77 @@ function switchTab(tab){
 }
 
 /* ==================================================================
-   Crew management
+   Crew — read-only here. Managed exclusively on the landing page
+   (index.html), shared across every section via an unprefixed local
+   storage key so every app on this device reads the same list without
+   needing to be signed in, and synced through Firestore when signed
+   in. Refreshed from that shared key at load and right before the
+   picker prompt shows, so an addition made on the landing page in
+   another tab is picked up without needing a full reload here.
    ================================================================== */
-$('addCrewBtn').addEventListener('click', addCrewMember);
-$('crewInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addCrewMember(); });
-$('shuffleCrewBtn').addEventListener('click', shuffleCrew);
+function loadSharedCrew(){
+  try{
+    const raw = localStorage.getItem('nextup_shared_crew');
+    crew = raw ? JSON.parse(raw) : [];
+  } catch(e){ crew = []; }
+}
 
-async function shuffleCrew(){
-  if (crew.length < 2) return;
-  const currentPerson = crew[turnIndex];
-  // Fisher-Yates shuffle
-  for (let i = crew.length - 1; i > 0; i--){
-    const j = Math.floor(Math.random() * (i + 1));
-    [crew[i], crew[j]] = [crew[j], crew[i]];
+/* ==================================================================
+   Pick stats — who picked what, per section. Written here (this
+   section is "tv"), but owned and displayed on the landing page
+   alongside every other section's numbers. Same unprefixed shared
+   local storage pattern as crew; synced to Firestore via a dotted
+   top-level key (e.g. "Alan.tv") so FieldValue.increment only ever
+   touches that one nested leaf — a plain nested object under
+   {merge:true} would silently overwrite the whole per-person map
+   instead of adding to it.
+   ================================================================== */
+async function recordPick(name){
+  if (!name || name === 'Unknown') return;
+  let stats = {};
+  try{ stats = JSON.parse(localStorage.getItem('nextup_shared_pickstats') || '{}'); } catch(e){ stats = {}; }
+  if (!stats[name]) stats[name] = {};
+  stats[name].tv = (stats[name].tv || 0) + 1;
+  localStorage.setItem('nextup_shared_pickstats', JSON.stringify(stats));
+  if (!currentUser) return;
+  try{
+    await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats')
+      .set({ [`${name}.tv`]: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+  } catch(e){ console.warn('Could not sync pick stat to cloud', e.message); }
+}
+
+/* ==================================================================
+   Picker prompt — shown at the moment of confirming a pick, not when
+   switching screens. Reuses the same modal-root/backdrop pattern as
+   the main confirm modal.
+   ================================================================== */
+function openPickerPrompt(show){
+  loadSharedCrew();
+  if (!crew.length){
+    confirmPick(show, 'Unknown');
+    return;
   }
-  turnIndex = crew.indexOf(currentPerson);
-  renderCrew();
-  renderUpNext();
-  await saveCrew();
-  await saveTurnIndex();
-}
-
-async function addCrewMember(){
-  const val = $('crewInput').value.trim();
-  if (!val) return;
-  crew.push(val);
-  $('crewInput').value = '';
-  renderCrew();
-  renderUpNext();
-  await saveCrew();
-}
-
-async function removeCrewMember(idx){
-  crew.splice(idx, 1);
-  if (turnIndex >= crew.length) turnIndex = 0;
-  renderCrew();
-  renderUpNext();
-  await saveCrew();
-  await saveTurnIndex();
-}
-
-async function moveCrewMember(idx, dir){
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= crew.length) return;
-  const currentPerson = crew[turnIndex];
-  [crew[idx], crew[newIdx]] = [crew[newIdx], crew[idx]];
-  turnIndex = crew.indexOf(currentPerson);
-  renderCrew();
-  renderUpNext();
-  await saveCrew();
-  await saveTurnIndex();
-}
-
-function renderCrew(){
-  const list = $('crewList');
-  $('crewEmptyHint').style.display = crew.length ? 'none' : 'block';
-  list.innerHTML = crew.map((name, i) => `
-    <div class="crew-item ${i === turnIndex ? 'current' : ''}">
-      <span class="crew-order">${i + 1}</span>
-      <span class="crew-name">${escapeHtml(name)}</span>
-      ${i === turnIndex ? '<span class="crew-badge">UP NEXT</span>' : ''}
-      <div class="crew-actions">
-        <button class="btn-ghost btn-icon" title="Move up" data-act="up" data-idx="${i}">↑</button>
-        <button class="btn-ghost btn-icon" title="Move down" data-act="down" data-idx="${i}">↓</button>
-        <button class="btn-danger btn-icon" title="Remove" data-act="remove" data-idx="${i}">×</button>
+  const root = $('modalRoot');
+  root.innerHTML = `
+    <div class="modal-backdrop" id="pickerBackdrop">
+      <div class="modal">
+        <h3>Who's picking?</h3>
+        <div class="crew-list" style="margin-top:14px;">
+          ${crew.map(name => `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" style="width:100%; text-align:left; padding:12px 14px;">${escapeHtml(name)}</button>`).join('')}
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn-ghost" id="pickerSkip" style="flex:1;">Skip / Unknown</button>
+          <button class="btn-ghost" id="pickerCancel" style="flex:1;">Cancel</button>
+        </div>
       </div>
     </div>
-  `).join('');
-  list.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = Number(btn.dataset.idx);
-      const act = btn.dataset.act;
-      if (act === 'up') moveCrewMember(idx, -1);
-      else if (act === 'down') moveCrewMember(idx, 1);
-      else if (act === 'remove') removeCrewMember(idx);
-    });
+  `;
+  $('pickerBackdrop').addEventListener('click', (e) => { if (e.target.id === 'pickerBackdrop') closeModal(); });
+  root.querySelectorAll('.picker-choice').forEach(btn => {
+    btn.addEventListener('click', () => confirmPick(show, btn.dataset.name));
   });
-}
-
-function renderUpNext(){
-  const box = $('upNextBox');
-  if (!crew.length){ box.style.display = 'none'; return; }
-  box.style.display = 'flex';
-  $('upNextName').textContent = crew[turnIndex];
-  const select = $('upNextOverride');
-  select.innerHTML = '<option value="" disabled selected>Change...</option>' +
-    crew.map((name, i) => `<option value="${i}">${escapeHtml(name)}</option>`).join('');
-  select.onchange = async () => {
-    turnIndex = Number(select.value);
-    renderCrew();
-    renderUpNext();
-    await saveTurnIndex();
-  };
-}
-
-async function advanceTurn(){
-  if (!crew.length) return;
-  turnIndex = (turnIndex + 1) % crew.length;
-  renderCrew();
-  renderUpNext();
-  await saveTurnIndex();
+  $('pickerSkip').addEventListener('click', () => confirmPick(show, 'Unknown'));
+  $('pickerCancel').addEventListener('click', closeModal);
 }
 
 /* ==================================================================
@@ -3688,7 +3630,13 @@ async function blockShowFromGrid(show){
   blockedShows.push({ title: show.title, year: show.year || null });
   await saveBlockedShows();
   currentBatch = currentBatch.filter(m => !(m.title === show.title && m.year === show.year));
+  // Shows up immediately in the Filtered Out list, same {movie, reason}
+  // shape every other exclusion reason already uses — rather than the
+  // show just silently vanishing from the grid with no trace of what
+  // happened to it.
+  lastFilteredOut.push({ show, reason: 'Blocked' });
   renderResults();
+  renderFilteredOut();
   renderBlockList();
 }
 
@@ -3727,7 +3675,7 @@ function openConfirm(show){
   `;
   $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
   $('cancelPick').addEventListener('click', closeModal);
-  $('confirmPick').addEventListener('click', () => confirmPick(show));
+  $('confirmPick').addEventListener('click', () => openPickerPrompt(show));
 
   if (canForceRefresh && !alreadyRefreshedThisSpin){
     $('forceRefreshBtn').addEventListener('click', async () => {
@@ -3848,8 +3796,7 @@ window.handleNativeBackPress = function(){
   return false;
 };
 
-async function confirmPick(show){
-  const picker = crew.length ? crew[turnIndex] : 'Unknown';
+async function confirmPick(show, picker){
   picks.push({
     title: show.title, year: show.year,
     decade: decadeLabel(currentChoice.decade), genre: currentChoice.genre,
@@ -3860,7 +3807,7 @@ async function confirmPick(show){
   renderResults();
   renderHistory();
   await savePicks();
-  await advanceTurn();
+  await recordPick(picker);
 
   if (currentSource === 'watchmode' && show.watchmodeId){
     fetchWatchmodeExtras(show).then(extras => appendTonightExtras(extras, show));
@@ -4066,8 +4013,13 @@ function appendTonightExtras(extras, show){
 
   const banner = document.querySelector('#tonightBanner .tonight > div');
   if (!banner) return; // user already spun again / banner no longer showing
-  const ratings = ratingChipsHtml(show);
-  if (ratings) banner.querySelector('h3').insertAdjacentHTML('afterend', ratings);
+  // Replaces the ratings that showTonightBanner already rendered
+  // immediately at pick time (with whatever data was on hand then) —
+  // this is a fresher result from the extras fetch, not an addition, so
+  // it needs to overwrite that same container rather than insert
+  // alongside it.
+  const ratingsContainer = document.getElementById('tonightRatings');
+  if (ratingsContainer) ratingsContainer.innerHTML = ratingChipsHtml(show);
   const bits = [];
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener">▶ Watch Trailer</a>`);
   if (extras.streamNames && extras.streamNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Streaming: ${escapeHtml(extras.streamNames.join(', '))}</span>`);
@@ -4085,7 +4037,7 @@ function showTonightBanner(show, picker){
       <div>
         <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
         <h3>${escapeHtml(show.title)}</h3>
-        ${ratingChipsHtml(show)}
+        <div id="tonightRatings">${ratingChipsHtml(show)}</div>
         <p>${show.year || '—'} · ${currentChoice.genre} · Enjoy the show</p>
         <a class="tmdb-link" href="${showTmdbLink(show)}" target="_blank" rel="noopener">🔗 Find trailer on ${showLinkLabel(show)}</a>
       </div>

@@ -46,6 +46,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg: #14141a;
@@ -54,6 +55,7 @@
     --amber: #f2a93b;
     --amber-rgb: 242,169,59;
     --amber-dim: #a8752b;
+    --velvet: #a13446;
     --cream: #efe7da;
     --muted: #8b8b98;
     --line: #34343f;
@@ -92,7 +94,7 @@
     background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px;
     padding: 2px 4px; border-radius: 50%; line-height:1;
   }
-  .account-corner .signout-x:hover{ color: var(--velvet, #a13446); border: none; }
+  .account-corner .signout-x:hover{ color: var(--velvet); border: none; }
   .auth-status{
     text-align:center; font-size: 11.5px; color: var(--muted); margin-top: 4px;
   }
@@ -105,7 +107,7 @@
     position: relative;
     text-align:center;
     padding: 26px 12px 30px;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     background: linear-gradient(180deg, var(--surface), var(--bg));
     border-radius: 6px;
     border: 1px solid var(--line);
@@ -123,6 +125,13 @@
   .tagline{
     font-family: var(--font-body); font-size: 13px; color: var(--muted);
   }
+  .tabs{ display:flex; justify-content:center; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab-btn{
+    background: var(--surface); color: var(--muted); border: 1px solid var(--line);
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+    padding: 9px 18px; border-radius: 20px; cursor:pointer; font-weight:500;
+  }
+  .tab-btn.active{ background: var(--amber); color: #241a08; border-color: var(--amber); font-weight:700; }
   .app-list{ display:flex; flex-direction:column; gap: 12px; }
   .app-card{
     display:flex; align-items:center; gap: 14px;
@@ -144,6 +153,67 @@
   }
   .footer-note{
     text-align:center; margin-top: 20px; font-size: 11.5px; color: var(--muted);
+  }
+
+  /* ---- Crew tab ---- */
+  .card{
+    background: var(--surface); border:1px solid var(--line); border-radius: 10px;
+    padding: 18px; margin-bottom: 14px;
+  }
+  .card h2{
+    font-family: var(--font-display); letter-spacing: 1px; font-size: 20px;
+    margin: 0 0 6px; color: var(--amber);
+  }
+  .card p.desc{ color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 14px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=text]{
+    flex: 1 1 160px;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--cream);
+    padding: 11px 12px; border-radius: 6px; font-family: var(--font-body); font-size: 14px;
+  }
+  select{
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--cream);
+    padding: 10px 12px; border-radius: 6px; font-family: var(--font-body); font-size: 14px;
+  }
+  input:focus, button:focus-visible, select:focus-visible{ outline: 2px solid var(--amber); outline-offset: 2px; }
+  button{
+    font-family: var(--font-body); font-weight: 700; border: none; border-radius: 6px;
+    padding: 11px 18px; cursor: pointer; font-size: 14px;
+    transition: transform .08s ease, filter .15s ease; white-space: nowrap;
+  }
+  button:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--amber); color: #241a08; }
+  .btn-primary:hover{ filter: brightness(1.08); }
+  .btn-danger{ background: transparent; color: var(--velvet); border: 1px solid var(--velvet); }
+  .btn-danger:hover{ background: var(--velvet); color: var(--cream); }
+  .btn-icon{ padding: 6px 10px; font-size: 13px; line-height:1; }
+  .hint{ color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+  .crew-list{ display:flex; flex-direction:column; gap:8px; margin-top: 14px; }
+  .crew-item{
+    display:flex; align-items:center; gap: 10px;
+    background: var(--surface-2); border:1px solid var(--line); border-radius:6px;
+    padding: 9px 12px;
+  }
+  .crew-name{ flex: 1; font-weight: 600; font-size: 14px; }
+
+  .stats-bars{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .stat-bar-row{ display:flex; align-items:center; gap:10px; }
+  .stat-bar-name{
+    width: 92px; flex-shrink:0; font-size: 13px; font-weight:600;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .stat-bar-track{
+    flex:1; height:18px; background: var(--surface-2); border-radius:4px;
+    overflow:hidden; border: 1px solid var(--line);
+  }
+  .stat-bar-fill{
+    height:100%; background: var(--amber); border-radius:4px;
+    transition: width 0.25s ease; min-width: 2px;
+  }
+  .stat-bar-count{
+    width: 26px; text-align:right; flex-shrink:0;
+    font-family: var(--font-mono); font-size: 12px; color: var(--muted);
   }
 </style>
 </head>
@@ -167,46 +237,81 @@
     </div>
     <div class="auth-status" id="authStatus" style="display:none;"></div>
 
-    <div class="app-list">
-      <a class="app-card" href="next-up-movies.html">
-        <div class="icon">🎬</div>
-        <div>
-          <div class="title">Movies</div>
-          <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
-        </div>
-      </a>
-
-      <a class="app-card" href="next-up-tv.html">
-        <div class="icon">📺</div>
-        <div>
-          <div class="title">TV Shows</div>
-          <div class="desc">Same idea, for series instead of movies.</div>
-        </div>
-        <div class="badge">Beta</div>
-      </a>
-
-      <div class="app-card disabled">
-        <div class="icon">📚</div>
-        <div>
-          <div class="title">Book Selection</div>
-          <div class="desc">Same idea, for your next read.</div>
-        </div>
-        <div class="badge">Coming soon</div>
-      </div>
+    <div class="tabs">
+      <button class="tab-btn active" id="tabHomeBtn">🏠 Home</button>
+      <button class="tab-btn" id="tabCrewBtn">👥 Crew</button>
     </div>
 
-    <div class="footer-note">Next Up Suite — a free, independent project</div>
+    <div id="homeTab">
+      <div class="app-list">
+        <a class="app-card" href="next-up-movies.html">
+          <div class="icon">🎬</div>
+          <div>
+            <div class="title">Movies</div>
+            <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
+          </div>
+        </a>
+
+        <a class="app-card" href="next-up-tv.html">
+          <div class="icon">📺</div>
+          <div>
+            <div class="title">TV Shows</div>
+            <div class="desc">Same idea, for series instead of movies.</div>
+          </div>
+          <div class="badge">Beta</div>
+        </a>
+
+        <div class="app-card disabled">
+          <div class="icon">📚</div>
+          <div>
+            <div class="title">Book Selection</div>
+            <div class="desc">Same idea, for your next read.</div>
+          </div>
+          <div class="badge">Coming soon</div>
+        </div>
+      </div>
+
+      <div class="footer-note">Next Up Suite — a free, independent project</div>
+    </div>
+
+    <div id="crewTab" style="display:none;">
+      <div class="card">
+        <h2>Crew</h2>
+        <p class="desc">Add everyone who takes a turn picking. Shared across every section — add someone here once, and they show up when picking in Movies, TV Shows, and anything added later.</p>
+        <div class="row">
+          <input type="text" id="crewInput" placeholder="Add a name">
+          <button class="btn-primary" id="addCrewBtn">Add</button>
+        </div>
+        <div id="crewList" class="crew-list"></div>
+        <div class="hint" id="crewEmptyHint" style="display:none;">Add at least one name so picks can be attributed to someone.</div>
+      </div>
+
+      <div class="card">
+        <h2>Pick Stats</h2>
+        <p class="desc">Who's picked the least in each section — sorted so whoever's due comes first, rather than tracking a strict rotation.</p>
+        <div class="row">
+          <select id="statsSection">
+            <option value="movies">Movies</option>
+            <option value="tv">TV Shows</option>
+          </select>
+        </div>
+        <div id="statsBars" class="stats-bars"></div>
+        <div class="hint" id="statsEmptyHint" style="display:none;"></div>
+      </div>
+    </div>
   </div>
 <script>
-const INDEX_VERSION = '1.0.0'; // tracked independently from next-up-movies.html's own version — this is a separate file
+const INDEX_VERSION = '2.0.0'; // tracked independently from next-up-movies.html's own version — this is a separate file
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 /* Same Firebase project as next-up-movies.html ("Next Up Suite") — shared
-   across the whole app suite. Only Auth is needed here; this page has no
-   app-specific data of its own to read or write, so Firestore isn't
-   loaded at all. Signing in here persists at the origin level, so it
-   carries over automatically once you navigate into Movies (or any
-   future section) — no extra syncing needed on this page. */
+   across the whole app suite. Firestore is now loaded (not just Auth),
+   since this page owns the shared crew list and pick stats — data every
+   section reads, and every section writes back to after a pick. */
 const firebaseConfig = {
   apiKey: "AIzaSyADAPuMongfa8YII9PY39DWNeWuMnFknLc",
   authDomain: "next-up-suite.firebaseapp.com",
@@ -218,6 +323,8 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const fbAuth = firebase.auth();
+const fbDb = firebase.firestore();
+let currentUser = null;
 
 function showAuthStatus(msg){
   const el = document.getElementById('authStatus');
@@ -225,12 +332,161 @@ function showAuthStatus(msg){
   el.style.display = msg ? 'block' : 'none';
 }
 
+/* ==================================================================
+   Tabs
+   ================================================================== */
+document.getElementById('tabHomeBtn').addEventListener('click', () => switchTab('home'));
+document.getElementById('tabCrewBtn').addEventListener('click', () => switchTab('crew'));
+function switchTab(tab){
+  document.getElementById('homeTab').style.display = tab === 'home' ? 'block' : 'none';
+  document.getElementById('crewTab').style.display = tab === 'crew' ? 'block' : 'none';
+  document.getElementById('tabHomeBtn').classList.toggle('active', tab === 'home');
+  document.getElementById('tabCrewBtn').classList.toggle('active', tab === 'crew');
+}
+
+/* ==================================================================
+   Crew + Pick Stats — shared across every section (Movies, TV Shows,
+   and anything added later). Stored unprefixed in local storage
+   (unlike each app's own fmn_/ntv_-prefixed settings) specifically so
+   every app on this device reads the exact same local copy without
+   needing to be signed in at all. When signed in, this syncs through
+   users/{uid}/sharedSettings/crew and .../pickStats — the same pattern
+   already used for the shared Watchmode key.
+   ================================================================== */
+let crew = [];
+let pickStats = {}; // { [name]: { movies: N, tv: N } }
+const STAT_SECTIONS = [
+  { key: 'movies', label: 'Movies' },
+  { key: 'tv', label: 'TV Shows' }
+];
+
+function loadCrewAndStatsLocal(){
+  try{ crew = JSON.parse(localStorage.getItem('nextup_shared_crew') || '[]'); } catch(e){ crew = []; }
+  try{ pickStats = JSON.parse(localStorage.getItem('nextup_shared_pickstats') || '{}'); } catch(e){ pickStats = {}; }
+}
+function saveCrewLocal(){ localStorage.setItem('nextup_shared_crew', JSON.stringify(crew)); }
+function savePickStatsLocal(){ localStorage.setItem('nextup_shared_pickstats', JSON.stringify(pickStats)); }
+
+async function saveCrewToCloud(){
+  if (!currentUser) return;
+  try{
+    await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('crew').set({ names: crew });
+  } catch(e){ console.warn('Could not sync crew to cloud', e.message); }
+}
+
+async function addCrewMember(){
+  const val = document.getElementById('crewInput').value.trim();
+  if (!val) return;
+  crew.push(val);
+  document.getElementById('crewInput').value = '';
+  saveCrewLocal();
+  renderCrew();
+  renderStatsBars();
+  await saveCrewToCloud();
+}
+async function removeCrewMember(idx){
+  crew.splice(idx, 1);
+  saveCrewLocal();
+  renderCrew();
+  renderStatsBars();
+  await saveCrewToCloud();
+  // Pick stats for a removed person are deliberately left in place in
+  // both local storage and Firestore — re-adding the same name later
+  // picks their history back up rather than starting over at zero.
+}
+
+document.getElementById('addCrewBtn').addEventListener('click', addCrewMember);
+document.getElementById('crewInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addCrewMember(); });
+document.getElementById('statsSection').addEventListener('change', renderStatsBars);
+
+function renderCrew(){
+  const list = document.getElementById('crewList');
+  document.getElementById('crewEmptyHint').style.display = crew.length ? 'none' : 'block';
+  list.innerHTML = crew.map((name, i) => `
+    <div class="crew-item">
+      <span class="crew-name">${escapeHtml(name)}</span>
+      <button class="btn-danger btn-icon" title="Remove" data-idx="${i}">×</button>
+    </div>
+  `).join('');
+  list.querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.addEventListener('click', () => removeCrewMember(Number(btn.dataset.idx)));
+  });
+}
+
+function renderStatsBars(){
+  const section = document.getElementById('statsSection').value;
+  const container = document.getElementById('statsBars');
+  const emptyHint = document.getElementById('statsEmptyHint');
+  if (!crew.length){
+    container.innerHTML = '';
+    emptyHint.textContent = 'Add some crew members first.';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  const rows = crew.map(name => ({ name, count: (pickStats[name] && pickStats[name][section]) || 0 }));
+  rows.sort((a, b) => a.count - b.count); // fewest picks first — who's due, front and center
+  const maxCount = Math.max(1, ...rows.map(r => r.count)); // avoid divide-by-zero when everyone's at 0
+  emptyHint.style.display = 'none';
+  container.innerHTML = rows.map(r => `
+    <div class="stat-bar-row">
+      <span class="stat-bar-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
+      <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${(r.count / maxCount * 100).toFixed(0)}%"></div></div>
+      <span class="stat-bar-count">${r.count}</span>
+    </div>
+  `).join('');
+}
+
+/* ==================================================================
+   Auth
+   ================================================================== */
+// Guards the crew/stats cloud sync so it only ever runs once per actual
+// browser tab session — sessionStorage is shared per tab, not per page,
+// so without this, navigating between this page and a sub-app within
+// the same tab session could cause a resync loop or redundant fetches.
+function triggerCrewSyncOnce(user){
+  if (sessionStorage.getItem('nextup_resynced_this_session_index')) return;
+  sessionStorage.setItem('nextup_resynced_this_session_index', '1');
+  syncCrewAndStatsOnSignIn(user);
+}
+
+async function syncCrewAndStatsOnSignIn(user){
+  try{
+    const crewRef = fbDb.collection('users').doc(user.uid).collection('sharedSettings').doc('crew');
+    const crewSnap = await crewRef.get();
+    if (crewSnap.exists && Array.isArray(crewSnap.data().names)){
+      crew = crewSnap.data().names;
+      saveCrewLocal();
+    } else if (crew.length){
+      // Cloud has nothing yet but this device already has a local crew
+      // list — seed the cloud with it, same "first device wins" pattern
+      // used for the shared Watchmode key.
+      await saveCrewToCloud();
+    }
+
+    const statsRef = fbDb.collection('users').doc(user.uid).collection('sharedSettings').doc('pickStats');
+    const statsSnap = await statsRef.get();
+    if (statsSnap.exists){
+      pickStats = statsSnap.data() || {};
+      savePickStatsLocal();
+    } else if (Object.keys(pickStats).length){
+      await statsRef.set(pickStats);
+    }
+
+    renderCrew();
+    renderStatsBars();
+  } catch(e){
+    console.warn('Crew/stats sync failed', e.message);
+  }
+}
+
 fbAuth.onAuthStateChanged((user) => {
+  currentUser = user;
   if (user){
     document.getElementById('authSignedOut').style.display = 'none';
     document.getElementById('authSignedIn').style.display = 'flex';
     document.getElementById('authName').textContent = user.displayName || user.email || 'Signed in';
     showAuthStatus('');
+    triggerCrewSyncOnce(user);
   } else {
     document.getElementById('authSignedOut').style.display = 'block';
     document.getElementById('authSignedIn').style.display = 'none';
@@ -283,8 +539,13 @@ document.getElementById('signInBtn').addEventListener('click', signInWithGoogle)
 document.getElementById('signOutBtn').addEventListener('click', () => {
   const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signOutNative === 'function';
   if (hasNativeBridge) Android.signOutNative();
+  sessionStorage.removeItem('nextup_resynced_this_session_index'); // so signing back in this same tab/session resyncs fresh
   fbAuth.signOut();
 });
+
+loadCrewAndStatsLocal();
+renderCrew();
+renderStatsBars();
 </script>
 <script>
 // Registers the service worker — same mechanism as next-up-movies.html,
