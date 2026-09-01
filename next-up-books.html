@@ -1,0 +1,3328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+// Applies the saved color theme before first paint, so switching themes
+// never shows a flash of the default one while the rest of the page loads.
+// Kept intentionally tiny and duplicated from the full theme list below —
+// this only needs the color values, not labels or app logic.
+(function(){
+  try{
+    var THEME_VARS = {
+      amber:    { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#f2a93b', amberRgb:'242,169,59', amberDim:'#a8752b', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      crimson:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#e2545f', amberRgb:'226,84,95', amberDim:'#9c3a42', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      emerald:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#4fbf8b', amberRgb:'79,191,139', amberDim:'#35805e', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      sapphire: { bg:'#12141a', surface:'#1c1f27', surface2:'#242833', amber:'#5b9fe3', amberRgb:'91,159,227', amberDim:'#3d6d9c', cream:'#e9edf5', muted:'#8b93a3', line:'#2e3340' },
+      violet:   { bg:'#16131a', surface:'#211d27', surface2:'#2a2433', amber:'#b98af0', amberRgb:'185,138,240', amberDim:'#7d5aa6', cream:'#efe7f5', muted:'#948b9e', line:'#38313f' },
+      popcorn:  { bg:'#f4ede0', surface:'#ffffff', surface2:'#f2e8d4', amber:'#d9822b', amberRgb:'217,130,43', amberDim:'#a85f18', cream:'#241a08', muted:'#7a6c54', line:'#ddd0b8' }
+    };
+    var saved = localStorage.getItem('nbk_color_theme');
+    var name = saved ? JSON.parse(saved) : 'amber';
+    var t = THEME_VARS[name] || THEME_VARS.amber;
+    var s = document.documentElement.style;
+    s.setProperty('--bg', t.bg);
+    s.setProperty('--surface', t.surface);
+    s.setProperty('--surface-2', t.surface2);
+    s.setProperty('--amber', t.amber);
+    s.setProperty('--amber-rgb', t.amberRgb);
+    s.setProperty('--amber-dim', t.amberDim);
+    s.setProperty('--cream', t.cream);
+    s.setProperty('--muted', t.muted);
+    s.setProperty('--line', t.line);
+  } catch(e){ /* falls back to the default theme in the stylesheet below */ }
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14141a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Next Up">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Next Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<!-- Firebase (Auth + Firestore) — compat build, so it exposes a plain
+     global `firebase` namespace usable from an ordinary script tag,
+     matching the rest of this file rather than requiring an ES module
+     restructure. -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg: #14141a;
+    --surface: #1e1e27;
+    --surface-2: #262633;
+    --amber: #f2a93b;
+    --amber-rgb: 242,169,59;
+    --amber-dim: #a8752b;
+    --velvet: #a13446;
+    --velvet-rgb: 161,52,70;
+    --green: #5a9e6f;
+    --cream: #efe7da;
+    --muted: #8b8b98;
+    --line: #34343f;
+    --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .app{
+    background: var(--bg);
+    color: var(--cream);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    padding: 44px 16px 60px;
+  }
+  .wrap{ max-width: 980px; margin: 0 auto; }
+
+  .marquee{
+    position: relative;
+    text-align:center;
+    padding: 22px 12px 26px;
+    margin-bottom: 20px;
+    background: linear-gradient(180deg, var(--surface), var(--bg));
+    border-radius: 6px;
+    border: 1px solid var(--line);
+  }
+  .account-corner{
+    display: flex; justify-content: space-between; align-items:center;
+    margin-bottom: 10px;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .home-link{
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
+    border-radius: 14px; padding: 5px 12px; cursor: pointer;
+    text-decoration:none; display:inline-flex; align-items:center; gap:5px;
+  }
+  .home-link:hover{ border-color: var(--amber); color: var(--amber); }
+  .version-badge{
+    position: absolute; bottom: 6px; right: 10px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3px;
+    color: var(--muted); opacity: 0.55; pointer-events: none;
+  }
+  .account-corner button{
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
+    border-radius: 14px; padding: 5px 12px; cursor: pointer;
+  }
+  .account-corner button:hover{ border-color: var(--amber); }
+  .account-corner .signed-in-pill{
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px 6px 4px 10px;
+  }
+  .account-corner .signed-in-name{ color: var(--muted); max-width: 110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .account-corner .signout-x{
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px;
+    padding: 2px 4px; border-radius: 50%; line-height:1;
+  }
+  .account-corner .signout-x:hover{ color: var(--velvet); border: none; }
+  @media (max-width: 420px){
+    .account-corner{ justify-content: center; }
+    .account-corner .signed-in-name{ max-width: 160px; }
+  }
+  .sprockets{
+    display:flex; justify-content:space-between;
+    position:absolute; left:10px; right:10px; top:8px; bottom:8px;
+    pointer-events:none;
+  }
+  .sprockets::before, .sprockets::after{
+    content:"";
+    position:absolute; left:0; right:0;
+    height:10px;
+    background-image: radial-gradient(circle, var(--bg) 3px, transparent 3.5px);
+    background-size: 18px 10px;
+    background-repeat: repeat-x;
+  }
+  .sprockets::before{ top:0; }
+  .sprockets::after{ bottom:0; }
+  .eyebrow{
+    font-family: var(--font-mono);
+    letter-spacing: 3px;
+    font-size: 11px;
+    color: var(--amber);
+    text-transform: uppercase;
+  }
+  h1{
+    font-family: var(--font-display);
+    font-size: clamp(38px, 8vw, 64px);
+    letter-spacing: 2px;
+    margin: 4px 0 2px;
+    color: var(--cream);
+    text-shadow: 0 0 18px rgba(var(--amber-rgb),0.25);
+  }
+  .tagline{ color: var(--muted); font-size: 14px; }
+
+  /* ---- Tabs ---- */
+  .tabs{ display:flex; justify-content:center; gap: 6px; margin-bottom: 22px; flex-wrap: wrap; }
+  .tab-btn{
+    background: var(--surface); color: var(--muted); border: 1px solid var(--line);
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+    padding: 9px 18px; border-radius: 20px; cursor:pointer; font-weight:500;
+  }
+  .tab-btn.active{ background: var(--amber); color: #241a08; border-color: var(--amber); font-weight:700; }
+
+  @media (max-width: 420px){
+    .tab-btn{ padding: 8px 12px; font-size: 11px; }
+    .reel{ width: 150px; height: 80px; }
+    .reel-value{ font-size: 22px; }
+  }
+
+  .theme-swatch-grid{ display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+  .theme-swatch{
+    width: 96px; cursor: pointer; border: 2px solid transparent; border-radius: 10px;
+    padding: 6px; text-align: center; transition: border-color .15s ease, transform .1s ease;
+    background: transparent;
+  }
+  .theme-swatch:hover{ transform: translateY(-2px); }
+  .theme-swatch.active{ border-color: var(--amber); }
+  .theme-swatch-preview{
+    width: 100%; height: 56px; border-radius: 7px; display:flex; align-items:flex-end;
+    padding: 6px; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.08);
+  }
+  .theme-swatch-dot{ width: 16px; height: 16px; border-radius: 50%; }
+  .theme-swatch-label{ font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.3px; }
+  .theme-swatch.active .theme-swatch-label{ color: var(--cream); }
+
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2{
+    font-family: var(--font-display);
+    letter-spacing: 1px;
+    font-size: 22px;
+    margin: 0 0 6px;
+    color: var(--amber);
+  }
+  .card p.desc{ color: var(--muted); font-size: 13.5px; line-height: 1.5; margin: 0 0 14px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=text], input[type=password]{
+    flex: 1 1 200px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--cream);
+    padding: 11px 12px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 14px;
+  }
+  select{
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--cream);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 14px;
+  }
+  input:focus, button:focus-visible, select:focus-visible{ outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  button{
+    font-family: var(--font-body);
+    font-weight: 700;
+    border: none;
+    border-radius: 6px;
+    padding: 11px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: transform .08s ease, filter .15s ease;
+    white-space: nowrap;
+  }
+  button:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--amber); color: #241a08; }
+  .btn-primary:hover{ filter: brightness(1.08); }
+  .btn-primary:disabled{ background: var(--amber-dim); color:#3a2e15; cursor:not-allowed; }
+  .btn-ghost{ background: transparent; color: var(--cream); border: 1px solid var(--line); }
+  .btn-ghost:hover{ border-color: var(--amber); color: var(--amber); }
+  .btn-ghost:disabled{ opacity: 0.35; cursor: not-allowed; color: var(--muted); }
+  .btn-ghost:disabled:hover{ border-color: var(--line); color: var(--muted); }
+  .btn-danger{ background: transparent; color: var(--velvet); border: 1px solid var(--velvet); }
+  .btn-danger:hover{ background: var(--velvet); color: var(--cream); }
+  .btn-icon{ padding: 6px 10px; font-size: 13px; line-height:1; }
+
+  .hint{ color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .error{ color: var(--velvet); font-size: 13px; margin-top: 10px; }
+  .status-pill{
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 20px; display:inline-block;
+  }
+  .status-connected{ background: rgba(90,158,111,0.18); color: var(--green); border: 1px solid var(--green); }
+  .status-off{ background: rgba(139,139,152,0.15); color: var(--muted); border: 1px solid var(--line); }
+
+  .crew-list{ display:flex; flex-direction:column; gap:8px; margin-top: 14px; }
+  .crew-item{
+    display:flex; align-items:center; gap: 10px;
+    background: var(--surface-2); border:1px solid var(--line); border-radius:6px;
+    padding: 9px 12px;
+  }
+  .crew-item.current{ border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
+  .crew-order{
+    font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    width: 20px; flex-shrink:0;
+  }
+  .crew-name{ flex: 1; font-weight: 600; font-size: 14px; }
+  .crew-badge{
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing:1px;
+    background: var(--amber); color:#241a08; padding: 3px 7px; border-radius: 4px;
+  }
+  .crew-actions{ display:flex; gap:4px; }
+
+  /* ---- Up next box (signature-ish) ---- */
+  .up-next-box{
+    display:flex; align-items:center; gap: 16px;
+    background: linear-gradient(120deg, rgba(var(--amber-rgb),0.16), rgba(var(--velvet-rgb),0.08));
+    border: 1px solid var(--amber-dim);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 22px;
+  }
+  .up-next-box .clapper{ font-size: 34px; flex-shrink:0; }
+  .up-next-box .u-eyebrow{ font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px; color: var(--amber); }
+  .up-next-box .u-name{ font-family: var(--font-display); font-size: 30px; letter-spacing: 0.5px; line-height:1.1; }
+  .up-next-box select{ margin-left: auto; font-size: 12px; padding: 6px 10px; }
+  .up-next-empty{ color: var(--muted); font-size: 13px; }
+
+  .reel-stage{
+    display:flex; align-items:center; justify-content:center; gap:18px;
+    flex-wrap: wrap;
+    margin: 10px 0 8px;
+  }
+  .reel{
+    position: relative;
+    width: 190px;
+    height: 92px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reel::before, .reel::after{
+    content:""; position:absolute; left:0; right:0; height:14px;
+    background-image: radial-gradient(circle, var(--bg) 4px, transparent 4.5px);
+    background-size: 22px 14px; background-repeat: repeat-x;
+  }
+  .reel::before{ top:0; } .reel::after{ bottom:0; }
+  .reel-label{
+    position:absolute; top: -18px; left:0; right:0; text-align:center;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--muted);
+  }
+  .reel-value{
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: var(--cream);
+    text-align:center;
+    padding: 0 8px;
+  }
+  .reel.spinning .reel-value{ color: var(--amber); }
+
+  .spin-btn-row{ text-align:center; margin: 18px 0 30px; }
+  .spin-btn{ font-size: 16px; padding: 14px 30px; letter-spacing: 0.5px; }
+  .source-note{ text-align:center; color: var(--muted); font-family: var(--font-mono); font-size: 11px; margin-top: 10px; }
+
+  .source-boxes{ display:flex; gap:8px; margin-top: 14px; flex-wrap: wrap; }
+  .source-box{
+    flex: 1 1 160px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 10px;
+    text-align: left;
+    opacity: 0.5;
+    filter: grayscale(0.4);
+    cursor: pointer;
+    transition: opacity .15s ease, border-color .15s ease, filter .15s ease, background .15s ease;
+  }
+  .source-box:hover{ opacity: 0.75; }
+  .source-box.active{
+    opacity: 1;
+    filter: none;
+    border-color: var(--amber);
+    background: linear-gradient(120deg, rgba(var(--amber-rgb),0.12), rgba(var(--amber-rgb),0.02));
+    box-shadow: 0 0 0 1px var(--amber-dim);
+  }
+  .source-box.active:hover{ opacity: 1; }
+  .source-box-top{ display:flex; align-items:center; gap:6px; }
+  .source-box-icon{ font-size: 13px; }
+  .source-box-title{ font-family: var(--font-display); font-size: 14px; letter-spacing: 0.5px; color: var(--cream); }
+  .source-live-badge{
+    margin-left: auto; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 1px;
+    color: var(--amber); opacity: 0; transition: opacity .15s ease; flex-shrink:0;
+  }
+  .source-box.active .source-live-badge{ opacity: 1; }
+  .source-box-link-inline{
+    font-family: var(--font-body); font-size: 11px; font-weight: 500; letter-spacing: 0;
+    color: var(--amber); text-decoration: none;
+  }
+  .source-box-link-inline:hover{ color: var(--cream); text-decoration: underline; }
+
+  @keyframes jumpFlash{
+    0%, 100% { box-shadow: none; border-color: var(--line); }
+    20%, 60% { box-shadow: 0 0 0 2px var(--amber); border-color: var(--amber); }
+  }
+  .jump-highlight{ animation: jumpFlash 1.5s ease; }
+
+  .results-head{
+    display:flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 10px 0 16px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+  .results-head h2{
+    font-family: var(--font-display); font-size: 26px; letter-spacing: 1px; margin:0; color: var(--cream);
+  }
+  .results-head .count{ color: var(--muted); font-size: 13px; font-family: var(--font-mono); }
+
+  .tonight{
+    display:flex; gap: 16px; background: linear-gradient(120deg, rgba(var(--amber-rgb),0.14), rgba(var(--velvet-rgb),0.10));
+    border: 1px solid var(--amber-dim);
+    border-radius: 10px; padding: 16px 18px; margin-bottom: 22px;
+    align-items:center;
+  }
+  .tonight img{ width: 70px; border-radius: 6px; flex-shrink:0; }
+  .tonight .t-icon{ font-size: 36px; flex-shrink:0; }
+  .tonight .t-eyebrow{ font-family: var(--font-mono); font-size: 11px; color: var(--amber); letter-spacing: 2px; }
+  .tonight h3{ font-family: var(--font-display); font-size: 24px; margin: 2px 0 4px; letter-spacing: 0.5px; }
+  .tonight p{ margin:0; color: var(--muted); font-size: 13px; }
+
+  .grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+    align-items: stretch;
+  }
+  .poster-card{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow:hidden;
+    cursor: pointer;
+    transition: transform .12s ease, border-color .12s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .poster-card:hover:not(.disabled){ transform: translateY(-3px); border-color: var(--amber); }
+  .poster-meta{ padding: 14px 14px 12px; display:flex; flex-direction:column; flex:1; }
+  .poster-card .p-num{ font-family: var(--font-mono); font-size: 10px; color: var(--amber-dim); }
+  .p-title-row{ min-height: 37px; } /* reserves 2 lines so titles of any length align the rows below them */
+  .poster-card .p-title{
+    font-size: 14px; font-weight: 700; line-height: 1.3; margin: 3px 0 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .poster-card .p-year{ font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+  .poster-card.disabled{ cursor: not-allowed; opacity: 0.5; }
+  .poster-card.disabled .p-title{ text-decoration: line-through; text-decoration-color: var(--velvet); }
+  .rating-row{ min-height: 24px; margin-top: 6px; }
+  .genre-row{ min-height: 22px; margin-bottom: 2px; }
+  .genre-chips{ display:flex; flex-wrap:wrap; gap:4px; }
+  .genre-chip{
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .rating-chip{
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
+    background: rgba(var(--amber-rgb),0.14); color: var(--amber); border: 1px solid var(--amber-dim);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .tmdb-link{
+    display:inline-block; font-family: var(--font-mono); font-size: 11px;
+    color: var(--amber); text-decoration:none; border-bottom: 1px dotted var(--amber-dim);
+  }
+  .tmdb-link:hover{ color: var(--cream); border-bottom-color: var(--cream); }
+  .meta-footer{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:10px; }
+  .watched-tag{
+    position:absolute; top:8px; right:8px; z-index:2;
+    background: rgba(20,20,26,0.85);
+    color: var(--amber);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--amber-dim);
+  }
+  .block-card-btn{
+    flex-shrink:0;
+    background: var(--surface-2); color: var(--velvet); border: 1px solid var(--velvet);
+    font-size: 11px; line-height:1; padding: 4px 6px; border-radius: 4px; cursor:pointer;
+  }
+  .block-card-btn:hover{ background: var(--velvet); color: var(--cream); }
+
+  .empty-note{ color: var(--muted); font-size: 14px; text-align:center; padding: 30px 10px; }
+
+  .section-toggle{ text-align:center; margin: 26px 0 10px; }
+  .history-list{ margin-top: 14px; display:flex; flex-direction:column; gap:8px; }
+  .history-item{
+    display:flex; justify-content:space-between; gap: 10px;
+    background: var(--surface); border:1px solid var(--line); border-radius:6px;
+    padding: 10px 12px; font-size: 13px; flex-wrap: wrap;
+  }
+  .history-item .h-name{ font-weight:600; }
+  .history-item .h-meta{ color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+  .history-item.clickable{ cursor: pointer; transition: border-color .12s ease; }
+  .history-item.clickable:hover{ border-color: var(--amber); }
+
+  .footer-actions{ display:flex; justify-content:center; gap:10px; margin-top: 16px; flex-wrap:wrap; }
+
+  /* ---- Admin ---- */
+  .toggle-grid{
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr));
+    gap: 8px; margin-top: 12px;
+  }
+  .toggle-chip{
+    display:flex; align-items:center; gap:8px;
+    background: var(--surface-2); border:1px solid var(--line); border-radius:6px;
+    padding: 9px 12px; font-size: 13px; cursor:pointer; user-select:none;
+  }
+  .toggle-chip input{ accent-color: var(--amber); width:15px; height:15px; }
+  .toggle-chip.off{ opacity: 0.5; }
+  .toggle-chip.disabled{ opacity: 0.35; cursor: not-allowed; }
+  .toggle-chip.disabled input{ cursor: not-allowed; }
+  .select-all-row{ display:flex; gap:8px; margin-top: 10px; }
+
+  .modal-backdrop{
+    position: fixed; inset:0; background: rgba(10,10,14,0.72);
+    display:flex; align-items:center; justify-content:center; padding: 20px; z-index: 50;
+  }
+  .modal{
+    position: relative;
+    background: var(--surface); border:1px solid var(--line); border-radius: 10px;
+    padding: 26px; max-width: 380px; width:100%; text-align:center;
+    max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .force-refresh-btn{
+    position: absolute; top: 8px; right: 8px;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 12px; padding: 4px 9px; font-size: 11px; cursor: pointer;
+    font-family: var(--font-mono);
+  }
+  .force-refresh-btn:hover{ border-color: var(--amber); color: var(--amber); }
+  .force-refresh-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+  .modal img{ width: 120px; border-radius: 6px; margin-bottom: 12px; }
+  .modal .m-icon{ font-size: 42px; margin-bottom: 8px; }
+  .modal h3{ font-family: var(--font-display); font-size: 26px; margin: 0 0 4px; letter-spacing: 0.5px; }
+  .modal p{ color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .modal .row{ justify-content:center; }
+  .modal-description{
+    text-align: left; font-size: 12.5px; line-height: 1.5; color: var(--cream);
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px; margin: 10px 0 !important; max-height: 140px; overflow-y: auto;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="wrap">
+
+    <div class="account-corner" id="accountCorner">
+      <a class="home-link" href="index.html" title="Back to Next Up home">🏠 Home</a>
+      <div id="authSignedOut">
+        <button id="signInBtn">Sign in with Google</button>
+      </div>
+      <div id="authSignedIn" class="signed-in-pill" style="display:none;">
+        <span class="signed-in-name" id="authName"></span>
+        <button class="signout-x" id="signOutBtn" title="Sign out">✕</button>
+      </div>
+    </div>
+
+    <div class="marquee">
+      <div class="sprockets"></div>
+      <h1>NEXT UP - BOOKS</h1>
+      <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
+      <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
+      <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
+      <div class="version-badge" id="versionBadge"></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabMainBtn">🎬 Next Up</button>
+      <button class="tab-btn" id="tabFiltersBtn">🎯 Book Filters</button>
+      <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Book List</button>
+      <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
+    </div>
+
+    <!-- ===================== MAIN TAB ===================== -->
+    <div id="mainTab">
+
+      <div class="reel-stage">
+        <div class="reel" id="decadeReel">
+          <div class="reel-label">DECADE</div>
+          <div class="reel-value" id="decadeValue">----</div>
+        </div>
+        <div class="reel" id="genreReel">
+          <div class="reel-label">GENRE</div>
+          <div class="reel-value" id="genreValue">----</div>
+        </div>
+      </div>
+      <div class="spin-btn-row">
+        <button class="btn-primary spin-btn" id="spinBtn">🎞 Spin the Reel</button>
+        <div class="error" id="spinError" style="display:none;"></div>
+        <div class="source-note" id="spinStatusNote"></div>
+        <div class="source-boxes">
+          <div class="source-box" id="sourceBoxBuiltin">
+            <div class="source-box-top">
+              <span class="source-box-icon">📋</span>
+              <span class="source-box-title">Built-in List</span>
+              <span class="source-live-badge">● LIVE</span>
+            </div>
+          </div>
+          <div class="source-box" id="sourceBoxOpenLibrary">
+            <div class="source-box-top">
+              <span class="source-box-icon">🌐</span>
+              <span class="source-box-title">Big Book API <a href="#" id="goToOpenLibraryConnection" class="source-box-link-inline">- Manage Connection→</a></span>
+              <span class="source-live-badge">● LIVE</span>
+            </div>
+          </div>
+        </div>
+        <div class="source-note" id="enrichStatusNote"></div>
+      </div>
+
+      <div id="resultsArea" style="display:none;">
+        <div id="tonightBanner"></div>
+        <div class="results-head">
+          <h2 id="resultsTitle"></h2>
+          <span class="count" id="resultsCount"></span>
+        </div>
+        <div id="grid" class="grid"></div>
+        <div id="emptyNote" class="empty-note" style="display:none;">
+          No titles available for this combo — spin again for a new decade & genre.
+        </div>
+        <div class="section-toggle" id="filteredOutToggleRow" style="display:none; margin-top:16px;">
+          <button class="btn-ghost" id="filteredOutToggleBtn"></button>
+        </div>
+        <div id="filteredOutPanel" style="display:none;">
+          <div id="filteredOutList" class="history-list"></div>
+        </div>
+      </div>
+
+      <div class="section-toggle">
+        <button class="btn-ghost" id="historyToggleBtn">Show Past Picks</button>
+      </div>
+      <div id="historyPanel" style="display:none;">
+        <div id="historyList" class="history-list"></div>
+        <div class="footer-actions">
+          <button class="btn-danger" id="clearHistoryBtn">Clear All History</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================== ADMIN TAB ===================== -->
+    <div id="adminTab" style="display:none;">
+
+      <div class="card">
+        <h2>Color Scheme</h2>
+        <p class="desc">Pick a look for the app. Applies immediately and everywhere.</p>
+        <div id="themeSwatchGrid" class="theme-swatch-grid"></div>
+      </div>
+
+      <div class="card" id="bbConnectionCard">
+        <h2>Big Book API <span class="status-pill status-connected">ALWAYS CONNECTED</span></h2>
+        <p class="desc">Books uses Big Book API, routed through a small proxy — no account or API key needed on this device. Spins pull live book lists by decade + genre, with covers, ratings, and (when a title is picked) a link to its Open Library or WorldCat page. If "Always use built-in list" is selected below, or if the service can't be reached, the app falls back to its built-in curated list.</p>
+        <div class="hint" id="bbWarmupStatus"></div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn-ghost" id="rerunWarmupBtn">Re-run Cache Warmup</button>
+          <button class="btn-danger" id="clearCacheBtn">Clear Cache</button>
+        </div>
+
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many books are already cached for a decade/genre. Those spins feel faster since little or no live lookup is needed.</p>
+        <div class="row">
+          <select id="cacheStatsDecade" style="max-width:140px;">
+            <option value="all">All Decades</option>
+          </select>
+          <select id="cacheStatsGenre" style="max-width:160px;">
+            <option value="all">All Genres</option>
+          </select>
+        </div>
+        <p class="desc" id="cacheStatsResult" style="margin-top:10px; margin-bottom:0;"></p>
+      </div>
+
+      <div class="card">
+        <h2>Data Source</h2>
+        <p class="desc">Which source to use when you spin.</p>
+        <div class="crew-list">
+          <label class="toggle-chip" style="justify-content:flex-start;"><input type="radio" name="dataSource" value="auto"> Use Big Book API, falling back to the built-in list if unreachable</label>
+          <label class="toggle-chip" style="justify-content:flex-start;"><input type="radio" name="dataSource" value="builtin"> Always use built-in list only</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Max Results</h2>
+        <p class="desc">How many titles you'll see after a Big Book API spin (10–100). If filtering leaves you short, it fetches more to make up the difference — higher numbers mean a longer wait. Doesn't affect the built-in list.</p>
+        <input type="number" id="maxResultsInput" min="10" max="100" step="1" style="max-width:120px;">
+      </div>
+
+      <div class="card">
+        <h2>API Call Log <span class="hint" id="apiLogCount" style="margin:0;"></span></h2>
+        <p class="desc">Every Big Book API request made since your last spin, and why — useful for seeing where time (and today's free-tier quota) goes. Clears on the next spin.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="apiLogToggleBtn">Show Log</button>
+        </div>
+        <div id="apiLogPanel" style="display:none;">
+          <div id="apiLogList" class="history-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>About</h2>
+        <p class="desc">Next Up is a free, independent project — not affiliated with, endorsed by, or sponsored by Big Book API, Open Library, or any publisher. Book data, covers, and ratings come from Big Book API and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
+        <p class="desc" style="margin-top:8px;"><a href="privacy.html">Privacy Policy</a></p>
+        <p class="desc hint" style="margin-top:8px;">App version: <span id="appVersionLabel"></span></p>
+      </div>
+
+    </div>
+
+    <!-- ===================== BOOK FILTERS TAB ===================== -->
+    <div id="filtersTab" style="display:none;">
+
+      <div class="card" id="rerunFiltersCard" style="display:none;">
+        <h2>Apply Changes</h2>
+        <p class="desc">Re-run your filters against the same fetched books — no new spin, no new API calls, just re-checks who currently passes.</p>
+        <button class="btn-primary" id="rerunFiltersBtn">🔄 Re-run Filters</button>
+      </div>
+
+      <div class="card">
+
+        <h2>Decades</h2>
+        <p class="desc">Check which decades you want included.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="decadesAllBtn">Select All</button>
+          <button class="btn-ghost" id="decadesNoneBtn">Select None</button>
+        </div>
+        <div id="decadeToggles" class="toggle-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Genres</h2>
+        <p class="desc">Check which genres you want included.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="genresAllBtn">Select All</button>
+          <button class="btn-ghost" id="genresNoneBtn">Select None</button>
+        </div>
+        <div id="genreToggles" class="toggle-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Languages</h2>
+        <p class="desc">Currently not applied — neither Big Book API nor the built-in list provides language data to filter on. Left here in case a future data source supports it.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="languagesAllBtn">Select All</button>
+          <button class="btn-ghost" id="languagesNoneBtn">Select None</button>
+        </div>
+        <div id="languageToggles" class="toggle-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Explicit Content Filter</h2>
+        <p class="desc">Best-effort — checks title and description against a keyword list, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
+        <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
+          <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Books With Explicit Content
+        </label>
+        <div class="row">
+          <input type="text" id="explicitKeywordInput" placeholder="Add a keyword or phrase">
+          <button class="btn-primary" id="explicitKeywordAddBtn">Add</button>
+        </div>
+        <div class="hint" id="explicitKeywordCount" style="margin-top:10px;"></div>
+        <button class="btn-ghost" id="explicitKeywordClearBtn" style="margin-top:8px;">Clear My Added Keywords</button>
+      </div>
+
+      <div class="card">
+        <h2>Blocked Books</h2>
+        <p class="desc">Titles here never show up in a spin, from either source. Leave year blank to block every version/remake of that title.</p>
+        <div class="row">
+          <input type="text" id="blockTitleInput" placeholder="Book title">
+          <input type="text" id="blockYearInput" placeholder="Year (optional)" style="flex: 0 1 140px;">
+          <button class="btn-primary" id="blockAddBtn">Block</button>
+        </div>
+        <div id="blockList" class="crew-list"></div>
+        <div class="hint" id="blockEmptyHint" style="display:none;">No blocked books.</div>
+      </div>
+
+    </div>
+
+    <!-- ===================== BUILT-IN BOOK LIST TAB ===================== -->
+    <div id="builtinTab" style="display:none;">
+
+      <div class="card">
+        <h2>Edit Built-in List</h2>
+        <p class="desc">Add or remove books from the built-in list for one decade + genre — used whenever that's the active source. These titles also get looked up automatically on Big Book API for covers, ratings, and descriptions.</p>
+        <div class="row">
+          <select id="editListDecade"></select>
+          <select id="editListGenre"></select>
+        </div>
+        <div id="editListBooks" class="crew-list" style="margin-top:14px;"></div>
+        <div class="row" style="margin-top:12px;">
+          <input type="text" id="editListTitleInput" placeholder="Book title">
+          <input type="text" id="editListYearInput" placeholder="Year" style="flex: 0 1 100px;">
+          <button class="btn-primary" id="editListAddBtn">Add</button>
+        </div>
+        <div class="error" id="editListError" style="display:none;"></div>
+        <div class="footer-actions" style="margin-top:12px;">
+          <button class="btn-danger" id="editListResetBtn">Reset This Combo to Default</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+/* ==================================================================
+   Firebase — Google sign-in + cross-device sync
+
+   Config values are public identifiers, not secrets — safe to embed in
+   client code (this is how every Firebase web app does it; access
+   control is enforced by the Firestore security rules, not by hiding
+   this object). This project ("Next Up Suite") is shared across the
+   whole planned app suite, not just this one.
+   ================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyADAPuMongfa8YII9PY39DWNeWuMnFknLc",
+  authDomain: "next-up-suite.firebaseapp.com",
+  projectId: "next-up-suite",
+  storageBucket: "next-up-suite.firebasestorage.app",
+  messagingSenderId: "517680626452",
+  appId: "1:517680626452:web:37b6ef5f9324d4beb36001",
+  measurementId: "G-44NFR9FPGX"
+};
+firebase.initializeApp(firebaseConfig);
+const fbAuth = firebase.auth();
+const fbDb = firebase.firestore();
+
+let currentUser = null; // set once signed in; null while signed out
+
+// Which localStorage/window.storage keys sync to the cloud when signed
+// in. Deliberately excludes anything device-local or easily regenerated
+// (the ratings/search caches, the resolved genre-ID map, warmup status)
+// — those stay local to each device rather than bloating the synced
+// document or fighting over which device's cache "wins."
+// Bumped with every shipped update — shown in Admin's About card, and a
+// useful thing to check if you're ever unsure whether a page is actually
+// running the latest version versus something the service worker cached.
+const APP_VERSION = '2.0.0'; // Books rebuilt on Big Book API (via Cloudflare Worker proxy) instead of Open Library, whose CORS restrictions made it unreachable from a browser
+document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
+
+const SYNCED_KEYS = new Set([
+  'book_picks', 'blocked_books',
+  'custom_book_additions', 'custom_book_removals', 'enabled_decades',
+  'enabled_genres', 'enabled_languages',
+  'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
+  'data_source_pref', 'color_theme'
+]);
+
+/* ==================================================================
+   Curated book database — decade (first-publish year) -> genre -> [{title,year}]
+   Starter set only — modest, well-known selection to get the spin
+   mechanic working end to end. Kept to 8 genres for now simply to start
+   modest, not because of any taxonomy issue — Big Book API's own genre
+   list (confirmed against their docs) is clean and well-defined.
+   Expanding this to real scale is an explicit, separate next step.
+   ================================================================== */
+const BOOK_DB = {
+1980:{
+Biography:[{title:"Iacocca: An Autobiography",year:1984}],
+"Classic Literature":[{title:"Beloved",year:1987},{title:"The Color Purple",year:1982}],
+Fantasy:[{title:"The Belgariad: Pawn of Prophecy",year:1982},{title:"The Dark Tower: The Gunslinger",year:1982},{title:"The Elfstones of Shannara",year:1982}],
+"Historical Fiction":[{title:"The Mists of Avalon",year:1983},{title:"The Clan of the Cave Bear",year:1980}],
+Horror:[{title:"It",year:1986},{title:"Misery",year:1987},{title:"Pet Sematary",year:1983}],
+Mystery:[{title:"The Name of the Rose",year:1980}],
+Romance:[{title:"Lace",year:1982}],
+"Science Fiction":[{title:"Ender's Game",year:1985},{title:"Neuromancer",year:1984},{title:"Contact",year:1985},{title:"The Handmaid's Tale",year:1985}]
+},
+1990:{
+Biography:[{title:"Angela's Ashes",year:1996}],
+"Classic Literature":[{title:"The Secret History",year:1992}],
+Fantasy:[{title:"A Game of Thrones",year:1996},{title:"Harry Potter and the Sorcerer's Stone",year:1997},{title:"Wizard's First Rule",year:1994}],
+"Historical Fiction":[{title:"Cold Mountain",year:1997}],
+Horror:[{title:"The Green Mile",year:1996}],
+Mystery:[{title:"The Alienist",year:1994}],
+Romance:[{title:"The Bridges of Madison County",year:1992}],
+"Science Fiction":[{title:"Snow Crash",year:1992},{title:"Jurassic Park",year:1990}]
+},
+2000:{
+Biography:[{title:"Eat, Pray, Love",year:2006}],
+"Classic Literature":[{title:"Life of Pi",year:2001},{title:"The Kite Runner",year:2003}],
+Fantasy:[{title:"Harry Potter and the Goblet of Fire",year:2000},{title:"Eragon",year:2002},{title:"The Name of the Wind",year:2007}],
+"Historical Fiction":[{title:"The Book Thief",year:2005}],
+Horror:[{title:"The Road",year:2006}],
+Mystery:[{title:"The Da Vinci Code",year:2003},{title:"The Girl with the Dragon Tattoo",year:2005}],
+Romance:[{title:"Twilight",year:2005}],
+"Science Fiction":[{title:"World War Z",year:2006}]
+},
+2010:{
+Biography:[{title:"Becoming",year:2018}],
+"Classic Literature":[{title:"Where the Crawdads Sing",year:2018}],
+Fantasy:[{title:"Six of Crows",year:2015},{title:"A Court of Thorns and Roses",year:2015},{title:"The Priory of the Orange Tree",year:2019}],
+"Historical Fiction":[{title:"All the Light We Cannot See",year:2014}],
+Horror:[{title:"Bird Box",year:2014}],
+Mystery:[{title:"Gone Girl",year:2012},{title:"Big Little Lies",year:2014}],
+Romance:[{title:"The Fault in Our Stars",year:2012},{title:"Me Before You",year:2012}],
+"Science Fiction":[{title:"The Martian",year:2011},{title:"Ready Player One",year:2011}]
+},
+2020:{
+Biography:[{title:"Spare",year:2023}],
+"Classic Literature":[{title:"Demon Copperhead",year:2022}],
+Fantasy:[{title:"House of Earth and Blood",year:2020}],
+"Historical Fiction":[{title:"The Lincoln Highway",year:2021}],
+Horror:[{title:"The Only Good Indians",year:2020}],
+Mystery:[{title:"The Thursday Murder Club",year:2020}],
+Romance:[{title:"Book Lovers",year:2022}],
+"Science Fiction":[{title:"Project Hail Mary",year:2021}]
+}
+};
+
+const DECADES = Object.keys(BOOK_DB).map(Number).sort((a,b)=>a-b);
+const GENRES = Object.keys(BOOK_DB[DECADES[0]]).sort();
+
+// Maps our genre names to Big Book API's genre values — confirmed
+// directly against their official documented list of 89 supported
+// genres (https://bigbookapi.com/docs/#Book_Genres), not guessed the
+// way Open Library's subject slugs had to be. Every one of our 8
+// genres has an exact, official match.
+const BB_GENRES = {
+  'Biography': 'biography',
+  'Classic Literature': 'classics',
+  'Fantasy': 'fantasy',
+  'Historical Fiction': 'historical_fiction',
+  'Horror': 'horror',
+  'Mystery': 'mystery',
+  'Romance': 'romance',
+  'Science Fiction': 'science_fiction'
+};
+
+function comboKey(decade, genre){ return `${decade}|${genre}`; }
+
+// Returns the built-in list for one decade/genre with the user's own edits
+// applied — anything they've removed hidden, anything they've added
+// appended. BOOK_DB itself is never modified; this is the only place that
+// should be read from when the built-in list is actually used for a spin.
+function getEffectiveBookList(decade, genre){
+  const base = (BOOK_DB[decade] && BOOK_DB[decade][genre]) || [];
+  const key = comboKey(decade, genre);
+  const removed = new Set(customRemovals[key] || []);
+  const kept = base.filter(m => !removed.has(`${m.title}|${m.year}`));
+  const additions = customAdditions[key] || [];
+  return kept.concat(additions);
+}
+// Currently unused for filtering (see matchesLanguage) — kept as a
+// display/normalization helper only, in case a future data source
+// provides language data to actually filter on.
+const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Japanese', 'Korean', 'Hindi', 'Italian', 'Portuguese', 'Chinese', 'Other', 'Unknown'];
+const LANG_CODE_TO_NAME = {
+  en: 'English', es: 'Spanish', fr: 'French', de: 'German', ja: 'Japanese',
+  ko: 'Korean', hi: 'Hindi', it: 'Italian', pt: 'Portuguese', zh: 'Chinese', cn: 'Chinese'
+};
+const LANG_NAME_TO_CODE = {};
+Object.entries(LANG_CODE_TO_NAME).forEach(([code, name]) => {
+  if (!LANG_NAME_TO_CODE[name]) LANG_NAME_TO_CODE[name] = code; // first code wins (zh over cn)
+});
+function normalizeLanguage(raw){
+  if (!raw) return 'Unknown';
+  const s = String(raw).trim();
+  if (!s) return 'Unknown';
+  const lower = s.toLowerCase();
+  if (LANG_CODE_TO_NAME[lower]) return LANG_CODE_TO_NAME[lower];
+  const match = LANGUAGES.find(l => l.toLowerCase() === lower);
+  return match || 'Other';
+}
+// User-configurable in Admin — how many titles a Big Book API spin pulls
+// back. Requesting more costs nothing extra for discovery itself (still
+// one call either way); the actual state variable and its bounds are set
+// below.
+const MAX_RESULTS_MIN = 10;
+const MAX_RESULTS_MAX = 100;
+const MAX_RESULTS_DEFAULT = 20;
+// Best-effort extra genre tags for well-known crossover titles in the
+// built-in list (keyed "Title|Year"). Anything not listed here just shows
+// the single genre it's filed under below — Big Book API-sourced results
+// don't need this, since each result is already tagged with the genre it
+// was searched under.
+const EXTRA_GENRES = {
+  "The Terminator|1984":["Action","Sci-Fi"], "RoboCop|1987":["Action","Sci-Fi"],
+  "Gremlins|1984":["Horror","Comedy"], "Aliens|1986":["Action","Sci-Fi","Horror"],
+  "Predator|1987":["Action","Sci-Fi","Horror"], "The Fly|1986":["Horror","Sci-Fi"],
+  "Beetlejuice|1988":["Comedy","Horror"], "The Princess Bride|1987":["Romance","Comedy"],
+  "Splash|1984":["Romance","Comedy"], "Working Girl|1988":["Romance","Comedy","Drama"],
+  "When Harry Met Sally...|1989":["Romance","Comedy"],
+  "The Matrix|1999":["Action","Sci-Fi"], "Total Recall|1990":["Action","Sci-Fi"],
+  "Starship Troopers|1997":["Action","Sci-Fi"], "Titanic|1997":["Drama","Romance"],
+  "Ghost|1990":["Romance","Drama","Thriller"], "Jerry Maguire|1996":["Romance","Drama","Comedy"],
+  "The Sixth Sense|1999":["Horror","Thriller","Drama"], "Scream|1996":["Horror","Comedy","Thriller"],
+  "Fargo|1996":["Thriller","Comedy","Drama"], "Braveheart|1995":["Action","Drama"],
+  "Beauty and the Beast|1991":["Animation","Romance"],
+  "Gladiator|2000":["Action","Drama"], "The Departed|2006":["Thriller","Drama","Crime"],
+  "Wall-E|2008":["Animation","Sci-Fi"], "District 9|2009":["Sci-Fi","Action","Thriller"],
+  "The Notebook|2004":["Romance","Drama"], "500 Days of Summer|2009":["Romance","Comedy","Drama"],
+  "(500) Days of Summer|2009":["Romance","Comedy","Drama"], "Little Miss Sunshine|2006":["Comedy","Drama"],
+  "Zombieland|2009":["Comedy","Horror"], "Shaun of the Dead|2004":["Horror","Comedy"],
+  "Get Out|2017":["Horror","Thriller"], "A Quiet Place|2018":["Horror","Thriller","Sci-Fi"],
+  "It Follows|2014":["Horror","Thriller"], "The Babadook|2014":["Horror","Drama"],
+  "Deadpool|2016":["Action","Comedy"], "Knives Out|2019":["Comedy","Thriller"],
+  "Silver Linings Playbook|2012":["Romance","Comedy","Drama"], "La La Land|2016":["Drama","Romance","Comedy"],
+  "Inception|2010":["Action","Sci-Fi","Thriller"], "Ex Machina|2014":["Sci-Fi","Thriller","Drama"],
+  "Everything Everywhere All at Once|2022":["Action","Comedy","Sci-Fi","Drama"],
+  "Barbie|2023":["Comedy","Drama"], "The Menu|2022":["Comedy","Thriller","Horror"],
+  "Talk to Me|2023":["Horror","Thriller"], "Nope|2022":["Horror","Sci-Fi","Thriller"],
+  "M3GAN|2023":["Horror","Comedy","Sci-Fi"], "Anyone but You|2023":["Romance","Comedy"],
+  "Free Guy|2021":["Action","Comedy","Sci-Fi"], "Dune|2021":["Sci-Fi","Action","Drama"],
+  "Oppenheimer|2023":["Drama","Thriller","History"], "Cocaine Bear|2023":["Comedy","Horror","Thriller"]
+};
+const CURRENT_YEAR = new Date().getFullYear();
+// Routed through a Cloudflare Worker proxy rather than called directly —
+// Big Book API (like Open Library before it) doesn't send the
+// Access-Control-Allow-Origin header browsers require for cross-origin
+// fetch() calls, confirmed via direct testing. The proxy also means the
+// API key never has to live in client-side code at all — it's stored as
+// an encrypted secret on the Worker, genuinely more secure than the
+// key-in-localStorage pattern Movies/TV use for Watchmode.
+const BIGBOOK_PROXY_BASE = 'https://bigbookapi-proxy.nextupsuite.workers.dev';
+
+/* ==================================================================
+   State
+   ================================================================== */
+let picks = [];
+let crew = []; // populated from the shared, cross-app local storage key — see loadSharedCrew()
+let currentBatch = [];
+const forceRefreshedThisSpin = new Set(); // big book ids already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
+let lastFilteredOut = []; // [{book, reason}] — cleared/rebuilt each spin
+let lastFullPool = []; // every book fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
+let currentChoice = null;
+let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
+
+let dataSourcePref = 'auto'; // 'auto' | 'builtin'
+
+const WM_DISCOVERY_STALE_MS = 20 * 24 * 60 * 60 * 1000;
+const WM_ENRICHMENT_STALE_MS = 90 * 24 * 60 * 60 * 1000;
+const WM_RATING_STALE_MS = 5 * 24 * 60 * 60 * 1000;
+const WM_GLOBAL_MAX_STALE_MS = 90 * 24 * 60 * 60 * 1000;
+
+function isFresh(timestamp, windowMs){
+  return timestamp != null && timestamp >= Date.now() - windowMs;
+}
+
+function mergeFreshestTiers(local, shared){
+  const merged = Object.assign({}, local);
+  if ((shared.discoveredAt || 0) > (local.discoveredAt || 0)){
+    merged.title = shared.title;
+    merged.genres = shared.genres;
+    merged.discoveredAt = shared.discoveredAt;
+  }
+  if ((shared.enrichedAt || 0) > (local.enrichedAt || 0)){
+    merged.year = shared.year;
+    merged.posterUrl = shared.posterUrl;
+    merged.description = shared.description;
+    merged.userRating = shared.userRating;
+    merged.openLibraryId = shared.openLibraryId;
+    merged.isbn = shared.isbn;
+    merged.enrichedAt = shared.enrichedAt;
+  }
+  return merged;
+}
+
+function applyRecordToBook(book, record, tierFlags){
+  const flags = tierFlags || { discoveryFresh: true, enrichmentFresh: true };
+  if (flags.discoveryFresh && record.genres && record.genres.length) book.genresOverride = record.genres;
+  if (flags.enrichmentFresh){
+    if (record.year != null && book.year == null) book.year = record.year;
+    if (record.posterUrl && !book.posterUrl) book.posterUrl = record.posterUrl;
+    if (record.description && !book.description) book.description = record.description;
+    if (record.userRating != null && book.userRating == null) book.userRating = record.userRating;
+    if (record.openLibraryId) book.openLibraryId = record.openLibraryId;
+    if (record.isbn) book.isbn = record.isbn;
+  }
+}
+let bbWarmupDone = false;
+const wmDetailsCache = new Map(); // big book id -> {posterUrl, genres, description, userRating, openLibraryId, isbn, enrichedAt} — persisted locally, mirroring wmRatingsCache's shape
+const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
+const wmRatingsCache = new Map(); // big book id -> {title, year, genres, posterUrl, description, userRating, openLibraryId, isbn, discoveredAt, enrichedAt} — used for the whole grid (session only)
+const wmSearchCache = new Map(); // "title|year" -> big book id (or null for a confirmed no-match), used to enrich the built-in list
+let enabledDecades = DECADES.slice();
+let enabledGenres = GENRES.slice();
+let enabledLanguages = ['English']; // default: English only, unlike other filters which default to "everything"
+
+// Color themes — each swaps the accent + base palette; danger (velvet) and
+// success (green) colors stay fixed across all of them so status colors
+// keep a consistent meaning no matter which theme is active.
+const COLOR_THEMES = {
+  amber: {
+    label: 'Amber Marquee', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#f2a93b', amberRgb: '242,169,59', amberDim: '#a8752b', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  crimson: {
+    label: 'Crimson Velvet', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#e2545f', amberRgb: '226,84,95', amberDim: '#9c3a42', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  emerald: {
+    label: 'Emerald Cinema', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#4fbf8b', amberRgb: '79,191,139', amberDim: '#35805e', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  sapphire: {
+    label: 'Sapphire Noir', bg: '#12141a', surface: '#1c1f27', surface2: '#242833',
+    amber: '#5b9fe3', amberRgb: '91,159,227', amberDim: '#3d6d9c', cream: '#e9edf5', muted: '#8b93a3', line: '#2e3340'
+  },
+  violet: {
+    label: 'Violet Reel', bg: '#16131a', surface: '#211d27', surface2: '#2a2433',
+    amber: '#b98af0', amberRgb: '185,138,240', amberDim: '#7d5aa6', cream: '#efe7f5', muted: '#948b9e', line: '#38313f'
+  },
+  popcorn: {
+    label: 'Popcorn Light', bg: '#f4ede0', surface: '#ffffff', surface2: '#f2e8d4',
+    amber: '#d9822b', amberRgb: '217,130,43', amberDim: '#a85f18', cream: '#241a08', muted: '#7a6c54', line: '#ddd0b8'
+  }
+};
+let colorTheme = 'amber';
+let filterExplicitContent = true; // on by default — safety filter, checked unless explicitly turned off
+// Best-effort text filter, not a guarantee — matched case-insensitively
+// against title + description. Kept to specific, unambiguous phrases
+// rather than broad single words (avoiding e.g. "sex" or "nude" alone,
+// which would sweep up ordinary dramas/romances). Intentionally not
+// exposed in the UI — only its existence and size are shown, not its
+// contents.
+const DEFAULT_EXPLICIT_KEYWORDS = [
+  'pornographic', 'pornography', 'porn film', 'xxx-rated', 'hardcore sex',
+  'explicit sex', 'sexually explicit', 'erotica', 'erotic film',
+  'adult film', 'adult entertainment', 'sex industry', 'hentai', 'nsfw'
+];
+let customExplicitKeywords = []; // user-added, on top of the built-in list above
+let blockedBooks = []; // {title, year|null}
+let customAdditions = {}; // "decade|genre" -> [{title, year}] — user-added built-in-list entries
+let customRemovals = {}; // "decade|genre" -> ["title|year", ...] — built-in entries the user has hidden
+let maxResults = MAX_RESULTS_DEFAULT;
+
+const $ = (id) => document.getElementById(id);
+const decadeLabel = (y) => y + 's';
+function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function randomFrom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+/* ==================================================================
+   Storage (each save wrapped so a failure never blocks the UI update)
+
+   Uses the Claude artifact storage API (window.storage) when it's
+   available — that's the case when this app is viewed inside a
+   Claude artifact panel. If this file has been downloaded and is
+   being opened directly in a browser (window.storage won't exist
+   there), it falls back to the browser's own localStorage so data
+   still saves between visits on that device.
+   ================================================================== */
+const HAS_CLAUDE_STORAGE = (typeof window.storage !== 'undefined' && !!window.storage);
+let storageWarningShown = false;
+
+function warnStorageFallback(){
+  if (storageWarningShown) return;
+  storageWarningShown = true;
+  console.warn('Claude artifact storage not detected — using this browser\'s local storage instead.');
+}
+
+async function loadJSON(key, fallback){
+  if (HAS_CLAUDE_STORAGE){
+    try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : fallback; }
+    catch(e){ return fallback; }
+  }
+  warnStorageFallback();
+  try{ const raw = localStorage.getItem('nbk_' + key); return raw ? JSON.parse(raw) : fallback; }
+  catch(e){ return fallback; }
+}
+async function saveJSON(key, value){
+  if (HAS_CLAUDE_STORAGE){
+    try{ await window.storage.set(key, JSON.stringify(value)); }
+    catch(e){ console.error('Storage save failed for ' + key, e); }
+  } else {
+    warnStorageFallback();
+    try{ localStorage.setItem('nbk_' + key, JSON.stringify(value)); }
+    catch(e){ console.error('Local storage save failed for ' + key, e); }
+  }
+  if (currentUser && SYNCED_KEYS.has(key)){
+    syncKeyToCloud(key, value); // fire-and-forget — local save above already succeeded either way
+  }
+}
+
+async function syncKeyToCloud(key, value){
+  try{
+    await fbDb.collection('users').doc(currentUser.uid)
+      .collection('nextUpApps').doc('books')
+      .set({ [key]: value }, { merge: true });
+  } catch(e){
+    console.warn('Cloud sync failed for ' + key, e.message);
+  }
+}
+
+// Starts sign-in. Inside the Android app, Google actively blocks sign-in
+// popups from running inside an embedded WebView (a real, enforced
+// security policy — not something we can code around) — so on that
+// platform, sign-in has to happen natively instead. This detects which
+// context it's in and picks the right path; the browser-hosted website
+// version always uses the normal popup.
+// Guards syncOnSignIn so it only ever runs once per actual app
+// launch/session — sessionStorage specifically, not a plain JS variable,
+// because syncOnSignIn's own location.reload() would otherwise reset a
+// plain variable and let it fire again on the reloaded page, right back
+// into the same loop this was built to avoid. sessionStorage survives a
+// same-tab reload but resets on a genuinely new launch (tab/app closed
+// and reopened), which is exactly the "once per launch" behavior wanted.
+// Centralized here (rather than called separately from each sign-in
+// path) so an explicit sign-in and the auth-state listener firing for
+// that same event can't both trigger a sync.
+function triggerSyncOnce(user){
+  if (sessionStorage.getItem('nextup_resynced_this_session_books')) return;
+  sessionStorage.setItem('nextup_resynced_this_session_books', '1');
+  syncOnSignIn(user);
+}
+
+function signInWithGoogle(){
+  const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signIn === 'function';
+  console.log('[signInWithGoogle] hasNativeBridge =', hasNativeBridge, '| typeof Android =', typeof Android);
+  if (hasNativeBridge){
+    showAuthStatus('Opening Google sign-in…');
+    Android.signIn(); // result arrives async via window.onNativeGoogleSignIn below
+    return;
+  }
+  if (location.protocol === 'file:'){
+    // Firebase Auth's browser sign-in flow (and its session persistence)
+    // requires a real http(s) origin — it can't work when this file is
+    // opened directly rather than loaded from a hosted URL. This isn't a
+    // bug to fix in code; it only works once this is actually hosted
+    // somewhere (e.g. GitHub Pages) and opened via that address.
+    showAuthStatus('Google Sign-In needs the app loaded from a real web address (https://…) — it can\'t work when opening this file directly. Try it from the hosted version instead.');
+    return;
+  }
+  showAuthStatus('Opening sign-in…');
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).then(result => {
+    triggerSyncOnce(result.user);
+  }).catch(e => {
+    console.warn('Google sign-in failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+}
+
+// Called by the native Android side (MainActivity.kt) after it gets a
+// Google credential outside the WebView. Payload is a JSON string:
+// {success:true, idToken} or {success:false, error}.
+window.onNativeGoogleSignIn = function(payloadStr){
+  let payload;
+  try{ payload = JSON.parse(payloadStr); }
+  catch(e){ showAuthStatus('Sign-in failed: unexpected response from the app.'); return; }
+
+  if (!payload.success){
+    showAuthStatus('Sign-in failed: ' + (payload.error || 'unknown error'));
+    return;
+  }
+  const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
+  fbAuth.signInWithCredential(credential).then(result => {
+    triggerSyncOnce(result.user);
+  }).catch(e => {
+    console.warn('Firebase sign-in with native credential failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+};
+
+// The true fresh-install default for every synced key — these must match
+// exactly what init() falls back to when nothing's been saved yet, so
+// signing out genuinely looks like a first-ever run, not an arbitrary
+// blank state.
+const SYNCED_KEY_DEFAULTS = {
+  book_picks: () => [],
+  blocked_books: () => [],
+  custom_book_additions: () => ({}),
+  custom_book_removals: () => ({}),
+  enabled_decades: () => DECADES.slice(),
+  enabled_genres: () => GENRES.slice(),
+  enabled_languages: () => ['English'],
+  min_rating: () => 0,
+  max_rating_ceiling: () => 10,
+  require_critic_score: () => true,
+  filter_explicit_content: () => true,
+  custom_explicit_keywords: () => [],
+  max_results: () => MAX_RESULTS_DEFAULT,
+  data_source_pref: () => 'auto',
+  color_theme: () => 'amber'
+};
+
+// Resets every synced key back to its true default — this is what makes
+// signing out actually behave like signing out, rather than leaving
+// whatever was last synced sitting in local storage for the next person
+// to use this device/browser. Deliberately leaves the ratings/search
+// cache alone — that's not personal data, just cached book metadata, and
+// clearing it would only cost the next connection extra API calls to
+// rebuild for no real benefit.
+async function resetLocalStateToDefaults(){
+  for (const key of SYNCED_KEYS){
+    const getDefault = SYNCED_KEY_DEFAULTS[key];
+    const value = getDefault ? getDefault() : null;
+    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(value));
+    else localStorage.setItem('nbk_' + key, JSON.stringify(value));
+  }
+  // Books has no equivalent of a shared, cross-app credential (Open
+  // Library needs no key) — nothing else to clear here beyond what's
+  // already in SYNCED_KEYS, aside from the warmup flag below, which is
+  // derived state rather than a real setting.
+  for (const key of ['bigbook_warmup_done']){
+    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
+    else localStorage.setItem('nbk_' + key, JSON.stringify(null));
+  }
+}
+
+async function signOutOfGoogle(){
+  try{ await fbAuth.signOut(); }
+  catch(e){ console.warn('Sign-out failed', e.message); }
+  // Also clears the native side's remembered credential state, if
+  // available, so the account picker shows fresh next time rather than
+  // silently reusing the last selection. Harmless no-op on the website.
+  if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
+    Android.signOutNative();
+  }
+  sessionStorage.removeItem('nextup_resynced_this_session_books'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
+  showAuthStatus('Signed out — resetting to defaults…');
+  await resetLocalStateToDefaults();
+  location.reload(); // same pattern as sign-in — the reliable way to get every part of the app to re-read the reset state
+}
+
+function showAuthStatus(text){
+  const el = document.getElementById('authStatus');
+  if (el){ el.textContent = text; el.style.display = text ? 'block' : 'none'; }
+}
+
+// Fires whenever sign-in state changes, INCLUDING automatically on every
+// app load if there's already a valid session — Firebase persists that
+// itself. That's also exactly the moment a resync-on-launch is wanted:
+// if you were signed in on this device already, this is the one chance
+// to pick up whatever changed on another device since last time. Routed
+// through triggerSyncOnce so it can never fire more than once per actual
+// launch — without that guard, this would be the same infinite-reload
+// bug as before, since syncOnSignIn's own reload would just cause this
+// listener to fire again on the reloaded page.
+fbAuth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  renderAuthUI();
+  if (user) triggerSyncOnce(user);
+});
+
+// Runs once right after a sign-in is confirmed. If cloud data already
+// exists for this account (they've synced from another device before),
+// it's treated as authoritative and pulled down, replacing local state —
+// simple and predictable, though it does mean an unsynced change sitting
+// only on a *different* device could get overwritten the next time that
+// device reconnects. If there's no cloud data yet, this device's current
+// local state is pushed up as the starting point instead.
+async function syncOnSignIn(user){
+  showAuthStatus('Syncing…');
+  try{
+    const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('books');
+    const snap = await ref.get();
+    if (snap.exists){
+      const data = snap.data();
+      for (const key of SYNCED_KEYS){
+        // Treat a stored null exactly like a missing field — never write a
+        // literal "null" into local storage, which would otherwise get
+        // read back as a real (empty) value instead of falling through to
+        // the app's actual defaults.
+        if (data[key] !== undefined && data[key] !== null){
+          if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(data[key]));
+          else localStorage.setItem('nbk_' + key, JSON.stringify(data[key]));
+        }
+      }
+      showAuthStatus('Synced from your account — reloading…');
+      location.reload(); // simplest reliable way to get every part of the app to re-read the newly-pulled state
+    } else {
+      const payload = {};
+      for (const key of SYNCED_KEYS){
+        const val = await loadJSON(key, null);
+        if (val !== null) payload[key] = val; // never seed the cloud with a bare null for a key that's never actually been set locally
+      }
+      await ref.set(payload);
+      showAuthStatus('');
+    }
+  } catch(e){
+    console.warn('Sync on sign-in failed', e.message);
+    showAuthStatus('Could not sync right now: ' + e.message);
+  }
+}
+
+function renderAuthUI(){
+  const signedOutBox = document.getElementById('authSignedOut');
+  const signedInBox = document.getElementById('authSignedIn');
+  if (!signedOutBox || !signedInBox) return; // shell not rendered yet
+  if (currentUser){
+    signedOutBox.style.display = 'none';
+    signedInBox.style.display = 'flex';
+    const firstName = (currentUser.displayName || currentUser.email || 'Signed in').split(' ')[0];
+    document.getElementById('authName').textContent = firstName;
+    document.getElementById('authName').title = currentUser.displayName || currentUser.email || '';
+  } else {
+    signedOutBox.style.display = 'block';
+    signedInBox.style.display = 'none';
+  }
+}
+
+async function savePicks(){ await saveJSON('book_picks', picks); }
+async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
+async function saveEnabledDecades(){ await saveJSON('enabled_decades', enabledDecades); }
+async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
+async function saveEnabledLanguages(){ await saveJSON('enabled_languages', enabledLanguages); }
+
+function applyColorTheme(name){
+  const theme = COLOR_THEMES[name] || COLOR_THEMES.amber;
+  const root = document.documentElement.style;
+  root.setProperty('--bg', theme.bg);
+  root.setProperty('--surface', theme.surface);
+  root.setProperty('--surface-2', theme.surface2);
+  root.setProperty('--amber', theme.amber);
+  root.setProperty('--amber-rgb', theme.amberRgb);
+  root.setProperty('--amber-dim', theme.amberDim);
+  root.setProperty('--cream', theme.cream);
+  root.setProperty('--muted', theme.muted);
+  root.setProperty('--line', theme.line);
+}
+async function saveColorTheme(){ await saveJSON('color_theme', colorTheme); }
+
+function renderThemeSwatches(){
+  $('themeSwatchGrid').innerHTML = Object.entries(COLOR_THEMES).map(([key, t]) => `
+    <div class="theme-swatch ${key === colorTheme ? 'active' : ''}" data-theme="${key}">
+      <div class="theme-swatch-preview" style="background:${t.bg};">
+        <span class="theme-swatch-dot" style="background:${t.amber};"></span>
+      </div>
+      <div class="theme-swatch-label">${escapeHtml(t.label)}</div>
+    </div>
+  `).join('');
+  $('themeSwatchGrid').querySelectorAll('.theme-swatch').forEach(el => {
+    el.addEventListener('click', async () => {
+      const name = el.dataset.theme;
+      if (name === colorTheme) return;
+      colorTheme = name;
+      applyColorTheme(colorTheme);
+      await saveColorTheme();
+      renderThemeSwatches();
+    });
+  });
+}
+async function saveFilterExplicitContent(){ await saveJSON('filter_explicit_content', filterExplicitContent); }
+async function saveCustomExplicitKeywords(){ await saveJSON('custom_explicit_keywords', customExplicitKeywords); }
+async function saveBlockedBooks(){ await saveJSON('blocked_books', blockedBooks); }
+async function saveCustomAdditions(){ await saveJSON('custom_book_additions', customAdditions); }
+async function saveCustomRemovals(){ await saveJSON('custom_book_removals', customRemovals); }
+async function saveMaxResults(){ await saveJSON('max_results', maxResults); }
+async function saveWmRatingsCache(){
+  const obj = {};
+  wmRatingsCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('openlibrary_ratings_cache', obj);
+}
+async function saveWmSearchCache(){
+  const obj = {};
+  wmSearchCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('openlibrary_search_cache', obj);
+}
+async function saveWmDetailsCache(){
+  const obj = {};
+  const cutoff = Date.now() - WM_DETAILS_PRUNE_MS;
+  wmDetailsCache.forEach((v, k) => {
+    const newestTouch = Math.max(v?.enrichedAt || 0, v?.ratedAt || 0);
+    if (newestTouch >= cutoff) obj[k] = v; // drop only once BOTH tiers are past the 90-day floor
+  });
+  await saveJSON('openlibrary_details_cache', obj);
+}
+async function saveBbWarmupDone(){ await saveJSON('bigbook_warmup_done', bbWarmupDone); }
+
+/* ==================================================================
+   Init
+   ================================================================== */
+async function init(){
+  picks = await loadJSON('book_picks', []);
+  loadSharedCrew();
+  dataSourcePref = await loadJSON('data_source_pref', 'auto');
+  enabledDecades = await loadJSON('enabled_decades', DECADES.slice());
+  enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
+  // Migration: a genre added to the app after someone already saved their
+  // filter selection (e.g. Fantasy/Western) should default to enabled for
+  // them too, not silently vanish from their spin pool — but a genre the
+  // user has deliberately unchecked must never get silently re-enabled
+  // just because it's also "missing" from their enabled list. The only way
+  // to tell those apart is to track which categories the app has actually
+  // seen before: only a category that's brand new since last time counts
+  // as "missing," never one that already existed and was just turned off.
+  const knownGenres = await loadJSON('known_genres', GENRES.slice()); // first run after this fix: treat everything current as already known, so nothing gets force-re-enabled once
+  const newlyAddedGenres = GENRES.filter(g => !knownGenres.includes(g));
+  if (newlyAddedGenres.length){
+    enabledGenres = enabledGenres.concat(newlyAddedGenres.filter(g => !enabledGenres.includes(g)));
+    await saveEnabledGenres();
+  }
+  await saveJSON('known_genres', GENRES.slice());
+
+  colorTheme = await loadJSON('color_theme', 'amber');
+  filterExplicitContent = await loadJSON('filter_explicit_content', true);
+  customExplicitKeywords = await loadJSON('custom_explicit_keywords', null);
+  if (customExplicitKeywords === null){
+    // Migration: this used to be one combined, user-editable list. Split
+    // off anything that isn't part of the current built-in defaults as a
+    // preserved custom addition, so nothing already added gets lost now
+    // that the list is a hidden default + separate custom additions.
+    const oldCombined = await loadJSON('explicit_content_keywords', []);
+    const defaultsLower = new Set(DEFAULT_EXPLICIT_KEYWORDS.map(k => k.toLowerCase()));
+    customExplicitKeywords = oldCombined.filter(k => !defaultsLower.has(k.toLowerCase()));
+    await saveCustomExplicitKeywords();
+  }
+  enabledLanguages = await loadJSON('enabled_languages', ['English']);
+  blockedBooks = await loadJSON('blocked_books', []);
+  customAdditions = await loadJSON('custom_book_additions', {});
+  customRemovals = await loadJSON('custom_book_removals', {});
+  maxResults = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, await loadJSON('max_results', MAX_RESULTS_DEFAULT)));
+  const savedRatingsCache = await loadJSON('openlibrary_ratings_cache', {});
+  Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
+  const savedSearchCache = await loadJSON('openlibrary_search_cache', {});
+  Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
+  const savedDetailsCache = await loadJSON('openlibrary_details_cache', {});
+  Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchBigBookExtras, not at load time
+  bbWarmupDone = await loadJSON('bigbook_warmup_done', false);
+
+  renderHistory();
+  renderAdmin();
+  updateSourceNote();
+  updateStorageNote();
+  runStartupWarmup(); // never awaited — runs in the background, doesn't block anything above
+}
+
+function updateStorageNote(){
+  const el = $('storageNote');
+  if (!el) return;
+  el.textContent = HAS_CLAUDE_STORAGE
+    ? 'Saving via Claude artifact storage'
+    : 'Saving to this browser\'s local storage (data stays on this device/browser only)';
+}
+
+/* ==================================================================
+   Tabs
+   ================================================================== */
+$('tabMainBtn').addEventListener('click', () => switchTab('main'));
+$('tabFiltersBtn').addEventListener('click', () => switchTab('filters'));
+$('tabBuiltinBtn').addEventListener('click', () => switchTab('builtin'));
+$('tabAdminBtn').addEventListener('click', () => switchTab('admin'));
+function switchTab(tab){
+  $('mainTab').style.display = tab === 'main' ? 'block' : 'none';
+  $('filtersTab').style.display = tab === 'filters' ? 'block' : 'none';
+  $('builtinTab').style.display = tab === 'builtin' ? 'block' : 'none';
+  $('adminTab').style.display = tab === 'admin' ? 'block' : 'none';
+  $('tabMainBtn').classList.toggle('active', tab === 'main');
+  $('tabFiltersBtn').classList.toggle('active', tab === 'filters');
+  $('tabBuiltinBtn').classList.toggle('active', tab === 'builtin');
+  $('tabAdminBtn').classList.toggle('active', tab === 'admin');
+  if (tab === 'admin') updateCacheStats();
+  if (tab === 'builtin') renderEditList();
+}
+
+/* ==================================================================
+   Crew — read-only here. Managed exclusively on the landing page
+   (index.html), shared across every section via an unprefixed local
+   storage key so every app on this device reads the same list without
+   needing to be signed in, and synced through Firestore when signed
+   in. Refreshed from that shared key at load and right before the
+   picker prompt shows, so an addition made on the landing page in
+   another tab is picked up without needing a full reload here.
+   ================================================================== */
+function loadSharedCrew(){
+  try{
+    const raw = localStorage.getItem('nextup_shared_crew');
+    crew = raw ? JSON.parse(raw) : [];
+  } catch(e){ crew = []; }
+}
+
+/* ==================================================================
+   Pick stats — who picked what, per section. Written here (this
+   section is "books"), but owned and displayed on the landing page
+   alongside every other section's numbers. Same unprefixed shared
+   local storage pattern as crew; synced to Firestore via a dotted
+   top-level key (e.g. "Alan.books") so FieldValue.increment only
+   ever touches that one nested leaf — a plain nested object under
+   {merge:true} would silently overwrite the whole per-person map
+   instead of adding to it.
+   ================================================================== */
+let pickStats = {}; // populated from the shared, cross-app local storage key — see loadSharedPickStats()
+
+function loadSharedPickStats(){
+  try{
+    pickStats = JSON.parse(localStorage.getItem('nextup_shared_pickstats') || '{}');
+  } catch(e){ pickStats = {}; }
+}
+
+async function recordPick(name){
+  if (!name || name === 'Unknown') return;
+  loadSharedPickStats(); // fresh read — another tab/section may have changed this since page load
+  if (!pickStats[name]) pickStats[name] = {};
+  pickStats[name].books = (pickStats[name].books || 0) + 1;
+  localStorage.setItem('nextup_shared_pickstats', JSON.stringify(pickStats));
+  if (!currentUser) return;
+  try{
+    await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats')
+      .set({ [`${name}.books`]: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+  } catch(e){ console.warn('Could not sync pick stat to cloud', e.message); }
+}
+
+/* ==================================================================
+   Picker prompt — shown at the moment of confirming a pick, not when
+   switching screens. Reuses the same modal-root/backdrop pattern as
+   the main confirm modal.
+   ================================================================== */
+function openPickerPrompt(book){
+  loadSharedCrew();
+  loadSharedPickStats();
+  if (!crew.length){
+    confirmPick(book, 'Unknown');
+    return;
+  }
+  const root = $('modalRoot');
+  root.innerHTML = `
+    <div class="modal-backdrop" id="pickerBackdrop">
+      <div class="modal">
+        <h3>Who's picking?</h3>
+        <div class="crew-list" style="margin-top:14px;">
+          ${crew.map(name => {
+            const count = (pickStats[name] && pickStats[name].books) || 0;
+            return `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;"><span>${escapeHtml(name)}</span><span class="hint" style="margin:0;">${count} picked</span></button>`;
+          }).join('')}
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn-ghost" id="pickerSkip" style="flex:1;">Skip / Unknown</button>
+          <button class="btn-ghost" id="pickerCancel" style="flex:1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `;
+  $('pickerBackdrop').addEventListener('click', (e) => { if (e.target.id === 'pickerBackdrop') closeModal(); });
+  root.querySelectorAll('.picker-choice').forEach(btn => {
+    btn.addEventListener('click', () => confirmPick(book, btn.dataset.name));
+  });
+  $('pickerSkip').addEventListener('click', () => confirmPick(book, 'Unknown'));
+  $('pickerCancel').addEventListener('click', closeModal);
+}
+
+/* ==================================================================
+   Book discovery: Big Book API (via Cloudflare Worker proxy)
+   ================================================================== */
+function bbUrl(path, params){
+  const usp = new URLSearchParams(params);
+  return `${BIGBOOK_PROXY_BASE}${path}?${usp.toString()}`;
+}
+// Global request pacing — shared across every call, persists for the
+// life of the session. Defaults to the free tier's 1 request/second
+// limit, since that's the safe assumption without knowing which paid
+// tier (if any) is active — going faster just produces 429s regardless
+// of tier. Recovers toward faster pacing on sustained success, same
+// adaptive approach as Movies/TV used for Watchmode.
+let bbLastRequestAt = 0;
+let bbMinIntervalMs = 1100;
+async function bbThrottleGate(){
+  const now = Date.now();
+  const slot = Math.max(now, bbLastRequestAt + bbMinIntervalMs);
+  bbLastRequestAt = slot;
+  const wait = slot - now;
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+}
+
+// Log of every Big Book API request since the last Spin the Reel press —
+// past that for any click-triggered lookups that happen afterward, until
+// the next spin resets it. Shown in Admin for optimization purposes.
+let apiCallLog = [];
+function logApiCall(reason, path, params, attempt){
+  const usp = new URLSearchParams(params);
+  apiCallLog.push({
+    time: new Date().toLocaleTimeString(),
+    reason: (reason || 'Unspecified') + (attempt ? ` — retry ${attempt}` : ''),
+    path,
+    query: usp.toString()
+  });
+  renderApiCallLog();
+}
+
+function renderApiCallLog(){
+  const countEl = document.getElementById('apiLogCount');
+  if (countEl) countEl.textContent = apiCallLog.length ? `(${apiCallLog.length} calls)` : '';
+  const listEl = document.getElementById('apiLogList');
+  if (!listEl) return;
+  if (!apiCallLog.length){
+    listEl.innerHTML = '<div class="empty-note">No API calls yet this spin.</div>';
+    return;
+  }
+  listEl.innerHTML = apiCallLog.map((entry, i) => `
+    <div class="history-item">
+      <span class="h-name">${String(i + 1).padStart(2, '0')}. ${escapeHtml(entry.path)} <span class="h-meta">${entry.time}</span></span>
+      <span class="h-meta">${escapeHtml(entry.reason)}${entry.query ? ' — ' + escapeHtml(entry.query) : ''}</span>
+    </div>
+  `).join('');
+}
+
+// Session-only circuit breaker for genuine outages/rate-limiting (separate
+// from the daily-quota tracking below, which is a distinct, expected
+// condition rather than a failure).
+let bbUnavailable = false;
+let bbConsecutiveFailedCalls = 0;
+// Set once a 402 (daily quota exhausted) response is seen — Big Book
+// API's documented behavior for the free tier specifically, not a guess.
+// Distinct from bbUnavailable: this isn't a failure, it's an expected,
+// informative state the user should actually see, not just silently
+// fall back from.
+let bbQuotaExhausted = false;
+let bbQuotaLeft = null; // from the X-API-Quota-Left response header, when present — shown in Admin
+
+const BB_PER_CALL_TIMEOUT_MS = 10000;
+
+async function bbFetch(path, params, attempt, maxAttempts, reason){
+  if (bbQuotaExhausted){
+    throw new Error('Today\'s free Big Book API quota is used up — using the built-in list instead until it resets.');
+  }
+  if (bbUnavailable){
+    throw new Error('Big Book API isn\'t responding right now — using the built-in list instead.');
+  }
+  attempt = attempt || 0;
+  const limit = (maxAttempts == null) ? 6 : maxAttempts;
+  await bbThrottleGate();
+  logApiCall(reason, path, params, attempt);
+  const res = await withTimeout(
+    fetch(bbUrl(path, params)),
+    BB_PER_CALL_TIMEOUT_MS,
+    'Big Book API request timed out'
+  );
+  const quotaLeftHeader = res.headers.get('X-API-Quota-Left');
+  if (quotaLeftHeader != null) bbQuotaLeft = Number(quotaLeftHeader);
+
+  if (res.status === 402){
+    // Documented Big Book API behavior: daily quota exhausted, no more
+    // calls possible until it resets — not worth retrying at all.
+    bbQuotaExhausted = true;
+    throw new Error('Today\'s free Big Book API quota is used up — using the built-in list instead until it resets.');
+  }
+  if (res.status === 429 || res.status >= 500){
+    if (attempt < limit){
+      bbMinIntervalMs = Math.min(8000, bbMinIntervalMs * 1.6);
+      const delay = 500 * Math.pow(2, attempt) + Math.random() * 300;
+      await new Promise(r => setTimeout(r, delay));
+      return bbFetch(path, params, attempt + 1, maxAttempts, reason);
+    }
+    bbConsecutiveFailedCalls++;
+    if (bbConsecutiveFailedCalls >= 2){
+      bbUnavailable = true;
+      throw new Error('Big Book API is persistently unavailable — using the built-in list instead for the rest of this session.');
+    }
+    throw new Error(`Big Book API request failed (${res.status})`);
+  }
+  if (!res.ok){
+    throw new Error(`Big Book API request failed (${res.status})`);
+  }
+  bbConsecutiveFailedCalls = 0;
+  bbMinIntervalMs = Math.max(1100, bbMinIntervalMs * 0.97);
+  return res.json();
+}
+
+$('rerunWarmupBtn').addEventListener('click', () => {
+  bbWarmupDone = false; // otherwise runStartupWarmup's own guard would make this a no-op on anything but the very first run
+  runStartupWarmup();
+});
+
+$('clearCacheBtn').addEventListener('click', async () => {
+  if (!confirm(`Clear all ${wmRatingsCache.size} cached book details? Spins will need to re-fetch from Big Book API until the cache rebuilds.`)) return;
+  wmRatingsCache.clear();
+  await saveWmRatingsCache();
+  bbWarmupDone = false;
+  await saveBbWarmupDone();
+  updateCacheStats();
+});
+
+document.querySelectorAll('input[name=dataSource]').forEach(radio => {
+  radio.addEventListener('change', async (e) => {
+    dataSourcePref = e.target.value;
+    await saveDataSourcePref();
+    updateSourceNote();
+  });
+});
+
+function renderAdmin(){
+  renderAuthUI();
+  const versionLabel = $('appVersionLabel');
+  if (versionLabel) versionLabel.textContent = APP_VERSION;
+  renderThemeSwatches();
+  populateCacheStatsDropdowns();
+  updateCacheStats();
+  populateEditListDropdowns();
+  renderEditList();
+
+  document.querySelectorAll('input[name=dataSource]').forEach(r => { r.checked = (r.value === dataSourcePref); });
+
+  $('decadeToggles').innerHTML = DECADES.map(d => `
+    <label class="toggle-chip ${enabledDecades.includes(d) ? '' : 'off'}">
+      <input type="checkbox" data-decade="${d}" ${enabledDecades.includes(d) ? 'checked' : ''}> ${decadeLabel(d)}
+    </label>
+  `).join('');
+  $('decadeToggles').querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const d = Number(cb.dataset.decade);
+      if (cb.checked) { if (!enabledDecades.includes(d)) enabledDecades.push(d); }
+      else { enabledDecades = enabledDecades.filter(x => x !== d); }
+      renderAdmin();
+      await saveEnabledDecades();
+    });
+  });
+
+  $('genreToggles').innerHTML = GENRES.map(g => `
+    <label class="toggle-chip ${enabledGenres.includes(g) ? '' : 'off'}">
+      <input type="checkbox" data-genre="${escapeHtml(g)}" ${enabledGenres.includes(g) ? 'checked' : ''}> ${escapeHtml(g)}
+    </label>
+  `).join('');
+  $('genreToggles').querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const g = cb.dataset.genre;
+      if (cb.checked) { if (!enabledGenres.includes(g)) enabledGenres.push(g); }
+      else { enabledGenres = enabledGenres.filter(x => x !== g); }
+      renderAdmin();
+      await saveEnabledGenres();
+    });
+  });
+
+  $('languageToggles').innerHTML = LANGUAGES.map(l => `
+    <label class="toggle-chip ${enabledLanguages.includes(l) ? '' : 'off'}">
+      <input type="checkbox" data-lang="${escapeHtml(l)}" ${enabledLanguages.includes(l) ? 'checked' : ''}> ${escapeHtml(l)}
+    </label>
+  `).join('');
+  $('languageToggles').querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const l = cb.dataset.lang;
+      if (cb.checked) { if (!enabledLanguages.includes(l)) enabledLanguages.push(l); }
+      else { enabledLanguages = enabledLanguages.filter(x => x !== l); }
+      renderAdmin();
+      await saveEnabledLanguages();
+    });
+  });
+
+  $('filterExplicitContentCheckbox').checked = filterExplicitContent;
+  $('maxResultsInput').value = String(maxResults);
+
+  renderExplicitKeywordCount();
+  renderBlockList();
+}
+
+function renderBlockList(){
+  $('blockEmptyHint').style.display = blockedBooks.length ? 'none' : 'block';
+  $('blockList').innerHTML = blockedBooks.map((b, i) => `
+    <div class="crew-item">
+      <span class="crew-name">${escapeHtml(b.title)} <span class="hint" style="margin:0;">${b.year ? '(' + b.year + ')' : '(any year)'}</span></span>
+      <div class="crew-actions">
+        <button class="btn-danger btn-icon" title="Unblock" data-idx="${i}">×</button>
+      </div>
+    </div>
+  `).join('');
+  $('blockList').querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => removeBlockedBook(Number(btn.dataset.idx)));
+  });
+}
+
+async function addBlockedBook(){
+  const title = $('blockTitleInput').value.trim();
+  const yearRaw = $('blockYearInput').value.trim();
+  if (!title) return;
+  const year = yearRaw ? Number(yearRaw) : null;
+  blockedBooks.push({ title, year: (year && !isNaN(year)) ? year : null });
+  $('blockTitleInput').value = '';
+  $('blockYearInput').value = '';
+  renderBlockList();
+  await saveBlockedBooks();
+}
+
+async function removeBlockedBook(idx){
+  blockedBooks.splice(idx, 1);
+  renderBlockList();
+  await saveBlockedBooks();
+}
+
+function isBlocked(title, year){
+  return blockedBooks.some(b =>
+    b.title.toLowerCase() === (title || '').toLowerCase() && (b.year == null || b.year === year)
+  );
+}
+
+function populateEditListDropdowns(){
+  const decadeSel = $('editListDecade');
+  if (decadeSel.options.length === 0){
+    DECADES.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = String(d);
+      opt.textContent = decadeLabel(d);
+      decadeSel.appendChild(opt);
+    });
+  }
+  const genreSel = $('editListGenre');
+  if (genreSel.options.length === 0){
+    GENRES.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      genreSel.appendChild(opt);
+    });
+  }
+}
+
+function renderEditList(){
+  const decade = Number($('editListDecade').value);
+  const genre = $('editListGenre').value;
+  const key = comboKey(decade, genre);
+  const removedSet = new Set(customRemovals[key] || []);
+  const baseList = (BOOK_DB[decade] && BOOK_DB[decade][genre]) || [];
+  const additions = customAdditions[key] || [];
+
+  const rows = [];
+  baseList.forEach(m => {
+    if (removedSet.has(`${m.title}|${m.year}`)) return; // hidden by the user
+    rows.push({ title: m.title, year: m.year, source: 'builtin' });
+  });
+  additions.forEach(m => rows.push({ title: m.title, year: m.year, source: 'custom' }));
+
+  $('editListBooks').innerHTML = rows.map((m, i) => `
+    <div class="crew-item">
+      <span class="crew-name">${escapeHtml(m.title)} <span class="hint" style="margin:0;">(${m.year})${m.source === 'custom' ? ' · added by you' : ''}</span></span>
+      <div class="crew-actions">
+        <button class="btn-danger btn-icon" title="Remove" data-idx="${i}">×</button>
+      </div>
+    </div>
+  `).join('');
+  $('editListBooks').querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = rows[Number(btn.dataset.idx)];
+      if (row.source === 'builtin'){
+        if (!customRemovals[key]) customRemovals[key] = [];
+        customRemovals[key].push(`${row.title}|${row.year}`);
+        await saveCustomRemovals();
+      } else {
+        customAdditions[key] = (customAdditions[key] || []).filter(m => !(m.title === row.title && m.year === row.year));
+        await saveCustomAdditions();
+      }
+      renderEditList();
+    });
+  });
+}
+
+async function addEditListBook(){
+  const title = $('editListTitleInput').value.trim();
+  const yearRaw = $('editListYearInput').value.trim();
+  const year = Number(yearRaw);
+  $('editListError').style.display = 'none';
+  if (!title || !yearRaw || isNaN(year)){
+    $('editListError').textContent = 'Enter both a title and a valid year.';
+    $('editListError').style.display = 'block';
+    return;
+  }
+  const decade = Number($('editListDecade').value);
+  const genre = $('editListGenre').value;
+  const key = comboKey(decade, genre);
+  if (!customAdditions[key]) customAdditions[key] = [];
+  customAdditions[key].push({ title, year });
+  await saveCustomAdditions();
+  $('editListTitleInput').value = '';
+  $('editListYearInput').value = '';
+  renderEditList();
+}
+
+$('editListDecade').addEventListener('change', renderEditList);
+$('editListGenre').addEventListener('change', renderEditList);
+$('editListAddBtn').addEventListener('click', addEditListBook);
+$('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListBook(); });
+$('editListResetBtn').addEventListener('click', async () => {
+  const decade = Number($('editListDecade').value);
+  const genre = $('editListGenre').value;
+  const key = comboKey(decade, genre);
+  if (!confirm(`Reset ${decadeLabel(decade)} ${genre} back to the default built-in list? This removes anything you've added or removed for this combo.`)) return;
+  delete customAdditions[key];
+  delete customRemovals[key];
+  await saveCustomAdditions();
+  await saveCustomRemovals();
+  renderEditList();
+});
+
+$('blockAddBtn').addEventListener('click', addBlockedBook);
+$('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedBook(); });
+
+$('decadesAllBtn').addEventListener('click', async () => { enabledDecades = DECADES.slice(); renderAdmin(); await saveEnabledDecades(); });
+$('decadesNoneBtn').addEventListener('click', async () => { enabledDecades = []; renderAdmin(); await saveEnabledDecades(); });
+$('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES.slice(); renderAdmin(); await saveEnabledGenres(); });
+$('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
+$('languagesAllBtn').addEventListener('click', async () => { enabledLanguages = LANGUAGES.slice(); renderAdmin(); await saveEnabledLanguages(); });
+$('languagesNoneBtn').addEventListener('click', async () => { enabledLanguages = []; renderAdmin(); await saveEnabledLanguages(); });
+
+$('signInBtn').addEventListener('click', signInWithGoogle);
+$('signOutBtn').addEventListener('click', signOutOfGoogle);
+
+$('filterExplicitContentCheckbox').addEventListener('change', async (e) => {
+  filterExplicitContent = e.target.checked;
+  await saveFilterExplicitContent();
+});
+
+function renderExplicitKeywordCount(){
+  const n = customExplicitKeywords.length;
+  $('explicitKeywordCount').textContent = `Built-in list active, plus ${n} keyword${n === 1 ? '' : 's'} you've added.`;
+}
+async function addExplicitKeyword(){
+  const val = $('explicitKeywordInput').value.trim();
+  if (!val) return;
+  const allLower = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords).map(k => k.toLowerCase());
+  if (allLower.includes(val.toLowerCase())){
+    $('explicitKeywordInput').value = '';
+    return; // already covered, either by the built-in list or a previous addition
+  }
+  customExplicitKeywords.push(val);
+  await saveCustomExplicitKeywords();
+  $('explicitKeywordInput').value = '';
+  renderExplicitKeywordCount();
+}
+$('explicitKeywordAddBtn').addEventListener('click', addExplicitKeyword);
+$('explicitKeywordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addExplicitKeyword(); });
+
+$('explicitKeywordClearBtn').addEventListener('click', async () => {
+  if (!customExplicitKeywords.length) return;
+  if (!confirm(`Remove all ${customExplicitKeywords.length} keyword(s) you've added? The built-in list stays active either way.`)) return;
+  customExplicitKeywords = [];
+  await saveCustomExplicitKeywords();
+  renderExplicitKeywordCount();
+});
+
+$('maxResultsInput').addEventListener('change', async (e) => {
+  let val = Math.round(Number(e.target.value));
+  if (isNaN(val)) val = MAX_RESULTS_DEFAULT;
+  val = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, val));
+  maxResults = val;
+  e.target.value = String(val);
+  await saveMaxResults();
+});
+
+function populateCacheStatsDropdowns(){
+  const decadeSel = $('cacheStatsDecade');
+  if (decadeSel.options.length <= 1){
+    DECADES.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = String(d);
+      opt.textContent = decadeLabel(d);
+      decadeSel.appendChild(opt);
+    });
+  }
+  const genreSel = $('cacheStatsGenre');
+  if (genreSel.options.length <= 1){
+    GENRES.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      genreSel.appendChild(opt);
+    });
+  }
+}
+
+function updateCacheStats(){
+  const decadeSel = $('cacheStatsDecade').value;
+  const genreSel = $('cacheStatsGenre').value;
+  let count = 0;
+  let missingYearData = 0;
+  wmRatingsCache.forEach((entry) => {
+    if (decadeSel !== 'all'){
+      if (entry.year == null){ missingYearData++; return; }
+      const entryDecade = Math.floor(entry.year / 10) * 10;
+      if (entryDecade !== Number(decadeSel)) return;
+    }
+    if (genreSel !== 'all'){
+      if (!entry.genres || !entry.genres.includes(genreSel)) return;
+    }
+    count++;
+  });
+  let text = `${count} book${count === 1 ? '' : 's'} cached for ${decadeSel === 'all' ? 'all decades' : decadeLabel(Number(decadeSel))} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
+  if (decadeSel !== 'all' && missingYearData){
+    text += ` (${missingYearData} cached entries from before this feature can't be counted by decade until re-fetched.)`;
+  }
+  $('cacheStatsResult').textContent = text;
+}
+
+$('cacheStatsDecade').addEventListener('change', updateCacheStats);
+$('cacheStatsGenre').addEventListener('change', updateCacheStats);
+
+function updateSourceNote(){
+  const willUseWm = dataSourcePref === 'auto';
+  $('sourceBoxBuiltin').classList.toggle('active', !willUseWm);
+  $('sourceBoxOpenLibrary').classList.toggle('active', !!willUseWm);
+}
+
+$('goToOpenLibraryConnection').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation(); // don't also trigger the box's own click-to-select handler
+  switchTab('admin');
+  const card = $('bbConnectionCard');
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  card.classList.add('jump-highlight');
+  setTimeout(() => card.classList.remove('jump-highlight'), 1500);
+});
+
+$('sourceBoxBuiltin').addEventListener('click', async () => {
+  if (dataSourcePref === 'builtin') return;
+  dataSourcePref = 'builtin';
+  await saveDataSourcePref();
+  renderAdmin();
+  updateSourceNote();
+});
+
+$('sourceBoxOpenLibrary').addEventListener('click', async () => {
+  if (dataSourcePref === 'auto') return;
+  dataSourcePref = 'auto';
+  await saveDataSourcePref();
+  renderAdmin();
+  updateSourceNote();
+});
+
+/* ==================================================================
+   Spin
+   ================================================================== */
+$('spinBtn').addEventListener('click', spin);
+$('rerunFiltersBtn').addEventListener('click', () => {
+  if (!lastFullPool.length) return;
+  applyFiltersAndRender();
+  switchTab('main');
+});
+
+// Last-resort safety net — races a promise against a plain timer. Doesn't
+// actually cancel the underlying request (fetch() has no clean way to do
+// that here), but stops the UI from waiting on it indefinitely if
+// something hangs without ever returning an error of its own.
+function withTimeout(promise, ms, message){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message || 'Timed out')), ms))
+  ]);
+}
+
+// Writes live progress underneath the Spin button instead of into the
+// button's own label — the label stays "🎞 Spin the Reel" throughout so it
+// never changes size or becomes hard to read mid-spin.
+function setSpinStatus(text){
+  $('spinStatusNote').textContent = text || '';
+}
+
+async function spin(){
+  $('spinError').style.display = 'none';
+  $('enrichStatusNote').textContent = '';
+  setSpinStatus('');
+  apiCallLog = [];
+  forceRefreshedThisSpin.clear();
+
+  const decadePool = DECADES.filter(d => enabledDecades.includes(d));
+  const genrePool = GENRES.filter(g => enabledGenres.includes(g));
+  if (!decadePool.length || !genrePool.length){
+    $('spinError').textContent = 'Turn at least one decade and one genre back on in the Admin tab first.';
+    $('spinError').style.display = 'block';
+    return;
+  }
+
+  $('spinBtn').disabled = true;
+  $('resultsArea').style.display = 'none';
+  $('tonightBanner').innerHTML = '';
+
+  const finalDecade = randomFrom(decadePool);
+  const finalGenre = randomFrom(genrePool);
+
+  const decadeReel = $('decadeReel'), genreReel = $('genreReel');
+  decadeReel.classList.add('spinning'); genreReel.classList.add('spinning');
+
+  let ticks = 0;
+  const maxTicks = 16;
+  await new Promise((resolve) => {
+    const timer = setInterval(() => {
+      ticks++;
+      $('decadeValue').textContent = decadeLabel(randomFrom(decadePool));
+      $('genreValue').textContent = randomFrom(genrePool);
+      if (ticks >= maxTicks){
+        clearInterval(timer);
+        $('decadeValue').textContent = decadeLabel(finalDecade);
+        $('genreValue').textContent = finalGenre;
+        decadeReel.classList.remove('spinning'); genreReel.classList.remove('spinning');
+        resolve();
+      }
+    }, 70);
+  });
+
+  currentChoice = { decade: finalDecade, genre: finalGenre };
+
+  const useWm = dataSourcePref === 'auto' && !!BB_GENRES[finalGenre];
+
+  if (useWm){
+    try{
+      lastFullPool = await buildBigBookPool(finalDecade, finalGenre);
+      currentSource = 'bigbook';
+      setSpinStatus('');
+    } catch(e){
+      lastFullPool = getEffectiveBookList(finalDecade, finalGenre);
+      currentSource = 'builtin';
+      setSpinStatus('');
+      $('spinError').textContent = 'Big Book API request failed (' + e.message + ') — showing the built-in list instead.';
+      $('spinError').style.display = 'block';
+    }
+  } else {
+    lastFullPool = getEffectiveBookList(finalDecade, finalGenre);
+    currentSource = 'builtin';
+    try{
+      await enrichBuiltinListWithBigBook(lastFullPool);
+    } catch(e){
+      console.warn('Built-in list Big Book API enrichment failed', e.message);
+    }
+    setSpinStatus('');
+  }
+
+  applyFiltersAndRender();
+  $('spinBtn').disabled = false;
+}
+
+// Re-applies block/explicit-content/Max-Results filtering against the
+// full pool already fetched (and, for Big Book API, already enriched)
+// this spin — no new API calls. Used right after a spin, and again by
+// the "Re-run Filters" button if filter settings change afterward.
+// Pure — no rendering, no global state writes. Filters, sorts, and trims a
+// raw pool down to Max Results, returning both the survivors and a record
+// of everything excluded and why. Shared by the initial spin, the pool
+// growth loop below, and the Re-run Filters button.
+function computeFilteredSurvivors(pool){
+  const survivors = [];
+  const filteredOut = [];
+  pool.forEach(m => {
+    if (isBlocked(m.title, m.year)){
+      filteredOut.push({ book: m, reason: 'Blocked' });
+      return;
+    }
+    if (!matchesExplicitContentFilter(m)){
+      filteredOut.push({ book: m, reason: 'Excluded by explicit content filter' });
+      return;
+    }
+    if (!matchesLanguage(m)){
+      const lang = m.language ? normalizeLanguage(m.language) : 'Unknown';
+      filteredOut.push({ book: m, reason: `Language "${lang}" excluded` });
+      return;
+    }
+    survivors.push(m);
+  });
+
+  survivors.sort((a, b) => {
+    if (a.userRating == null && b.userRating == null) return 0;
+    if (a.userRating == null) return 1;
+    if (b.userRating == null) return -1;
+    if (a.userRating !== b.userRating) return b.userRating - a.userRating;
+    // Tied on user rating — break the tie with critic score, when available.
+    if (a.criticScore == null && b.criticScore == null) return 0;
+    if (a.criticScore == null) return 1;
+    if (b.criticScore == null) return -1;
+    return b.criticScore - a.criticScore;
+  });
+
+  const allQualified = survivors.slice(); // everything that passed real content criteria, before the display-only max-results trim below
+
+  if (survivors.length > maxResults){
+    const overflow = survivors.slice(maxResults);
+    overflow.forEach(m => filteredOut.push({ book: m, reason: `Exceeded Max Results (${maxResults}) — kept the higher-rated titles instead` }));
+    return { survivors: survivors.slice(0, maxResults), filteredOut, allQualified };
+  }
+  return { survivors, filteredOut, allQualified };
+}
+
+function applyFiltersAndRender(){
+  const { survivors, filteredOut } = computeFilteredSurvivors(lastFullPool);
+  currentBatch = survivors;
+  lastFilteredOut = filteredOut;
+  renderFilteredOut();
+
+  renderResults();
+  $('rerunFiltersCard').style.display = lastFullPool.length ? 'block' : 'none';
+  $('spinBtn').disabled = false;
+}
+
+function firstNumber(...vals){
+  for (const v of vals) if (typeof v === 'number') return v;
+  return null;
+}
+function firstString(...vals){
+  for (const v of vals) if (typeof v === 'string' && v) return v;
+  return null;
+}
+function firstArray(...vals){
+  for (const v of vals) if (Array.isArray(v) && v.length) return v;
+  return null;
+}
+// Unlike Movies/TV (whose canonical genre is the short form "Sci-Fi"),
+// Books' canonical genre name is the full "Science Fiction" — matching
+// what Open Library's own subject tags actually say — so no alias
+// translation is needed here the way it was for those.
+const GENRE_DISPLAY_ALIASES = {};
+
+function normalizeGenreList(arr){
+  if (!arr) return null;
+  const names = arr.map(g => {
+    let name = '';
+    if (typeof g === 'string') name = g;
+    else if (g && typeof g === 'object' && g.name) name = g.name;
+    return GENRE_DISPLAY_ALIASES[name] || name;
+  }).filter(Boolean);
+  return names.length ? names : null;
+}
+
+// Runs `worker` over `items` with at most `limit` in flight at once, and a
+// small pause between each item in a lane, so a 50-book batch spreads its
+// requests out over several seconds instead of bursting all at once.
+async function mapWithConcurrency(items, limit, worker, paceMs){
+  let cursor = 0;
+  async function runNext(){
+    while (cursor < items.length){
+      const i = cursor++;
+      try{
+        await worker(items[i], i);
+      } catch(e){
+        // The worker is expected to catch its own errors, but this is a
+        // shared queue runner — if anything unexpected ever slips through,
+        // one item's failure must never be able to halt the rest of the
+        // batch behind it.
+        console.warn('mapWithConcurrency: worker threw unexpectedly', e);
+      }
+      if (paceMs) await new Promise(r => setTimeout(r, paceMs));
+    }
+  }
+  const runners = Array.from({ length: Math.min(limit, items.length) }, runNext);
+  await Promise.all(runners);
+}
+
+function bookHasEnrichmentData(cached){
+  return !!cached && (cached.description || cached.posterUrl || (cached.genres && cached.genres.length));
+}
+
+function bookNeedsEnrichment(book){
+  return !book.description && !book.posterUrl;
+}
+
+// Big Book API's Get Book Information endpoint — same one used at
+// pick-time in fetchBigBookExtras, reused here for the
+// discovery/warmup enrichment path.
+async function fetchBigBookDetails(id, maxAttempts, reason){
+  return bbFetch(`/${id}`, {}, 0, maxAttempts, reason);
+}
+
+async function enrichOneBook(book, maxAttempts, forceRefresh){
+  const id = book.bigBookId;
+  let record = forceRefresh ? {} : (wmRatingsCache.get(id) || {});
+
+  // Shared, cross-user cache — checked whenever any tier this device
+  // knows about (or doesn't know about at all) might be stale. Only
+  // consulted while signed in, and skipped entirely on a forced
+  // refresh — the whole point of that is to bypass every cache, not
+  // just the local one.
+  if (currentUser && !forceRefresh){
+    const anyTierNeedsShared = !isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS)
+      || !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
+    if (anyTierNeedsShared){
+      try{
+        const sharedDoc = await fbDb.collection('sharedBookRatings').doc(String(id)).get();
+        if (sharedDoc.exists) record = mergeFreshestTiers(record, sharedDoc.data());
+      } catch(e){ console.warn('Shared enrichment cache lookup failed, falling back to Big Book API directly', e.message); }
+    }
+  }
+
+  const discoveryFresh = isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS);
+  const enrichmentFresh = isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
+
+  if (discoveryFresh && enrichmentFresh && bookHasEnrichmentData(record)){
+    // Every tier we might need is fresh, whether from local or the shared
+    // merge above — no live call needed at all.
+    wmRatingsCache.set(id, record);
+    saveWmRatingsCache();
+    applyRecordToBook(book, record);
+    return { ok: true, hasData: true };
+  }
+
+  // At least one tier is stale or was never known — since everything
+  // comes from the same Get Book Information response, a single live
+  // call refreshes it all at once.
+  try{
+    const details = await fetchBigBookDetails(id, maxAttempts, `Details lookup: "${book.title}"`);
+    // A response with neither a title nor an id at all is treated as a
+    // failure rather than a legitimate "nothing here" result — this is
+    // what a degraded/throttled 200 OK response would look like.
+    if (!details || (details.title == null && details.id == null)){
+      throw new Error('Empty or unexpected response from Big Book API');
+    }
+    const now = Date.now();
+    const ids = details.identifiers || {};
+    const fresh = {
+      title: book.title,
+      year: (details.publish_date != null) ? Math.round(details.publish_date) : (book.year || null),
+      genres: book.genresOverride || record.genres || null, // Big Book API's own responses don't return genre tags — carried over from the genre we searched for at discovery time
+      discoveredAt: now,
+      posterUrl: details.image || book.posterUrl || null,
+      description: details.description || null,
+      userRating: (details.rating && details.rating.average != null) ? details.rating.average * 10 : (book.userRating ?? null),
+      openLibraryId: ids.open_library_id || null,
+      isbn: ids.isbn_13 || ids.isbn_10 || null,
+      enrichedAt: now
+    };
+    const hasData = bookHasEnrichmentData(fresh);
+    // Only cache when there's actually something here — a 200 OK with an
+    // empty/degraded body must NOT get cached, or every future attempt —
+    // including our own retry pass below — will just read back the same
+    // empty result instead of trying again.
+    if (hasData){
+      wmRatingsCache.set(id, fresh);
+      saveWmRatingsCache(); // fire-and-forget — don't block on a local storage write
+      if (currentUser){
+        // merge:true — fetchBigBookExtras also writes to this same
+        // document (availability specifically); merging means this write
+        // can't erase that field, since this function doesn't know about
+        // it at all.
+        fbDb.collection('sharedBookRatings').doc(String(id)).set(fresh, { merge: true })
+          .catch(e => console.warn('Could not write shared enrichment cache entry', e.message)); // fire-and-forget — never blocks the enrichment result
+      }
+      applyRecordToBook(book, fresh);
+      return { ok: true, hasData: true };
+    }
+    // Live call succeeded but came back empty — fall back to whichever
+    // tiers were actually fresh before we tried, rather than nothing.
+    if (discoveryFresh || enrichmentFresh){
+      applyRecordToBook(book, record, { discoveryFresh, enrichmentFresh });
+      return { ok: true, hasData: bookHasEnrichmentData(record) };
+    }
+    return { ok: true, hasData: false };
+  } catch(e){
+    console.warn('Big Book API detail lookup failed for', book.title, e.message);
+    // Live call failed entirely — still use whatever tiers were fresh
+    // going in, rather than surfacing a total failure when we actually
+    // had usable (if partial) data on hand.
+    if (discoveryFresh || enrichmentFresh){
+      applyRecordToBook(book, record, { discoveryFresh, enrichmentFresh });
+      return { ok: true, hasData: bookHasEnrichmentData(record) };
+    }
+    return { ok: false, hasData: false, error: e.message };
+  }
+}
+
+async function enrichBatchWithRatings(books, opts){
+  const silent = opts && opts.silent;
+  // Experimenting with concurrency 3 (was 1, then 2 — confirmed fine). Every
+  // request still passes through the same global adaptive throttle
+  // regardless of lane count, and the throttle-gate race condition is
+  // fixed, so lanes queue correctly rather than slipping through together.
+  // If Big Book API's limit is throughput-based this won't speed anything
+  // up beyond what 2 already got — the throttle will just queue the third
+  // lane behind the others — but it's safe to try. Drop back down if
+  // rate-limiting creeps up.
+  let done = 0, missing = 0, firstError = null;
+  await mapWithConcurrency(books, 3, async (book) => {
+    const result = await enrichOneBook(book, 6);
+    done++;
+    if (!result.ok || !result.hasData){
+      missing++;
+      if (result.error && !firstError) firstError = result.error;
+    }
+    if (!silent) setSpinStatus(`Fetching details… ${done}/${books.length}`);
+  });
+
+  if (silent) return;
+  if (missing){
+    $('enrichStatusNote').textContent =
+      `Details loaded for ${books.length - missing}/${books.length}.` +
+      (firstError ? ` (${firstError})` : ' (Big Book API may simply have nothing on file for the rest.)') +
+      ` Anything missing fills in automatically when you click into it.`;
+  } else {
+    $('enrichStatusNote').textContent = '';
+  }
+}
+
+// Looks up a single built-in list title on Big Book API by name, picks
+// the best match (matching year if possible), and caches the resolved
+// key (or the confirmed absence of one) so the same title is never
+// searched for twice.
+async function searchBigBookForBook(book){
+  const searchKey = `${book.title}|${book.year}`;
+  const cached = wmSearchCache.get(searchKey);
+  if (cached && isFresh(cached.cachedAt, WM_GLOBAL_MAX_STALE_MS)){
+    return cached.bbId;
+  }
+
+  // Shared database lookup by title+year — checked before ever needing a
+  // live search. This is what lets built-in list enrichment work for a
+  // signed-in user right away: a title/year match here gives us the Big
+  // Book API id directly, since that's the document's own ID in the
+  // shared collection.
+  if (currentUser){
+    try{
+      const snap = await fbDb.collection('sharedBookRatings')
+        .where('title', '==', book.title)
+        .where('year', '==', book.year)
+        .limit(1)
+        .get();
+      if (!snap.empty){
+        const bbId = Number(snap.docs[0].id);
+        wmSearchCache.set(searchKey, { bbId, cachedAt: Date.now() });
+        saveWmSearchCache();
+        return bbId;
+      }
+    } catch(e){ console.warn('Shared database title/year lookup failed (may need a Firestore index on title+year) — falling back to live search', e.message); }
+  }
+
+  let bbId = null;
+  try{
+    const data = await bbFetch('/search-books', { query: book.title, number: '5' }, 0, 3, `Built-in list search: "${book.title}"`);
+    const results = (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean);
+    // search-books doesn't return a year field to match against, so this
+    // just takes the top result rather than trying to disambiguate by
+    // year the way the Open Library version could.
+    bbId = results[0] ? results[0].id : null;
+  } catch(e){
+    console.warn('Big Book API search failed for', book.title, e.message);
+    wmSearchCache.delete(searchKey); // don't cache a failure as a confirmed no-match — worth retrying later
+    return null;
+  }
+  wmSearchCache.set(searchKey, { bbId, cachedAt: Date.now() });
+  saveWmSearchCache(); // fire-and-forget
+  return bbId;
+}
+
+// Best-effort: try to enrich each built-in list title with the same
+// ratings/cover/genres/description a live Big Book API result would
+// have. Silently does nothing for a title it can't resolve — the
+// built-in list still displays exactly as before either way.
+async function enrichBuiltinListWithBigBook(books){
+  let done = 0;
+  await mapWithConcurrency(books, 1, async (book) => {
+    if (!book.bigBookId){
+      const bbId = await searchBigBookForBook(book);
+      if (bbId) book.bigBookId = bbId;
+    }
+    if (book.bigBookId){
+      await enrichOneBook(book, 2);
+    }
+    done++;
+    setSpinStatus(`Enriching built-in list… ${done}/${books.length}`);
+  }, 250);
+}
+
+// Best-effort only — a text match on title/description, not a content
+// analysis of the actual film. Won't catch everything, and can very
+// occasionally flag something legitimate (a serious documentary that uses
+// one of these words clinically, for instance). No source-scoping needed
+// here, unlike the filters above — a title with no description simply
+// can't match anything, so it passes through either way.
+function matchesExplicitContentFilter(book){
+  if (!filterExplicitContent) return true;
+  const allKeywords = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords);
+  if (!allKeywords.length) return true;
+  const haystack = `${book.title || ''} ${book.description || ''}`.toLowerCase();
+  return !allKeywords.some(kw => kw && haystack.includes(kw.toLowerCase()));
+}
+
+function matchesLanguage(book){
+  // Neither Open Library nor Big Book API's endpoints return a language
+  // field at all — this filter has no real data to work with for any
+  // live source this app has used, so it passes through unconditionally
+  // rather than silently excluding everything by defaulting to
+  // "Unknown" for every single result.
+  return true;
+  const lang = book.language ? normalizeLanguage(book.language) : 'Unknown';
+  return enabledLanguages.includes(lang);
+}
+
+// search-books' response nests each result as a single-element array —
+// {"books": [[{...}], [{...}]]} — confirmed directly from a real response,
+// not a guess. Flattened here so nothing downstream has to know about it.
+async function fetchBigBookPage(startYear, genreName, limit, reason, minRatingParam, maxRatingParam){
+  const genreValue = BB_GENRES[genreName];
+  if (!genreValue) return [];
+  const endYear = Math.min(startYear + 9, CURRENT_YEAR);
+  const params = {
+    genres: genreValue,
+    'earliest-publish-year': String(startYear),
+    'latest-publish-year': String(endYear),
+    number: String(limit)
+  };
+  if (minRatingParam != null) params['min-rating'] = String(minRatingParam);
+  if (maxRatingParam != null) params['max-rating'] = String(maxRatingParam);
+  const data = await bbFetch('/search-books', params, 0, 6, reason || 'Discovery list');
+  const flatBooks = (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean);
+  return flatBooks.map(b => ({
+    title: b.title,
+    // search-books doesn't return a publish year at all — left unset here
+    // and backfilled by enrichOneBook from Get Book Information's
+    // publish_date, which does return one, before the grid ever renders.
+    year: null,
+    bigBookId: b.id,
+    posterUrl: b.image || null,
+    authors: (b.authors || []).map(a => a.name).filter(Boolean),
+    // Big Book API's rating is 0-1 — converted to the app's 0-10 scale
+    // here so the existing rating-chip display works unchanged.
+    userRating: (b.rating && b.rating.average != null) ? b.rating.average * 10 : null,
+    // search-books doesn't return genre tags on results either — but we
+    // already know which genre we searched for, so tag it directly
+    // rather than leaving it blank.
+    genresOverride: [genreName]
+  }));
+}
+
+// Big Book API returns real per-book ratings directly in the discovery
+// response (unlike Open Library, which needed a separate call) — so the
+// rating-band search Movies/TV uses is back: start at a narrow top band
+// and widen downward only if not enough results turn up there, so the
+// highest-rated titles for a combo get returned first.
+async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonPrefix){
+  const ceiling = 1;
+  const floor = 0;
+  const collected = [];
+  let low = 0.8;
+  while (true){
+    setSpinStatus(`${reasonPrefix} — searching rated ${(low * 10).toFixed(1)}–${(ceiling * 10).toFixed(1)}…`);
+    const batch = await fetchBigBookPage(decade, genre, targetCount, `${reasonPrefix}: rated ${low}-${ceiling}`, low, ceiling);
+    batch.forEach(b => {
+      if (!seenIds.has(b.bigBookId) && !collected.some(c => c.bigBookId === b.bigBookId)){
+        collected.push(b);
+      }
+    });
+    if (collected.length >= targetCount) break;
+    if (low <= floor) break;
+    low = Math.max(floor, low - 0.2);
+  }
+  return collected;
+}
+
+// Builds the pool for one spin. Always re-fetches from scratch with a
+// growing count rather than paging forward — simplest way to avoid any
+// risk of skipping or duplicating titles between calls. It's still just
+// one call each time regardless of size, so this costs nothing extra by
+// itself; what costs something is enrichment, which only ever runs on
+// titles we haven't already fetched+enriched this round.
+// Reconstructs book objects directly from the persistent cache for one
+// decade/genre combo — no API call involved. Genre matching uses each
+// entry's real stored genre list (set when it was first cached), not
+// "which spin found it," so a title tagged both Horror and Thriller
+// correctly shows up for either.
+function getCachedBooksForCombo(decade, genre){
+  const results = [];
+  wmRatingsCache.forEach((entry, id) => {
+    // Can't trust this record's decade/genre placement at all once its
+    // discovery tier has gone stale — skip it entirely rather than risk
+    // matching it into a combo it may no longer actually belong to.
+    if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return;
+    if (entry.year == null) return;
+    if (Math.floor(entry.year / 10) * 10 !== decade) return;
+    if (!entry.genres || !entry.genres.includes(genre)) return;
+    const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
+    const languageFresh = isFresh(entry.languageAt, WM_ENRICHMENT_STALE_MS);
+    const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
+    results.push({
+      title: entry.title,
+      year: entry.year,
+      bigBookId: id,
+      imdbId: entry.imdbId || null,
+      tmdbId: entry.tmdbId || null,
+      posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
+      userRating: ratingFresh ? entry.userRating : null,
+      criticScore: ratingFresh ? entry.criticScore : null,
+      usRating: enrichmentFresh ? entry.usRating : null,
+      genresOverride: entry.genres,
+      language: languageFresh ? (entry.language || null) : null,
+      description: enrichmentFresh ? (entry.description || null) : null
+    });
+  });
+  return results;
+}
+
+// The shared-database equivalent of getCachedBooksForCombo above — a
+// real Firestore query across every signed-in user's contributed book
+// records for this decade+genre, not just this device's own local cache.
+// Deliberately does NOT filter by rating server-side — everything
+// matching decade+genre gets downloaded in batches, and it's up to the
+// caller (buildBigBookPool) to run the normal filter pipeline on it and
+// decide what's actually worth keeping. This also means this function no
+// longer writes anything to local storage itself — only genuinely
+// qualifying titles get committed locally, decided by the caller after
+// filtering, not just anything that happened to get downloaded.
+//
+// Supports pagination via an optional cursor (a Firestore document
+// snapshot from a previous call's last result) — a single fixed-size
+// batch has no way to know in advance whether it'll contain enough
+// titles that actually pass your filters, so the caller pulls
+// successive batches, checking after each one, until either enough
+// survive or the data genuinely runs out.
+//
+// Needs a Firestore composite index on (genres array-contains, year
+// range, ordered by year) to actually work — until that index exists,
+// Firestore rejects the query outright. That failure is caught and
+// treated as "no shared data available this time," never as a hard
+// error — the spin still works using local cache and live discovery
+// either way. Fastest way to create the index: trigger this once while
+// signed in with a key connected, then check the browser console for a
+// Firestore error containing a direct link that auto-configures the
+// correct index.
+async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
+  if (!currentUser) return { candidates: [], cursor: null, exhausted: true };
+  try{
+    let query = fbDb.collection('sharedBookRatings')
+      .where('genres', 'array-contains', genre)
+      .where('year', '>=', decade)
+      .where('year', '<=', decade + 9)
+      .orderBy('year')
+      .limit(batchSize);
+    if (cursor) query = query.startAfter(cursor);
+
+    const snap = await query.get();
+    const candidates = [];
+    snap.forEach(doc => {
+      const entry = doc.data();
+      if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return; // can't trust this record's decade/genre placement once stale
+      const id = Number(doc.id) || doc.id;
+      const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
+      const languageFresh = isFresh(entry.languageAt, WM_ENRICHMENT_STALE_MS);
+      const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
+      candidates.push({
+        record: entry, // kept alongside the pool-ready shape below so the caller can commit it locally, with its real timestamps intact, if it survives filtering
+        pool: {
+          title: entry.title,
+          year: entry.year,
+          bigBookId: id,
+          imdbId: entry.imdbId || null,
+          tmdbId: entry.tmdbId || null,
+          posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
+          userRating: ratingFresh ? entry.userRating : null,
+          criticScore: ratingFresh ? entry.criticScore : null,
+          usRating: enrichmentFresh ? entry.usRating : null,
+          genresOverride: entry.genres,
+          language: languageFresh ? (entry.language || null) : null,
+          description: enrichmentFresh ? (entry.description || null) : null
+        }
+      });
+    });
+    return {
+      candidates,
+      cursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : cursor,
+      exhausted: snap.docs.length < batchSize // fewer than requested means there's nothing left to page through
+    };
+  } catch(e){
+    console.warn('Shared discovery query failed (likely missing Firestore index — create one on sharedBookRatings for genres array-contains + year range, ordered by year) — continuing with local cache and live discovery only', e.message);
+    return { candidates: [], cursor: null, exhausted: true };
+  }
+}
+
+async function buildBigBookPool(decade, genre){
+  // Full pass through the local cache FIRST — zero API calls — before ever
+  // reaching for Big Book API. With a well-warmed cache this can fully
+  // satisfy a spin on its own.
+  setSpinStatus('Checking local cache…');
+  const seenIds = new Set();
+  let pool = [];
+  const sharedRecordsById = new Map(); // bigBookId -> raw shared record, kept only long enough to decide what's worth committing locally after filtering
+
+  if (true){
+    getCachedBooksForCombo(decade, genre).forEach(m => {
+      pool.push(m);
+      seenIds.add(m.bigBookId);
+    });
+
+    if (currentUser){
+      setSpinStatus('Checking shared database…');
+      // Genuinely exhaustive — keeps pulling batches until the shared data
+      // for this decade+genre actually runs out (or a generous hard cap
+      // is hit), rather than stopping once "enough" survivors are found.
+      // Since the whole accumulated pool gets sorted and trimmed to the
+      // top maxResults only once, at the very end, this naturally means a
+      // higher-rated title found in a later batch replaces a lower-rated
+      // one from an earlier batch — no separate "replace" logic needed,
+      // that's just what sorting the full set does. The trade-off is
+      // exactly what it sounds like: more Firestore reads and more time
+      // per spin, in exchange for actually finding the true best matches
+      // instead of settling for the first sufficient ones.
+      const sharedBatchSize = Math.max(maxResults * 5, 50); // larger batches now that we're not trying to stop early — fewer round trips to cover the same ground
+      const maxSharedBatches = 20; // a generous ceiling (up to ~1000+ candidates), not a "good enough" shortcut — still bounded so a pathologically large combo can't run away entirely
+      let sharedCursor = null;
+      let sharedBatchesUsed = 0;
+      const sharedScanStart = Date.now();
+      for (let batchNum = 0; batchNum < maxSharedBatches; batchNum++){
+        const { candidates, cursor, exhausted } = await getSharedBooksForComboBatch(decade, genre, sharedBatchSize, sharedCursor);
+        sharedBatchesUsed++;
+        candidates.forEach(c => {
+          if (!seenIds.has(c.pool.bigBookId)){
+            pool.push(c.pool);
+            seenIds.add(c.pool.bigBookId);
+            sharedRecordsById.set(c.pool.bigBookId, c.record);
+          }
+        });
+        sharedCursor = cursor;
+        if (exhausted) break; // genuinely nothing more to page through
+        setSpinStatus(`Checking shared database… (${sharedRecordsById.size} candidates so far)`);
+      }
+      console.log(`[shared discovery] ${sharedBatchesUsed} batch(es), ${sharedRecordsById.size} candidates, ${Date.now() - sharedScanStart}ms`);
+    }
+
+    // Some cached entries may come back with their rating tier stale
+    // (nulled out by getCachedBooksForCombo/getSharedBooksForCombo) even
+    // though their discovery tier is still trusted — those need a fresh
+    // enrichment pass too, not just newly-discovered live candidates
+    // below, or they'd silently skip rating filtering forever instead of
+    // getting current data.
+    const needsFreshRating = pool.filter(m => bookNeedsEnrichment(m) && !isBlocked(m.title, m.year));
+    if (needsFreshRating.length){
+      await enrichBatchWithRatings(needsFreshRating);
+    }
+  }
+
+  let { survivors, allQualified } = computeFilteredSurvivors(pool);
+
+  // Now that filtering has actually run, commit to local storage only the
+  // shared candidates that genuinely qualified — not everything that was
+  // merely downloaded. A title that failed content rating, language, or
+  // rating criteria for THIS spin isn't stored locally at all; if a later
+  // spin has looser filters, it'll simply be re-downloaded from the
+  // shared database then; that's a deliberate trade for not accumulating
+  // local storage for titles that didn't actually match what you wanted.
+  if (sharedRecordsById.size){
+    const qualifiedIds = new Set(allQualified.map(m => m.bigBookId));
+    let committedAny = false;
+    sharedRecordsById.forEach((record, id) => {
+      if (!qualifiedIds.has(id)) return;
+      const existingLocal = wmRatingsCache.get(id);
+      const merged = existingLocal ? mergeFreshestTiers(existingLocal, record) : record;
+      wmRatingsCache.set(id, merged);
+      committedAny = true;
+    });
+    if (committedAny) saveWmRatingsCache(); // fire-and-forget
+  }
+
+  let didLiveFetch = false;
+
+  // Only reach for live discovery if the cache alone doesn't cover Max
+  // Results after filtering — searched by rating band (see
+  // fetchBigBookByRating above), so this already keeps widening on
+  // its own until either enough titles are found or your configured
+  // Minimum Rating is reached, replacing the old separate shortfall-retry
+  // loop that used to sit here.
+  if (survivors.length < maxResults){
+    const needed = maxResults - survivors.length;
+    didLiveFetch = true;
+    const fresh = await fetchBigBookByRating(decade, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
+    fresh.forEach(m => seenIds.add(m.bigBookId));
+    pool = pool.concat(fresh);
+    await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)));
+    ({ survivors } = computeFilteredSurvivors(pool));
+  }
+
+  const allCached = (list) => list.length > 0 &&
+    list.every(m => bookHasEnrichmentData(wmRatingsCache.get(m.bigBookId)));
+
+  // If we're fully cached so far, make ONE opportunistic attempt to grab 5
+  // more — still sorted by popularity (edition count), same as the main
+  // discovery above, so this bonus exploration keeps the same priority
+  // rather than quietly falling back to arbitrary order. Skipped entirely
+  // once the pool is already at or past 3x Max Results.
+  const hardCap = maxResults * 3;
+  if (didLiveFetch && pool.length < hardCap && allCached(pool)){
+    const growBy = Math.min(hardCap, pool.length + 5) - pool.length;
+    if (growBy > 0){
+      const fresh = await fetchBigBookByRating(decade, genre, growBy, seenIds, 'Free growth (fully cached so far)');
+      if (fresh.length){
+        fresh.forEach(m => seenIds.add(m.bigBookId));
+        pool = pool.concat(fresh);
+        await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)), { silent: true });
+      }
+    }
+    ({ survivors } = computeFilteredSurvivors(pool));
+  }
+
+  return pool;
+}
+
+// Runs once per session, in the background after the app loads — never awaited by anything, never blocks the UI. Pulls a small sample (10
+// titles) per enabled decade/genre combo and warms the persistent ratings
+// cache for them, so future spins into those combos start with a head
+// start already cached. Uses enrichBatchWithRatings's silent mode so it
+// never touches the spin button or status text, even if a real spin
+// happens to run at the same time.
+async function runStartupWarmup(){
+  if (bbWarmupDone) return;
+
+  const combos = [];
+  DECADES.filter(d => enabledDecades.includes(d)).forEach(d => {
+    GENRES.filter(g => enabledGenres.includes(g)).forEach(g => combos.push([d, g]));
+  });
+  if (!combos.length) return;
+
+  const setStatus = (text) => {
+    console.log('[warmup]', text);
+    const el = document.getElementById('bbWarmupStatus');
+    if (el) el.textContent = text;
+  };
+
+  setStatus(`Warming up cache in the background: 0/${combos.length} combos…`);
+  for (let i = 0; i < combos.length; i++){
+    const [decade, genre] = combos[i];
+    try{
+      // Sorted by popularity (edition count) — same as a real spin uses —
+      // so the most enduringly popular titles for this combo get cached
+      // first.
+      const pool = await fetchBigBookByRating(decade, genre, 10, new Set(), `Background cache warmup: ${decadeLabel(decade)} ${genre}`);
+      const toEnrich = pool.filter(m => !isBlocked(m.title, m.year));
+      await enrichBatchWithRatings(toEnrich, { silent: true });
+    } catch(e){
+      console.warn('[warmup] failed for', decade, genre, e.message);
+    }
+    setStatus(`Warming up cache in the background: ${i + 1}/${combos.length} combos…`);
+  }
+
+  bbWarmupDone = true;
+  await saveBbWarmupDone();
+  setStatus(`Cache warmup complete (${combos.length} decade/genre combos).`);
+}
+
+/* ==================================================================
+   Results / grid
+   ================================================================== */
+function isPicked(title, year){ return picks.some(p => p.title === title && p.year === year); }
+// Looks up who picked a given title, for display on the grid card once
+// it's watched — returns null if unpicked, or if picked without a
+// named picker (crew was empty / picker skipped as Unknown).
+function getPickerFor(title, year){
+  const entry = picks.find(p => p.title === title && p.year === year);
+  return (entry && entry.picker && entry.picker !== 'Unknown') ? entry.picker : null;
+}
+
+function bookGenres(book){
+  if (book.genresOverride && book.genresOverride.length) return book.genresOverride;
+  const key = `${book.title}|${book.year}`;
+  if (EXTRA_GENRES[key]) return EXTRA_GENRES[key];
+  return currentChoice ? [currentChoice.genre] : [];
+}
+
+function bookDetailLink(book){
+  if (book.openLibraryId) return `https://openlibrary.org/works/${book.openLibraryId}`;
+  if (book.isbn) return `https://www.worldcat.org/isbn/${book.isbn}`;
+  return `https://openlibrary.org/search?q=${encodeURIComponent(book.title)}`;
+}
+
+function bookCoverUrl(book){
+  return book.posterUrl || null;
+}
+
+function bookLinkLabel(book){
+  if (book.openLibraryId) return 'Open Library';
+  if (book.isbn) return 'WorldCat';
+  return 'Search';
+}
+
+function genreChipsHtml(book){
+  const genres = bookGenres(book);
+  if (!genres.length) return '';
+  return `<div class="genre-chips">${genres.map(g => `<span class="genre-chip">${escapeHtml(g)}</span>`).join('')}</div>`;
+}
+
+function ratingChipsHtml(book){
+  const chips = [];
+  if (book.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${book.userRating.toFixed(1)}</span>`);
+  if (book.criticScore != null) chips.push(`<span class="rating-chip" title="Critic score">📊 Critic ${book.criticScore}%</span>`);
+  if (book.usRating) chips.push(`<span class="rating-chip" title="US content rating">🎟 ${escapeHtml(book.usRating)}</span>`);
+  if (!chips.length) return '';
+  return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
+}
+
+function renderResults(){
+  $('resultsTitle').textContent = `${decadeLabel(currentChoice.decade)} ${currentChoice.genre}`;
+  $('resultsCount').textContent = `${currentBatch.length} book${currentBatch.length === 1 ? '' : 's'}`;
+  $('resultsArea').style.display = 'block';
+  updateSourceNote();
+
+  const grid = $('grid');
+  grid.innerHTML = '';
+  $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
+
+  currentBatch.forEach((book, i) => {
+    const picked = isPicked(book.title, book.year);
+    const card = document.createElement('div');
+    card.className = 'poster-card' + (picked ? ' disabled' : '');
+    card.dataset.idx = i;
+    const picker = picked ? getPickerFor(book.title, book.year) : null;
+    const watchedTagHtml = picked ? `<div class="watched-tag">WATCHED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
+    card.innerHTML = `
+      ${watchedTagHtml}
+      <div class="poster-meta">
+        <div class="p-num">${String(i + 1).padStart(2, '0')}</div>
+        <div class="p-title-row"><div class="p-title">${escapeHtml(book.title)}</div></div>
+        <div class="p-year">${book.year || '—'}</div>
+        <div class="rating-row">${ratingChipsHtml(book)}</div>
+        <div class="genre-row">${genreChipsHtml(book)}</div>
+        <div class="meta-footer">
+          <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" title="View on ${bookLinkLabel(book)}">🔗 ${bookLinkLabel(book)}</a>
+          <button class="block-card-btn" title="Block this book">⛔</button>
+        </div>
+      </div>
+    `;
+    card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
+    card.querySelector('.block-card-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      blockBookFromGrid(book);
+    });
+    if (!picked) card.addEventListener('click', () => openConfirm(book));
+    grid.appendChild(card);
+  });
+}
+
+async function blockBookFromGrid(book){
+  if (!confirm(`Block "${book.title}" (${book.year || '—'}) so it never shows up in a spin again?`)) return;
+  blockedBooks.push({ title: book.title, year: book.year || null });
+  await saveBlockedBooks();
+  currentBatch = currentBatch.filter(m => !(m.title === book.title && m.year === book.year));
+  // Shows up immediately in the Filtered Out list, same {book, reason}
+  // shape every other exclusion reason already uses — rather than the
+  // book just silently vanishing from the grid with no trace of what
+  // happened to it.
+  lastFilteredOut.push({ book, reason: 'Blocked' });
+  renderResults();
+  renderFilteredOut();
+  renderBlockList();
+}
+
+/* ==================================================================
+   Confirm pick modal
+   ================================================================== */
+function openConfirm(book){
+  const root = $('modalRoot');
+  const posterUrl = bookCoverUrl(book);
+  const posterHtml = posterUrl
+    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(book.title)} poster">`
+    : `<div class="m-icon" id="modalPoster">🎬</div>`;
+  const showStreamingLookup = currentSource === 'bigbook' && book.bigBookId;
+  const canForceRefresh = !!book.bigBookId;
+  const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(book.bigBookId);
+  const showExtrasContainer = showStreamingLookup || canForceRefresh;
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal">
+        ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from Big Book API'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
+        ${posterHtml}
+        <h3>${escapeHtml(book.title)}</h3>
+        <p>${book.year || '—'} · ${currentChoice.genre}</p>
+        <div id="modalRatings">${ratingChipsHtml(book)}</div>
+        <div id="modalGenres">${genreChipsHtml(book)}</div>
+        <p id="modalDescription" class="modal-description" style="${book.description ? '' : 'display:none;'}">${escapeHtml(book.description || '')}</p>
+        <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin: 10px 0;">🔗 View on ${bookLinkLabel(book)} / find trailer</a>
+        ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showStreamingLookup ? 'Checking where to stream…' : ''}</div>` : ''}
+        <p style="margin-top:6px;">Lock this in for tonight? It'll be marked watched and won't be selectable again.</p>
+        <div class="row">
+          <button class="btn-ghost" id="cancelPick">Cancel</button>
+          <button class="btn-primary" id="confirmPick">Pick This Book</button>
+        </div>
+      </div>
+    </div>
+  `;
+  $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
+  $('cancelPick').addEventListener('click', closeModal);
+  $('confirmPick').addEventListener('click', () => openPickerPrompt(book));
+
+  if (canForceRefresh && !alreadyRefreshedThisSpin){
+    $('forceRefreshBtn').addEventListener('click', async () => {
+      const btn = $('forceRefreshBtn');
+      btn.disabled = true;
+      btn.textContent = '⟳ Refreshing…';
+      const extrasEl = document.getElementById('modalExtras');
+      if (extrasEl) extrasEl.textContent = 'Checking where to stream…';
+      try{
+        const extras = await fetchBigBookExtras(book, true); // true = bypass every cache, local and shared
+        appendModalExtras(extras, book);
+      } finally {
+        // Marked used here, not just on success — the API call already
+        // went out and the quota's already spent whether or not it
+        // ultimately threw, and this keeps the tracking set and what the
+        // button visually shows always in sync if the modal is reopened
+        // later in the same spin.
+        forceRefreshedThisSpin.add(book.bigBookId);
+        // Only touch the button if the modal (and this button) is still
+        // open — it may have been closed while the live call was in
+        // flight. Once used, it stays permanently marked "Refreshed" for
+        // the rest of this spin, even on error, since the point is
+        // limiting API calls, not retrying until something useful comes
+        // back.
+        if (document.getElementById('forceRefreshBtn')){
+          btn.disabled = true;
+          btn.textContent = '✓ Refreshed';
+        }
+      }
+    });
+  }
+
+  if (showStreamingLookup){
+    fetchBigBookExtras(book).then(extras => appendModalExtras(extras, book));
+  }
+}
+
+function appendModalExtras(extras, book){
+  if (!book.posterUrl && extras.posterUrl) book.posterUrl = extras.posterUrl;
+  if (extras.genres && extras.genres.length) book.genresOverride = extras.genres;
+  if (!book.description && extras.description) book.description = extras.description;
+  if (book.userRating == null && extras.userRating != null) book.userRating = extras.userRating;
+  if (extras.openLibraryId) book.openLibraryId = extras.openLibraryId;
+  if (extras.isbn) book.isbn = extras.isbn;
+
+  backfillGridCard(book);
+
+  const container = document.getElementById('modalExtras');
+  if (!container) return; // modal already closed — data above is still backfilled to the grid
+
+  const ratingsBox = document.getElementById('modalRatings');
+  if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(book);
+  const genresBox = document.getElementById('modalGenres');
+  if (genresBox) genresBox.innerHTML = genreChipsHtml(book);
+  const descBox = document.getElementById('modalDescription');
+  if (descBox && book.description){
+    descBox.textContent = book.description;
+    descBox.style.display = '';
+  }
+
+  const posterEl = document.getElementById('modalPoster');
+  if (posterEl && posterEl.tagName !== 'IMG' && book.posterUrl){
+    const img = document.createElement('img');
+    img.id = 'modalPoster';
+    img.src = book.posterUrl;
+    img.alt = book.title + ' cover';
+    posterEl.replaceWith(img);
+  }
+
+  container.className = '';
+  container.innerHTML = detailLinkHtml(book);
+}
+
+// Big Book API has no borrow/availability concept the way Open Library
+// did — this links out to the book's real page instead: Open Library's
+// own work page when we have that id, a WorldCat lookup by ISBN
+// otherwise, or a plain title search as the last resort. Matches
+// bookDetailLink/bookLinkLabel, which decide the same thing for the
+// "Search" link shown before extras load.
+function detailLinkHtml(book){
+  return `<a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
+}
+
+// Updates a book's already-rendered grid card in place — used once a
+// click-triggered (or pick-triggered) Big Book API lookup fills in data
+// the eager batch enrichment missed, so the main grid reflects it without
+// needing a full re-render.
+function backfillGridCard(book){
+  const idx = currentBatch.indexOf(book);
+  if (idx === -1) return; // a new spin has replaced the batch since
+  const card = document.querySelector(`.poster-card[data-idx="${idx}"]`);
+  if (!card) return;
+  const ratingRow = card.querySelector('.rating-row');
+  if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(book);
+  const genreRow = card.querySelector('.genre-row');
+  if (genreRow) genreRow.innerHTML = genreChipsHtml(book);
+}
+
+function closeModal(){ $('modalRoot').innerHTML = ''; }
+
+// Called by the native Android side (MainActivity.kt) when the device back
+// button is pressed. Returning true means "handled here, don't exit the
+// app" — false means "nothing to close, go ahead and exit."
+window.handleNativeBackPress = function(){
+  if ($('modalBackdrop')){
+    closeModal();
+    return true;
+  }
+  return false;
+};
+
+async function confirmPick(book, picker){
+  picks.push({
+    title: book.title, year: book.year,
+    decade: decadeLabel(currentChoice.decade), genre: currentChoice.genre,
+    picker: picker, pickedAt: new Date().toISOString().slice(0, 10)
+  });
+  closeModal();
+  showTonightBanner(book, picker);
+  renderResults();
+  renderHistory();
+  await savePicks();
+  await recordPick(picker);
+
+  if (currentSource === 'bigbook' && book.bigBookId){
+    fetchBigBookExtras(book).then(extras => appendTonightExtras(extras, book));
+  }
+}
+
+// A book picked straight from a live spin has almost always already been
+// enriched during discovery, before the grid even rendered — this mostly
+// just returns what enrichOneBook already set on the book object. It
+// only does real work when forceRefresh is set (the "⟳ Refresh" button)
+// or for the rare case where discovery-time enrichment didn't complete
+// for this specific title.
+async function fetchBigBookExtras(book, forceRefresh){
+  await enrichOneBook(book, 6, forceRefresh);
+  return {
+    posterUrl: book.posterUrl || null,
+    genres: book.genresOverride || null,
+    description: book.description || null,
+    userRating: book.userRating ?? null,
+    openLibraryId: book.openLibraryId || null,
+    isbn: book.isbn || null
+  };
+}
+
+function appendTonightExtras(extras, book){
+  if (extras.genres && extras.genres.length) book.genresOverride = extras.genres;
+  if (book.userRating == null && extras.userRating != null) book.userRating = extras.userRating;
+  if (extras.openLibraryId) book.openLibraryId = extras.openLibraryId;
+  if (extras.isbn) book.isbn = extras.isbn;
+  backfillGridCard(book);
+
+  const banner = document.querySelector('#tonightBanner .tonight > div');
+  if (!banner) return; // user already spun again / banner no longer showing
+  banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${detailLinkHtml(book)}</div>`);
+}
+
+function showTonightBanner(book, picker){
+  const posterUrl = bookCoverUrl(book);
+  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🍿</div>';
+  $('tonightBanner').innerHTML = `
+    <div class="tonight">
+      ${posterHtml}
+      <div>
+        <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
+        <h3>${escapeHtml(book.title)}</h3>
+        <div id="tonightRatings">${ratingChipsHtml(book)}</div>
+        <p>${book.year || '—'} · ${currentChoice.genre} · Enjoy the show</p>
+        <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener">🔗 Find trailer on ${bookLinkLabel(book)}</a>
+      </div>
+    </div>
+  `;
+}
+
+/* ==================================================================
+   History
+   ================================================================== */
+$('historyToggleBtn').addEventListener('click', () => {
+  const panel = $('historyPanel');
+  const showing = panel.style.display === 'block';
+  panel.style.display = showing ? 'none' : 'block';
+  $('historyToggleBtn').textContent = showing ? 'Show Past Picks' : 'Hide Past Picks';
+});
+
+$('apiLogToggleBtn').addEventListener('click', () => {
+  const panel = $('apiLogPanel');
+  const showing = panel.style.display === 'block';
+  panel.style.display = showing ? 'none' : 'block';
+  $('apiLogToggleBtn').textContent = showing ? 'Show Log' : 'Hide Log';
+  if (!showing) renderApiCallLog();
+});
+
+$('filteredOutToggleBtn').addEventListener('click', () => {
+  const panel = $('filteredOutPanel');
+  const showing = panel.style.display === 'block';
+  panel.style.display = showing ? 'none' : 'block';
+  $('filteredOutToggleBtn').textContent = (showing ? 'Show' : 'Hide') + ` ${lastFilteredOut.length} Filtered Out`;
+});
+
+function renderFilteredOut(){
+  const row = $('filteredOutToggleRow');
+  const panel = $('filteredOutPanel');
+  if (!lastFilteredOut.length){
+    row.style.display = 'none';
+    panel.style.display = 'none';
+    $('filteredOutList').innerHTML = '';
+    return;
+  }
+  row.style.display = 'block';
+  $('filteredOutToggleBtn').textContent = `Show ${lastFilteredOut.length} Filtered Out`;
+  panel.style.display = 'none';
+  $('filteredOutList').innerHTML = lastFilteredOut.map(({ book, reason }, i) => `
+    <div class="history-item clickable" data-idx="${i}" title="Click for details — you can still pick this book">
+      <span class="h-name">${escapeHtml(book.title)} <span class="h-meta">(${book.year || '—'})</span></span>
+      <span class="h-meta">${escapeHtml(reason)}</span>
+    </div>
+  `).join('');
+  $('filteredOutList').querySelectorAll('.history-item[data-idx]').forEach(el => {
+    el.addEventListener('click', () => {
+      const entry = lastFilteredOut[Number(el.dataset.idx)];
+      if (entry) openConfirm(entry.book);
+    });
+  });
+}
+
+function renderHistory(){
+  const list = $('historyList');
+  if (!picks.length){ list.innerHTML = '<div class="empty-note">No books picked yet.</div>'; return; }
+  // Walk picks in reverse (newest first) but keep track of each item's
+  // real index in the underlying array so removal targets the right one.
+  const rows = picks.map((p, idx) => ({ p, idx })).reverse();
+  list.innerHTML = rows.map(({ p, idx }) => `
+    <div class="history-item">
+      <span class="h-name">${escapeHtml(p.title)} <span class="h-meta">(${p.year || '—'})</span></span>
+      <span class="h-meta" style="display:flex; align-items:center; gap:10px;">
+        ${p.decade} · ${p.genre}${p.picker ? ' · picked by ' + escapeHtml(p.picker) : ''} · ${p.pickedAt}
+        <button class="btn-danger btn-icon" title="Remove this pick" data-remove-idx="${idx}">✕</button>
+      </span>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-remove-idx]').forEach(btn => {
+    btn.addEventListener('click', () => removePickAt(Number(btn.dataset.removeIdx)));
+  });
+}
+
+async function removePickAt(idx){
+  const removed = picks[idx];
+  if (!removed) return;
+  if (!confirm(`Remove "${removed.title}" (${removed.year || '—'}) from the picked list? It'll become selectable again.`)) return;
+  picks.splice(idx, 1);
+  renderHistory();
+  if (currentBatch.length) renderResults();
+  await savePicks();
+}
+
+$('clearHistoryBtn').addEventListener('click', async () => {
+  if (!confirm('Clear all past picks? Every book will become pickable again.')) return;
+  picks = [];
+  renderHistory();
+  if (currentBatch.length) renderResults();
+  await savePicks();
+});
+
+// Registers the service worker so the app can be installed to the home
+// screen and reload instantly even without a network connection. Silently
+// does nothing if unsupported or if this file is opened directly via
+// file:// — service workers require being served over HTTPS (or
+// localhost), so this only takes effect once hosted somewhere.
+if ('serviceWorker' in navigator && location.protocol !== 'file:'){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then((registration) => {
+      // Ask right away whether a newer sw.js exists, rather than only
+      // relying on the browser's own background check timing (which can
+      // be quite lazy about it).
+      registration.update().catch(() => {});
+    }).catch((e) => console.warn('Service worker registration failed', e));
+
+    // Fires once a new service worker actually takes control — which
+    // happens automatically shortly after a newer version is found and
+    // installed, since sw.js calls skipWaiting()/clients.claim() rather
+    // than waiting for every tab to close first. This reloads the page
+    // exactly once so the fresh version is what's actually showing,
+    // instead of needing a manual hard-refresh or cache clear. This only
+    // touches the service worker's own app-shell cache (the HTML/CSS/JS
+    // files themselves) — it has no effect on localStorage or Firestore,
+    // so your crew, picks, and settings are completely untouched by it.
+    let hasReloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hasReloadedForUpdate) return; // guard against a theoretical double-fire
+      hasReloadedForUpdate = true;
+      location.reload();
+    });
+  });
+}
+
+init();
+</script>
+</body>
+</html>
