@@ -256,7 +256,7 @@
           <div class="icon">📺</div>
           <div>
             <div class="title">TV Shows</div>
-            <div class="desc">Same idea, for series instead of movies.</div>
+            <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
           </div>
           <div class="badge">Beta</div>
         </a>
@@ -264,8 +264,8 @@
         <div class="app-card disabled">
           <div class="icon">📚</div>
           <div>
-            <div class="title">Book Selection</div>
-            <div class="desc">Same idea, for your next read.</div>
+            <div class="title">Books</div>
+            <div class="desc">Spin for a random genre, then pick from the list.</div>
           </div>
           <div class="badge">Coming soon</div>
         </div>
@@ -301,7 +301,7 @@
     </div>
   </div>
 <script>
-const INDEX_VERSION = '2.0.0'; // tracked independently from next-up-movies.html's own version — this is a separate file
+const INDEX_VERSION = '2.1.1'; // tracked independently from next-up-movies.html's own version — this is a separate file
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
 function escapeHtml(s){
@@ -395,6 +395,25 @@ async function removeCrewMember(idx){
   // picks their history back up rather than starting over at zero.
 }
 
+async function clearPersonStats(name){
+  if (!confirm(`Clear all pick stats for ${name}? This can't be undone.`)) return;
+  delete pickStats[name];
+  savePickStatsLocal();
+  renderStatsBars();
+  if (!currentUser) return;
+  try{
+    // name is used as a plain top-level key here (no dot notation) — safe
+    // with FieldValue.delete(), since it targets exactly that one
+    // top-level field without touching any other person's entry. The
+    // unsafe version would be nesting it inside an object literal
+    // (e.g. { [name]: {...} }), which Firestore would treat as
+    // replacing the *entire* parent object rather than one field within
+    // it — not what's happening here.
+    await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats')
+      .set({ [name]: firebase.firestore.FieldValue.delete() }, { merge: true });
+  } catch(e){ console.warn('Could not clear pick stats in the cloud', e.message); }
+}
+
 document.getElementById('addCrewBtn').addEventListener('click', addCrewMember);
 document.getElementById('crewInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addCrewMember(); });
 document.getElementById('statsSection').addEventListener('change', renderStatsBars);
@@ -405,11 +424,15 @@ function renderCrew(){
   list.innerHTML = crew.map((name, i) => `
     <div class="crew-item">
       <span class="crew-name">${escapeHtml(name)}</span>
+      <button class="btn-ghost btn-icon" title="Clear this person's pick stats" data-clear-name="${escapeHtml(name)}" style="font-size:11px; padding:6px 9px;">Clear Stats</button>
       <button class="btn-danger btn-icon" title="Remove" data-idx="${i}">×</button>
     </div>
   `).join('');
   list.querySelectorAll('button[data-idx]').forEach(btn => {
     btn.addEventListener('click', () => removeCrewMember(Number(btn.dataset.idx)));
+  });
+  list.querySelectorAll('button[data-clear-name]').forEach(btn => {
+    btn.addEventListener('click', () => clearPersonStats(btn.dataset.clearName));
   });
 }
 
