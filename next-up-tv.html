@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.5.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
+const APP_VERSION = '0.6.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1816,13 +1816,20 @@ function loadSharedCrew(){
    {merge:true} would silently overwrite the whole per-person map
    instead of adding to it.
    ================================================================== */
+let pickStats = {}; // populated from the shared, cross-app local storage key — see loadSharedPickStats()
+
+function loadSharedPickStats(){
+  try{
+    pickStats = JSON.parse(localStorage.getItem('nextup_shared_pickstats') || '{}');
+  } catch(e){ pickStats = {}; }
+}
+
 async function recordPick(name){
   if (!name || name === 'Unknown') return;
-  let stats = {};
-  try{ stats = JSON.parse(localStorage.getItem('nextup_shared_pickstats') || '{}'); } catch(e){ stats = {}; }
-  if (!stats[name]) stats[name] = {};
-  stats[name].tv = (stats[name].tv || 0) + 1;
-  localStorage.setItem('nextup_shared_pickstats', JSON.stringify(stats));
+  loadSharedPickStats(); // fresh read — another tab/section may have changed this since page load
+  if (!pickStats[name]) pickStats[name] = {};
+  pickStats[name].tv = (pickStats[name].tv || 0) + 1;
+  localStorage.setItem('nextup_shared_pickstats', JSON.stringify(pickStats));
   if (!currentUser) return;
   try{
     await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats')
@@ -1837,6 +1844,7 @@ async function recordPick(name){
    ================================================================== */
 function openPickerPrompt(show){
   loadSharedCrew();
+  loadSharedPickStats();
   if (!crew.length){
     confirmPick(show, 'Unknown');
     return;
@@ -1847,7 +1855,12 @@ function openPickerPrompt(show){
       <div class="modal">
         <h3>Who's picking?</h3>
         <div class="crew-list" style="margin-top:14px;">
-          ${crew.map(name => `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" style="width:100%; text-align:left; padding:12px 14px;">${escapeHtml(name)}</button>`).join('')}
+          ${crew.map(name => {
+            const already = isPickedByPerson(show.title, show.year, name);
+            const count = (pickStats[name] && pickStats[name].tv) || 0;
+            const label = already ? 'Already picked' : `${count} picked`;
+            return `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" ${already ? 'disabled' : ''} style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;"><span>${escapeHtml(name)}</span><span class="hint" style="margin:0;">${label}</span></button>`;
+          }).join('')}
         </div>
         <div class="row" style="margin-top:14px;">
           <button class="btn-ghost" id="pickerSkip" style="flex:1;">Skip / Unknown</button>
@@ -1857,7 +1870,7 @@ function openPickerPrompt(show){
     </div>
   `;
   $('pickerBackdrop').addEventListener('click', (e) => { if (e.target.id === 'pickerBackdrop') closeModal(); });
-  root.querySelectorAll('.picker-choice').forEach(btn => {
+  root.querySelectorAll('.picker-choice:not(:disabled)').forEach(btn => {
     btn.addEventListener('click', () => confirmPick(show, btn.dataset.name));
   });
   $('pickerSkip').addEventListener('click', () => confirmPick(show, 'Unknown'));
@@ -3547,7 +3560,21 @@ async function runStartupWarmup(){
 /* ==================================================================
    Results / grid
    ================================================================== */
-function isPicked(title, year){ return picks.some(p => p.title === title && p.year === year); }
+// Checks whether one specific person has already picked this title —
+// used to grey out just their button in the picker prompt, not the
+// whole card.
+function isPickedByPerson(title, year, name){
+  return picks.some(p => p.title === title && p.year === year && p.picker === name);
+}
+// A card only shows as fully watched (disabled on the grid) once
+// everyone currently in crew has individually picked it — an Unknown
+// pick counts as globally exclusive, same as an empty crew list, since
+// there's no specific person left to still pick it.
+function isFullyPicked(title, year){
+  if (picks.some(p => p.title === title && p.year === year && p.picker === 'Unknown')) return true;
+  if (!crew.length) return picks.some(p => p.title === title && p.year === year);
+  return crew.every(name => isPickedByPerson(title, year, name));
+}
 
 function showGenres(show){
   if (show.genresOverride && show.genresOverride.length) return show.genresOverride;
@@ -3586,6 +3613,7 @@ function ratingChipsHtml(show){
 }
 
 function renderResults(){
+  loadSharedCrew(); // fresh read — crew may have changed on the landing page since this page loaded
   $('resultsTitle').textContent = `${decadeLabel(currentChoice.decade)} ${currentChoice.genre}`;
   $('resultsCount').textContent = `${currentBatch.length} show${currentBatch.length === 1 ? '' : 's'}`;
   $('resultsArea').style.display = 'block';
@@ -3596,7 +3624,7 @@ function renderResults(){
   $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
 
   currentBatch.forEach((show, i) => {
-    const picked = isPicked(show.title, show.year);
+    const picked = isFullyPicked(show.title, show.year);
     const card = document.createElement('div');
     card.className = 'poster-card' + (picked ? ' disabled' : '');
     card.dataset.idx = i;
