@@ -817,7 +817,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.1.0'; // removed duplicate detail links in modal + tonight banner, removed movie-specific text/icons, fixed a dangling variable reference caught while cleaning this up
+const APP_VERSION = '2.2.0'; // added author + page count display, and an on-demand Similar Books feature using Big Book API's /similar endpoint
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1032,6 +1032,8 @@ function mergeFreshestTiers(local, shared){
     merged.userRating = shared.userRating;
     merged.openLibraryId = shared.openLibraryId;
     merged.isbn = shared.isbn;
+    merged.authors = shared.authors;
+    merged.pageCount = shared.pageCount;
     merged.enrichedAt = shared.enrichedAt;
   }
   return merged;
@@ -1047,6 +1049,8 @@ function applyRecordToBook(book, record, tierFlags){
     if (record.userRating != null && book.userRating == null) book.userRating = record.userRating;
     if (record.openLibraryId) book.openLibraryId = record.openLibraryId;
     if (record.isbn) book.isbn = record.isbn;
+    if (record.authors && record.authors.length) book.authors = record.authors;
+    if (record.pageCount != null) book.pageCount = record.pageCount;
   }
 }
 let bbWarmupDone = false;
@@ -2321,6 +2325,23 @@ async function fetchBigBookDetails(id, maxAttempts, reason){
   return bbFetch(`/${id}`, {}, 0, maxAttempts, reason);
 }
 
+// Similar-books lookups are deliberately NOT part of the automatic
+// enrichment flow — they're a separate API call per book, only spent
+// when someone actually asks for it via the button in the modal, not
+// fired automatically for every title a spin turns up.
+const similarBooksCache = new Map(); // bigBookId -> array of {id, title, image} — session only, avoids re-spending the call if the same book's modal is reopened
+async function fetchSimilarBooks(bigBookId){
+  if (similarBooksCache.has(bigBookId)) return similarBooksCache.get(bigBookId);
+  const data = await bbFetch(`/${bigBookId}/similar`, {}, 0, 3, `Similar books lookup: id ${bigBookId}`);
+  const results = (data.similar_books || []).map(b => ({
+    id: b.id,
+    title: b.title,
+    image: b.image || null
+  }));
+  similarBooksCache.set(bigBookId, results);
+  return results;
+}
+
 async function enrichOneBook(book, maxAttempts, forceRefresh){
   const id = book.bigBookId;
   let record = forceRefresh ? {} : (wmRatingsCache.get(id) || {});
@@ -2376,6 +2397,8 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
       userRating: (details.rating && details.rating.average != null) ? details.rating.average * 10 : (book.userRating ?? null),
       openLibraryId: ids.open_library_id || null,
       isbn: ids.isbn_13 || ids.isbn_10 || null,
+      authors: (details.authors && details.authors.length) ? details.authors.map(a => a.name).filter(Boolean) : (book.authors || null),
+      pageCount: (details.number_of_pages != null) ? Math.round(details.number_of_pages) : null,
       enrichedAt: now
     };
     const hasData = bookHasEnrichmentData(fresh);
@@ -2940,6 +2963,17 @@ function genreChipsHtml(book){
   return `<div class="genre-chips">${genres.map(g => `<span class="genre-chip">${escapeHtml(g)}</span>`).join('')}</div>`;
 }
 
+function bylineHtml(book){
+  if (!book.authors || !book.authors.length) return '';
+  return `by ${escapeHtml(book.authors.join(', '))}`;
+}
+
+function metaLineHtml(book){
+  const bits = [book.year || '—', currentChoice.genre];
+  if (book.pageCount) bits.push(`${book.pageCount} pages`);
+  return bits.join(' · ');
+}
+
 function ratingChipsHtml(book){
   const chips = [];
   if (book.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${book.userRating.toFixed(1)}</span>`);
@@ -3024,11 +3058,17 @@ function openConfirm(book){
         ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from Big Book API'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
         ${posterHtml}
         <h3>${escapeHtml(book.title)}</h3>
-        <p>${book.year || '—'} · ${currentChoice.genre}</p>
+        <p class="hint" id="modalByline" style="${bylineHtml(book) ? '' : 'display:none;'}">${bylineHtml(book)}</p>
+        <p id="modalMeta">${metaLineHtml(book)}</p>
         <div id="modalRatings">${ratingChipsHtml(book)}</div>
         <div id="modalGenres">${genreChipsHtml(book)}</div>
         <p id="modalDescription" class="modal-description" style="${book.description ? '' : 'display:none;'}">${escapeHtml(book.description || '')}</p>
         ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showDetailsLookup ? 'Loading details…' : ''}</div>` : ''}
+        ${canForceRefresh ? `
+        <div id="similarBooksSection" style="margin-top:10px;">
+          <button class="btn-ghost" id="similarBooksBtn" style="font-size:12px; padding:6px 10px;">📚 Show Similar Books</button>
+          <div id="similarBooksResults"></div>
+        </div>` : ''}
         <div class="row">
           <button class="btn-ghost" id="cancelPick">Cancel</button>
           <button class="btn-primary" id="confirmPick">Pick This Book</button>
@@ -3037,6 +3077,22 @@ function openConfirm(book){
     </div>
   `;
   $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
+  if (canForceRefresh){
+    $('similarBooksBtn').addEventListener('click', async () => {
+      const btn = $('similarBooksBtn');
+      btn.disabled = true;
+      btn.textContent = 'Loading…';
+      try{
+        const similar = await fetchSimilarBooks(book.bigBookId);
+        renderSimilarBooks(similar);
+      } catch(e){
+        const resultsEl = document.getElementById('similarBooksResults');
+        if (resultsEl) resultsEl.innerHTML = `<p class="hint">Couldn't load similar books (${escapeHtml(e.message)}).</p>`;
+      } finally {
+        btn.style.display = 'none'; // one lookup per modal open — no need to click again once shown, or after it's failed
+      }
+    });
+  }
   $('cancelPick').addEventListener('click', closeModal);
   $('confirmPick').addEventListener('click', () => openPickerPrompt(book));
 
@@ -3046,7 +3102,7 @@ function openConfirm(book){
       btn.disabled = true;
       btn.textContent = '⟳ Refreshing…';
       const extrasEl = document.getElementById('modalExtras');
-      if (extrasEl) extrasEl.textContent = 'Checking where to stream…';
+      if (extrasEl) extrasEl.textContent = 'Loading details…';
       try{
         const extras = await fetchBigBookExtras(book, true); // true = bypass every cache, local and shared
         appendModalExtras(extras, book);
@@ -3083,12 +3139,22 @@ function appendModalExtras(extras, book){
   if (book.userRating == null && extras.userRating != null) book.userRating = extras.userRating;
   if (extras.openLibraryId) book.openLibraryId = extras.openLibraryId;
   if (extras.isbn) book.isbn = extras.isbn;
+  if (extras.authors && extras.authors.length) book.authors = extras.authors;
+  if (extras.pageCount != null) book.pageCount = extras.pageCount;
 
   backfillGridCard(book);
 
   const container = document.getElementById('modalExtras');
   if (!container) return; // modal already closed — data above is still backfilled to the grid
 
+  const bylineBox = document.getElementById('modalByline');
+  if (bylineBox){
+    const byline = bylineHtml(book);
+    bylineBox.textContent = byline;
+    bylineBox.style.display = byline ? '' : 'none';
+  }
+  const metaBox = document.getElementById('modalMeta');
+  if (metaBox) metaBox.textContent = metaLineHtml(book);
   const ratingsBox = document.getElementById('modalRatings');
   if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(book);
   const genresBox = document.getElementById('modalGenres');
@@ -3120,6 +3186,32 @@ function appendModalExtras(extras, book){
 // "Search" link shown before extras load.
 function detailLinkHtml(book){
   return `<a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
+}
+
+// Similar-books results only ever include id/title/image — not enough
+// for a real bookDetailLink (no openLibraryId or ISBN comes back from
+// this endpoint), so each one links out to a plain Open Library title
+// search instead, same fallback bookDetailLink itself uses when it
+// doesn't have anything better to go on.
+function renderSimilarBooks(list){
+  const container = document.getElementById('similarBooksResults');
+  if (!container) return; // modal already closed
+  if (!list.length){
+    container.innerHTML = '<p class="hint">No similar books found.</p>';
+    return;
+  }
+  const cards = list.map(b => `
+    <a href="https://openlibrary.org/search?q=${encodeURIComponent(b.title)}" target="_blank" rel="noopener" style="flex-shrink:0; width:72px; text-align:center; text-decoration:none; color:inherit;">
+      ${b.image
+        ? `<img src="${b.image}" alt="${escapeHtml(b.title)}" style="width:64px; height:96px; object-fit:cover; border-radius:4px; border:1px solid var(--line);">`
+        : `<div style="width:64px; height:96px; background:var(--surface); border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:20px;">📖</div>`}
+      <div style="font-size:10px; margin-top:4px; line-height:1.2; color:var(--muted);">${escapeHtml(b.title)}</div>
+    </a>
+  `).join('');
+  container.innerHTML = `
+    <div class="hint" style="margin:8px 0 6px;">You might also like:</div>
+    <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:6px;">${cards}</div>
+  `;
 }
 
 // Updates a book's already-rendered grid card in place — used once a
@@ -3182,7 +3274,9 @@ async function fetchBigBookExtras(book, forceRefresh){
     description: book.description || null,
     userRating: book.userRating ?? null,
     openLibraryId: book.openLibraryId || null,
-    isbn: book.isbn || null
+    isbn: book.isbn || null,
+    authors: book.authors || null,
+    pageCount: book.pageCount ?? null
   };
 }
 
@@ -3191,24 +3285,36 @@ function appendTonightExtras(extras, book){
   if (book.userRating == null && extras.userRating != null) book.userRating = extras.userRating;
   if (extras.openLibraryId) book.openLibraryId = extras.openLibraryId;
   if (extras.isbn) book.isbn = extras.isbn;
+  if (extras.authors && extras.authors.length) book.authors = extras.authors;
+  if (extras.pageCount != null) book.pageCount = extras.pageCount;
   backfillGridCard(book);
 
   const banner = document.querySelector('#tonightBanner .tonight > div');
   if (!banner) return; // user already spun again / banner no longer showing
+  const bylineBox = document.getElementById('tonightByline');
+  if (bylineBox){
+    const byline = bylineHtml(book);
+    bylineBox.textContent = byline;
+    bylineBox.style.display = byline ? '' : 'none';
+  }
+  const metaBox = document.getElementById('tonightMeta');
+  if (metaBox) metaBox.textContent = `${metaLineHtml(book)} · Happy reading`;
   banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${detailLinkHtml(book)}</div>`);
 }
 
 function showTonightBanner(book, picker){
   const posterUrl = bookCoverUrl(book);
   const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">📖</div>';
+  const byline = bylineHtml(book);
   $('tonightBanner').innerHTML = `
     <div class="tonight">
       ${posterHtml}
       <div>
         <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
         <h3>${escapeHtml(book.title)}</h3>
+        ${byline ? `<p class="hint" id="tonightByline">${byline}</p>` : '<p class="hint" id="tonightByline" style="display:none;"></p>'}
         <div id="tonightRatings">${ratingChipsHtml(book)}</div>
-        <p>${book.year || '—'} · ${currentChoice.genre} · Happy reading</p>
+        <p id="tonightMeta">${metaLineHtml(book)} · Happy reading</p>
       </div>
     </div>
   `;
