@@ -38,11 +38,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Next Up - TV Shows">
+<meta name="apple-mobile-web-app-title" content="Next Up">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Next Up - TV Shows</title>
+<title>Next Up</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <!-- Firebase (Auth + Firestore) — compat build, so it exposes a plain
@@ -77,7 +77,7 @@
     color: var(--cream);
     font-family: var(--font-body);
     min-height: 100vh;
-    padding: 28px 16px 60px;
+    padding: 44px 16px 60px;
   }
   .wrap{ max-width: 980px; margin: 0 auto; }
 
@@ -687,7 +687,7 @@
 
       <div class="card">
         <h2>About</h2>
-        <p class="desc">Next Up - TV Shows is a free, independent project — not affiliated with, endorsed by, or sponsored by Watchmode, Google, or any streaming service. Show data and streaming availability come from Watchmode when connected and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
+        <p class="desc">Next Up is a free, independent project — not affiliated with, endorsed by, or sponsored by Watchmode, Google, or any streaming service. Show data and streaming availability come from Watchmode when connected and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
         <p class="desc" style="margin-top:8px;"><a href="privacy.html">Privacy Policy</a></p>
         <p class="desc hint" style="margin-top:8px;">App version: <span id="appVersionLabel"></span></p>
       </div>
@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.8.0'; // tracked independently from next-up-movies.html — description text pass + streaming-hint visibility fix
+const APP_VERSION = '0.9.0'; // tracked independently from next-up-movies.html — app title + spacing fixes
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
