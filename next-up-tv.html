@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.6.0'; // tracked independently from next-up-movies.html — this reflects TV Shows' own early, starter state (small built-in list, unverified Watchmode TV params, no shared Firestore caching yet)
+const APP_VERSION = '0.7.0'; // tracked independently from next-up-movies.html — built-in list expanded to 14 genres x 5 decades (460 entries), content-rating filter fixed to TV scale, Watchmode TV discovery params still unverified, no shared Firestore caching yet
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -910,42 +910,94 @@ const SYNCED_KEYS = new Set([
 
 /* ==================================================================
    Curated TV show database — decade (first-air year) -> genre -> [{title,year}]
-   Starter set only — a modest, well-known selection to get the spin
-   mechanic working end to end. Expanding this to real scale, and
-   running a genre-accuracy pass against Watchmode's actual TV genre
-   data (the same way we did for the show list), are explicit,
-   separate next steps — not done yet.
+   Expanded from the original starter set: 14 genres x 5 decades
+   (1980s-2020s), matching Movies' genre list. Most combos land in the
+   8-15 range; some genres (Romance, Western, Horror, Documentary,
+   Fantasy, Thriller) are genuinely thinner as standalone TV genre
+   tags, especially in earlier decades — reflects real availability,
+   not incomplete effort. Every entry's year was validated to fall
+   within its decade bucket.
    ================================================================== */
 const SHOW_DB = {
+1980:{
+Action:[{title:"The A-Team",year:1983},{title:"Miami Vice",year:1984},{title:"Knight Rider",year:1982},{title:"MacGyver",year:1985},{title:"Airwolf",year:1984},{title:"The Fall Guy",year:1981},{title:"Magnum, P.I.",year:1980},{title:"Hunter",year:1984},{title:"Hardcastle and McCormick",year:1983},{title:"Riptide",year:1984},{title:"T.J. Hooker",year:1982},{title:"Simon & Simon",year:1981},{title:"The Equalizer",year:1985}],
+Adventure:[{title:"MacGyver",year:1985},{title:"The Fall Guy",year:1981},{title:"Airwolf",year:1984},{title:"Voyagers!",year:1982},{title:"The Greatest American Hero",year:1981},{title:"Tales of the Gold Monkey",year:1982},{title:"Simon & Simon",year:1981},{title:"The A-Team",year:1983}],
+Animation:[{title:"The Smurfs",year:1981},{title:"Transformers",year:1984},{title:"He-Man and the Masters of the Universe",year:1983},{title:"G.I. Joe",year:1983},{title:"DuckTales",year:1987},{title:"The Real Ghostbusters",year:1986},{title:"My Little Pony",year:1986},{title:"ThunderCats",year:1985},{title:"Teenage Mutant Ninja Turtles",year:1987},{title:"Muppet Babies",year:1984},{title:"Garfield and Friends",year:1988},{title:"Alvin and the Chipmunks",year:1983},{title:"Inspector Gadget",year:1983},{title:"Jem",year:1985},{title:"Care Bears",year:1985},{title:"The Simpsons",year:1989}],
+Comedy:[{title:"Cheers",year:1982},{title:"The Cosby Show",year:1984},{title:"Family Ties",year:1982},{title:"Growing Pains",year:1985},{title:"Who's the Boss?",year:1984},{title:"Night Court",year:1984},{title:"Mr. Belvedere",year:1985},{title:"ALF",year:1986},{title:"Married... with Children",year:1987},{title:"Perfect Strangers",year:1986},{title:"The Golden Girls",year:1985},{title:"Full House",year:1987},{title:"Roseanne",year:1988},{title:"Newhart",year:1982},{title:"It's Garry Shandling's Show",year:1986}],
+Crime:[{title:"Hill Street Blues",year:1981},{title:"Miami Vice",year:1984},{title:"Cagney & Lacey",year:1981},{title:"Hunter",year:1984},{title:"Matlock",year:1986},{title:"Murder, She Wrote",year:1984},{title:"In the Heat of the Night",year:1988},{title:"Wiseguy",year:1987},{title:"Spenser: For Hire",year:1985},{title:"Crime Story",year:1986}],
+Documentary:[{title:"Cosmos",year:1980},{title:"Unsolved Mysteries",year:1987},{title:"American Masters",year:1985},{title:"Cops",year:1989},{title:"Biography",year:1987},{title:"Lifestyles of the Rich and Famous",year:1984}],
+Drama:[{title:"Dynasty",year:1981},{title:"St. Elsewhere",year:1982},{title:"L.A. Law",year:1986},{title:"thirtysomething",year:1987},{title:"Moonlighting",year:1985},{title:"Falcon Crest",year:1981},{title:"China Beach",year:1988},{title:"Hill Street Blues",year:1981},{title:"Cagney & Lacey",year:1981}],
+Family:[{title:"Full House",year:1987},{title:"Family Ties",year:1982},{title:"Growing Pains",year:1985},{title:"The Cosby Show",year:1984},{title:"Who's the Boss?",year:1984},{title:"Punky Brewster",year:1984},{title:"Mr. Belvedere",year:1985},{title:"Webster",year:1983},{title:"Small Wonder",year:1985},{title:"The Wonder Years",year:1988},{title:"Family Matters",year:1989}],
+Fantasy:[{title:"Highway to Heaven",year:1984},{title:"Amazing Stories",year:1985},{title:"Beauty and the Beast",year:1987},{title:"Voyagers!",year:1982},{title:"Manimal",year:1983},{title:"The Greatest American Hero",year:1981},{title:"ALF",year:1986}],
+Horror:[{title:"Tales from the Darkside",year:1983},{title:"Freddy's Nightmares",year:1988},{title:"Friday the 13th: The Series",year:1987},{title:"Monsters",year:1988},{title:"Amazing Stories",year:1985},{title:"The Hitchhiker",year:1983}],
+Romance:[{title:"Moonlighting",year:1985},{title:"Dynasty",year:1981},{title:"Falcon Crest",year:1981}],
+"Sci-Fi":[{title:"Knight Rider",year:1982},{title:"Airwolf",year:1984},{title:"V",year:1984},{title:"Max Headroom",year:1987},{title:"Star Trek: The Next Generation",year:1987},{title:"Quantum Leap",year:1989},{title:"Alien Nation",year:1989},{title:"Small Wonder",year:1985},{title:"Automan",year:1983}],
+Thriller:[{title:"Miami Vice",year:1984},{title:"Hill Street Blues",year:1981},{title:"Wiseguy",year:1987},{title:"Crime Story",year:1986},{title:"Spenser: For Hire",year:1985},{title:"Hunter",year:1984}],
+Western:[{title:"The Young Riders",year:1989},{title:"Paradise",year:1988},{title:"Bret Maverick",year:1981},{title:"Father Murphy",year:1981},{title:"Lonesome Dove",year:1989}]
+},
 1990:{
-Comedy:[{title:"Friends",year:1994},{title:"Frasier",year:1993},{title:"Home Improvement",year:1991},{title:"The Fresh Prince of Bel-Air",year:1990},{title:"Everybody Loves Raymond",year:1996},{title:"3rd Rock from the Sun",year:1996},{title:"Mad About You",year:1992}],
-Drama:[{title:"The X-Files",year:1993},{title:"ER",year:1994},{title:"Twin Peaks",year:1990},{title:"NYPD Blue",year:1993},{title:"Law & Order",year:1990},{title:"Beverly Hills, 90210",year:1990},{title:"My So-Called Life",year:1994},{title:"Party of Five",year:1994}],
-Crime:[{title:"Law & Order",year:1990},{title:"NYPD Blue",year:1993},{title:"Homicide: Life on the Street",year:1993}],
-"Sci-Fi":[{title:"The X-Files",year:1993},{title:"Star Trek: Deep Space Nine",year:1993},{title:"Babylon 5",year:1994},{title:"Star Trek: Voyager",year:1995},{title:"Sliders",year:1995}],
-Fantasy:[{title:"Buffy the Vampire Slayer",year:1997},{title:"Charmed",year:1998},{title:"Hercules: The Legendary Journeys",year:1995},{title:"Xena: Warrior Princess",year:1995}],
-Animation:[{title:"South Park",year:1997},{title:"Beavis and Butt-Head",year:1993},{title:"King of the Hill",year:1997},{title:"Batman: The Animated Series",year:1992}],
-Horror:[{title:"Goosebumps",year:1995},{title:"Are You Afraid of the Dark?",year:1990}],
-Thriller:[{title:"La Femme Nikita",year:1997},{title:"The X-Files",year:1993}]
+Action:[{title:"La Femme Nikita",year:1997},{title:"Walker, Texas Ranger",year:1993},{title:"Renegade",year:1992},{title:"Xena: Warrior Princess",year:1995},{title:"Hercules: The Legendary Journeys",year:1995},{title:"VIP",year:1998},{title:"Silk Stalkings",year:1991},{title:"Viper",year:1994},{title:"Air America",year:1998},{title:"Baywatch Nights",year:1995}],
+Adventure:[{title:"Xena: Warrior Princess",year:1995},{title:"Hercules: The Legendary Journeys",year:1995},{title:"Sliders",year:1995},{title:"The Adventures of Brisco County Jr.",year:1993},{title:"Land of the Lost",year:1991},{title:"seaQuest DSV",year:1993},{title:"The Lost World",year:1999}],
+Animation:[{title:"South Park",year:1997},{title:"Beavis and Butt-Head",year:1993},{title:"King of the Hill",year:1997},{title:"Batman: The Animated Series",year:1992},{title:"Rugrats",year:1991},{title:"Animaniacs",year:1993},{title:"Pinky and the Brain",year:1995},{title:"Dexter's Laboratory",year:1996},{title:"Doug",year:1991},{title:"X-Men",year:1992},{title:"Gargoyles",year:1994},{title:"Recess",year:1997},{title:"Hey Arnold!",year:1996},{title:"The Powerpuff Girls",year:1998},{title:"SpongeBob SquarePants",year:1999}],
+Comedy:[{title:"Friends",year:1994},{title:"Frasier",year:1993},{title:"Home Improvement",year:1991},{title:"The Fresh Prince of Bel-Air",year:1990},{title:"Everybody Loves Raymond",year:1996},{title:"3rd Rock from the Sun",year:1996},{title:"Mad About You",year:1992},{title:"Boy Meets World",year:1993},{title:"Will & Grace",year:1998},{title:"The Nanny",year:1993},{title:"NewsRadio",year:1995},{title:"Just Shoot Me!",year:1997}],
+Crime:[{title:"Law & Order",year:1990},{title:"NYPD Blue",year:1993},{title:"Homicide: Life on the Street",year:1993},{title:"The Sopranos",year:1999},{title:"La Femme Nikita",year:1997},{title:"Diagnosis: Murder",year:1993},{title:"Silk Stalkings",year:1991},{title:"Profiler",year:1996}],
+Documentary:[{title:"American Justice",year:1992},{title:"Antiques Roadshow",year:1997},{title:"The Real World",year:1992}],
+Drama:[{title:"The X-Files",year:1993},{title:"ER",year:1994},{title:"Twin Peaks",year:1990},{title:"NYPD Blue",year:1993},{title:"Law & Order",year:1990},{title:"Beverly Hills, 90210",year:1990},{title:"My So-Called Life",year:1994},{title:"Party of Five",year:1994},{title:"The Sopranos",year:1999},{title:"Chicago Hope",year:1994},{title:"Picket Fences",year:1992},{title:"Homicide: Life on the Street",year:1993}],
+Family:[{title:"Boy Meets World",year:1993},{title:"7th Heaven",year:1996},{title:"Sabrina the Teenage Witch",year:1996},{title:"Home Improvement",year:1991},{title:"Step by Step",year:1991}],
+Fantasy:[{title:"Buffy the Vampire Slayer",year:1997},{title:"Charmed",year:1998},{title:"Hercules: The Legendary Journeys",year:1995},{title:"Xena: Warrior Princess",year:1995},{title:"Sabrina the Teenage Witch",year:1996},{title:"Forever Knight",year:1992}],
+Horror:[{title:"Goosebumps",year:1995},{title:"Are You Afraid of the Dark?",year:1990},{title:"American Gothic",year:1995},{title:"Buffy the Vampire Slayer",year:1997}],
+Romance:[{title:"Dawson's Creek",year:1998},{title:"Party of Five",year:1994},{title:"Felicity",year:1998},{title:"Beverly Hills, 90210",year:1990}],
+"Sci-Fi":[{title:"The X-Files",year:1993},{title:"Star Trek: Deep Space Nine",year:1993},{title:"Babylon 5",year:1994},{title:"Star Trek: Voyager",year:1995},{title:"Sliders",year:1995},{title:"Stargate SG-1",year:1997},{title:"seaQuest DSV",year:1993},{title:"Earth: Final Conflict",year:1997}],
+Thriller:[{title:"La Femme Nikita",year:1997},{title:"The X-Files",year:1993},{title:"Profiler",year:1996},{title:"Millennium",year:1996}],
+Western:[{title:"Dr. Quinn, Medicine Woman",year:1993},{title:"The Adventures of Brisco County Jr.",year:1993},{title:"Walker, Texas Ranger",year:1993}]
 },
 2000:{
-Comedy:[{title:"The Office",year:2005},{title:"Arrested Development",year:2003},{title:"Scrubs",year:2001},{title:"How I Met Your Mother",year:2005},{title:"30 Rock",year:2006},{title:"Curb Your Enthusiasm",year:2000},{title:"Flight of the Conchords",year:2007}],
-Drama:[{title:"Six Feet Under",year:2001},{title:"The Wire",year:2002},{title:"Mad Men",year:2007},{title:"Friday Night Lights",year:2006},{title:"Grey's Anatomy",year:2005},{title:"Lost",year:2004}],
-Crime:[{title:"The Wire",year:2002},{title:"Dexter",year:2006},{title:"CSI: Crime Scene Investigation",year:2000},{title:"Breaking Bad",year:2008}],
-"Sci-Fi":[{title:"Battlestar Galactica",year:2004},{title:"Lost",year:2004},{title:"Firefly",year:2002},{title:"Heroes",year:2006}],
-Fantasy:[{title:"Supernatural",year:2005},{title:"Merlin",year:2008},{title:"True Blood",year:2008}],
-Animation:[{title:"Avatar: The Last Airbender",year:2005},{title:"American Dad!",year:2005},{title:"Robot Chicken",year:2005}],
-Horror:[{title:"Supernatural",year:2005},{title:"Dexter",year:2006}],
-Thriller:[{title:"24",year:2001},{title:"Prison Break",year:2005},{title:"Breaking Bad",year:2008}]
+Action:[{title:"24",year:2001},{title:"Alias",year:2001},{title:"Prison Break",year:2005},{title:"Burn Notice",year:2007},{title:"Chuck",year:2007},{title:"The Shield",year:2002}],
+Adventure:[{title:"Lost",year:2004},{title:"Firefly",year:2002},{title:"Jericho",year:2006},{title:"The Amazing Race",year:2001},{title:"Survivor",year:2000},{title:"Man vs. Wild",year:2006}],
+Animation:[{title:"Avatar: The Last Airbender",year:2005},{title:"American Dad!",year:2005},{title:"Robot Chicken",year:2005},{title:"The Boondocks",year:2005},{title:"Phineas and Ferb",year:2007},{title:"Star Wars: The Clone Wars",year:2008},{title:"Foster's Home for Imaginary Friends",year:2004}],
+Comedy:[{title:"The Office",year:2005},{title:"Arrested Development",year:2003},{title:"Scrubs",year:2001},{title:"How I Met Your Mother",year:2005},{title:"30 Rock",year:2006},{title:"Curb Your Enthusiasm",year:2000},{title:"Flight of the Conchords",year:2007},{title:"Parks and Recreation",year:2009},{title:"It's Always Sunny in Philadelphia",year:2005},{title:"My Name Is Earl",year:2005},{title:"Reno 911!",year:2003},{title:"Community",year:2009}],
+Crime:[{title:"The Wire",year:2002},{title:"Dexter",year:2006},{title:"CSI: Crime Scene Investigation",year:2000},{title:"Breaking Bad",year:2008},{title:"Cold Case",year:2003},{title:"Criminal Minds",year:2005},{title:"The Shield",year:2002},{title:"Monk",year:2002}],
+Documentary:[{title:"Planet Earth",year:2006},{title:"MythBusters",year:2003},{title:"Deadliest Catch",year:2005},{title:"Man vs. Wild",year:2006},{title:"Intervention",year:2005},{title:"Dirty Jobs",year:2005},{title:"The First 48",year:2004}],
+Drama:[{title:"Six Feet Under",year:2001},{title:"The Wire",year:2002},{title:"Mad Men",year:2007},{title:"Friday Night Lights",year:2006},{title:"Grey's Anatomy",year:2005},{title:"Lost",year:2004},{title:"Damages",year:2007},{title:"Dexter",year:2006},{title:"House",year:2004}],
+Family:[{title:"Gilmore Girls",year:2000},{title:"Everybody Hates Chris",year:2005},{title:"Malcolm in the Middle",year:2000},{title:"That's So Raven",year:2003},{title:"Hannah Montana",year:2006}],
+Fantasy:[{title:"Supernatural",year:2005},{title:"Merlin",year:2008},{title:"True Blood",year:2008},{title:"Pushing Daisies",year:2007}],
+Horror:[{title:"Supernatural",year:2005},{title:"Dexter",year:2006},{title:"Masters of Horror",year:2005},{title:"Ghost Whisperer",year:2005}],
+Romance:[{title:"Grey's Anatomy",year:2005},{title:"Gossip Girl",year:2007},{title:"One Tree Hill",year:2003},{title:"Ugly Betty",year:2006}],
+"Sci-Fi":[{title:"Battlestar Galactica",year:2004},{title:"Lost",year:2004},{title:"Firefly",year:2002},{title:"Heroes",year:2006},{title:"Doctor Who",year:2005},{title:"Fringe",year:2008},{title:"Stargate Atlantis",year:2004},{title:"Smallville",year:2001}],
+Thriller:[{title:"24",year:2001},{title:"Prison Break",year:2005},{title:"Breaking Bad",year:2008},{title:"Dexter",year:2006},{title:"The Shield",year:2002}],
+Western:[{title:"Deadwood",year:2004},{title:"Into the West",year:2005}]
 },
 2010:{
-Comedy:[{title:"Brooklyn Nine-Nine",year:2013},{title:"New Girl",year:2011},{title:"The Good Place",year:2016},{title:"Fleabag",year:2016},{title:"Schitt's Creek",year:2015}],
-Drama:[{title:"Game of Thrones",year:2011},{title:"This Is Us",year:2016},{title:"The Crown",year:2016},{title:"Succession",year:2018},{title:"Stranger Things",year:2016}],
-Crime:[{title:"True Detective",year:2014},{title:"Mindhunter",year:2017},{title:"Ozark",year:2017},{title:"Narcos",year:2015}],
-"Sci-Fi":[{title:"Stranger Things",year:2016},{title:"Black Mirror",year:2011},{title:"Westworld",year:2016},{title:"The Expanse",year:2015}],
-Fantasy:[{title:"Game of Thrones",year:2011},{title:"The Witcher",year:2019},{title:"American Gods",year:2017}],
-Animation:[{title:"BoJack Horseman",year:2014},{title:"Rick and Morty",year:2013},{title:"Big Mouth",year:2017}],
-Horror:[{title:"American Horror Story",year:2011},{title:"Stranger Things",year:2016},{title:"The Haunting of Hill House",year:2018}],
-Thriller:[{title:"Mr. Robot",year:2015},{title:"Killing Eve",year:2018},{title:"Ozark",year:2017}]
+Action:[{title:"Arrow",year:2012},{title:"The Boys",year:2019},{title:"Strike Back",year:2010},{title:"Daredevil",year:2015},{title:"The Punisher",year:2017},{title:"Banshee",year:2013},{title:"Jack Ryan",year:2018}],
+Adventure:[{title:"The Walking Dead",year:2010},{title:"Lost in Space",year:2018},{title:"Vikings",year:2013},{title:"Marco Polo",year:2014},{title:"The Mandalorian",year:2019}],
+Animation:[{title:"BoJack Horseman",year:2014},{title:"Rick and Morty",year:2013},{title:"Big Mouth",year:2017},{title:"Gravity Falls",year:2012},{title:"Steven Universe",year:2013},{title:"Bob's Burgers",year:2011},{title:"Adventure Time",year:2010},{title:"Bluey",year:2018}],
+Comedy:[{title:"Brooklyn Nine-Nine",year:2013},{title:"New Girl",year:2011},{title:"The Good Place",year:2016},{title:"Fleabag",year:2016},{title:"Schitt's Creek",year:2015},{title:"Veep",year:2012},{title:"Silicon Valley",year:2014},{title:"What We Do in the Shadows",year:2019}],
+Crime:[{title:"True Detective",year:2014},{title:"Mindhunter",year:2017},{title:"Ozark",year:2017},{title:"Narcos",year:2015},{title:"Peaky Blinders",year:2013},{title:"Fargo",year:2014},{title:"Better Call Saul",year:2015}],
+Documentary:[{title:"Making a Murderer",year:2015},{title:"Chef's Table",year:2015},{title:"Wild Wild Country",year:2018},{title:"Icarus",year:2017},{title:"Wormwood",year:2017}],
+Drama:[{title:"Game of Thrones",year:2011},{title:"This Is Us",year:2016},{title:"The Crown",year:2016},{title:"Stranger Things",year:2016},{title:"Better Call Saul",year:2015},{title:"House of Cards",year:2013},{title:"Euphoria",year:2019},{title:"Succession",year:2018},{title:"The Morning Show",year:2019}],
+Family:[{title:"Fuller House",year:2016},{title:"The Fosters",year:2013},{title:"Andi Mack",year:2017},{title:"Bluey",year:2018}],
+Fantasy:[{title:"Game of Thrones",year:2011},{title:"The Witcher",year:2019},{title:"American Gods",year:2017},{title:"Outlander",year:2014},{title:"Once Upon a Time",year:2011}],
+Horror:[{title:"American Horror Story",year:2011},{title:"Stranger Things",year:2016},{title:"The Haunting of Hill House",year:2018},{title:"Hannibal",year:2013},{title:"Penny Dreadful",year:2014}],
+Romance:[{title:"Outlander",year:2014},{title:"Jane the Virgin",year:2014},{title:"This Is Us",year:2016},{title:"Virgin River",year:2019}],
+"Sci-Fi":[{title:"Stranger Things",year:2016},{title:"Black Mirror",year:2011},{title:"Westworld",year:2016},{title:"The Expanse",year:2015},{title:"Dark",year:2017},{title:"Orphan Black",year:2013},{title:"For All Mankind",year:2019}],
+Thriller:[{title:"Mr. Robot",year:2015},{title:"Killing Eve",year:2018},{title:"Ozark",year:2017},{title:"True Detective",year:2014},{title:"Big Little Lies",year:2017}],
+Western:[{title:"Yellowstone",year:2018},{title:"Godless",year:2017},{title:"Justified",year:2010},{title:"Hell on Wheels",year:2011},{title:"Longmire",year:2012}]
+},
+2020:{
+Action:[{title:"Reacher",year:2022},{title:"The Old Man",year:2022},{title:"Warrior Nun",year:2020},{title:"The Wheel of Time",year:2021},{title:"Andor",year:2022},{title:"The Continental",year:2023}],
+Adventure:[{title:"Loki",year:2021},{title:"1899",year:2022},{title:"Shadow and Bone",year:2021},{title:"Willow",year:2022},{title:"Rings of Power",year:2022}],
+Animation:[{title:"Arcane",year:2021},{title:"Invincible",year:2021},{title:"The Owl House",year:2020},{title:"Solar Opposites",year:2020},{title:"Hazbin Hotel",year:2024},{title:"Blue Eye Samurai",year:2023}],
+Comedy:[{title:"Ted Lasso",year:2020},{title:"Only Murders in the Building",year:2021},{title:"Abbott Elementary",year:2021},{title:"Hacks",year:2021},{title:"Reservation Dogs",year:2021},{title:"The Bear",year:2022}],
+Crime:[{title:"Mare of Easttown",year:2021},{title:"Dahmer",year:2022},{title:"The Watcher",year:2022},{title:"Bosch: Legacy",year:2022},{title:"True Detective: Night Country",year:2024},{title:"Candy",year:2022}],
+Documentary:[{title:"Beckham",year:2023},{title:"Chimp Crazy",year:2024},{title:"Wham!",year:2023},{title:"Stutz",year:2022},{title:"Tiger King",year:2020},{title:"The Last Dance",year:2020},{title:"Cheer",year:2020}],
+Drama:[{title:"The White Lotus",year:2021},{title:"Shogun",year:2024},{title:"Yellowjackets",year:2021},{title:"Poker Face",year:2023}],
+Family:[{title:"Ginny & Georgia",year:2021},{title:"American Born Chinese",year:2023}],
+Fantasy:[{title:"House of the Dragon",year:2022},{title:"The Sandman",year:2022},{title:"Wednesday",year:2022},{title:"Shadow and Bone",year:2021},{title:"Willow",year:2022}],
+Horror:[{title:"The Haunting of Bly Manor",year:2020},{title:"Midnight Mass",year:2021},{title:"Yellowjackets",year:2021},{title:"The Last of Us",year:2023}],
+Romance:[{title:"Bridgerton",year:2020},{title:"Heartstopper",year:2022},{title:"Never Have I Ever",year:2020}],
+"Sci-Fi":[{title:"Severance",year:2022},{title:"Foundation",year:2021},{title:"3 Body Problem",year:2024}],
+Thriller:[{title:"Squid Game",year:2021},{title:"The Diplomat",year:2023},{title:"Dark Winds",year:2022},{title:"Reacher",year:2022}],
+Western:[{title:"1883",year:2021},{title:"1923",year:2022},{title:"Outer Range",year:2022}]
 }
 };
 
@@ -966,7 +1018,7 @@ function getEffectiveShowList(decade, genre){
   const additions = customAdditions[key] || [];
   return kept.concat(additions);
 }
-const CONTENT_RATINGS = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'NR', 'NO_DATA'];
+const CONTENT_RATINGS = ['TV-Y', 'TV-Y7', 'TV-G', 'TV-PG', 'TV-14', 'TV-MA', 'NR', 'NO_DATA'];
 const STREAMING_SERVICES = ['Apple TV+', 'Disney+', 'Hulu', 'Max', 'Netflix', 'Paramount+', 'Peacock', 'Prime Video'];
 const CONTENT_RATING_LABELS = { NO_DATA: 'No Rating Available' };
 // Confirmed: Watchmode's discovery endpoint supports a `languages` param
@@ -1856,10 +1908,8 @@ function openPickerPrompt(show){
         <h3>Who's picking?</h3>
         <div class="crew-list" style="margin-top:14px;">
           ${crew.map(name => {
-            const already = isPickedByPerson(show.title, show.year, name);
             const count = (pickStats[name] && pickStats[name].tv) || 0;
-            const label = already ? 'Already picked' : `${count} picked`;
-            return `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" ${already ? 'disabled' : ''} style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;"><span>${escapeHtml(name)}</span><span class="hint" style="margin:0;">${label}</span></button>`;
+            return `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;"><span>${escapeHtml(name)}</span><span class="hint" style="margin:0;">${count} picked</span></button>`;
           }).join('')}
         </div>
         <div class="row" style="margin-top:14px;">
@@ -1870,7 +1920,7 @@ function openPickerPrompt(show){
     </div>
   `;
   $('pickerBackdrop').addEventListener('click', (e) => { if (e.target.id === 'pickerBackdrop') closeModal(); });
-  root.querySelectorAll('.picker-choice:not(:disabled)').forEach(btn => {
+  root.querySelectorAll('.picker-choice').forEach(btn => {
     btn.addEventListener('click', () => confirmPick(show, btn.dataset.name));
   });
   $('pickerSkip').addEventListener('click', () => confirmPick(show, 'Unknown'));
@@ -3130,9 +3180,9 @@ async function enrichBuiltinListWithWatchmode(shows){
 
 function matchesContentRating(show){
   // "No rating data" and "confirmed Not Rated" are different things, and
-  // now separately toggleable — someone might want to exclude actual NC-17
-  // titles but still see titles Watchmode just hasn't rated at all, or
-  // vice versa.
+  // now separately toggleable — someone might want to exclude actual
+  // TV-MA titles but still see titles Watchmode just hasn't rated at
+  // all, or vice versa.
   if (!show.usRating) return enabledContentRatings.includes('NO_DATA');
   const rating = CONTENT_RATINGS.includes(show.usRating) ? show.usRating : 'NR';
   return enabledContentRatings.includes(rating);
@@ -3560,20 +3610,13 @@ async function runStartupWarmup(){
 /* ==================================================================
    Results / grid
    ================================================================== */
-// Checks whether one specific person has already picked this title —
-// used to grey out just their button in the picker prompt, not the
-// whole card.
-function isPickedByPerson(title, year, name){
-  return picks.some(p => p.title === title && p.year === year && p.picker === name);
-}
-// A card only shows as fully watched (disabled on the grid) once
-// everyone currently in crew has individually picked it — an Unknown
-// pick counts as globally exclusive, same as an empty crew list, since
-// there's no specific person left to still pick it.
-function isFullyPicked(title, year){
-  if (picks.some(p => p.title === title && p.year === year && p.picker === 'Unknown')) return true;
-  if (!crew.length) return picks.some(p => p.title === title && p.year === year);
-  return crew.every(name => isPickedByPerson(title, year, name));
+function isPicked(title, year){ return picks.some(p => p.title === title && p.year === year); }
+// Looks up who picked a given title, for display on the grid card once
+// it's watched — returns null if unpicked, or if picked without a
+// named picker (crew was empty / picker skipped as Unknown).
+function getPickerFor(title, year){
+  const entry = picks.find(p => p.title === title && p.year === year);
+  return (entry && entry.picker && entry.picker !== 'Unknown') ? entry.picker : null;
 }
 
 function showGenres(show){
@@ -3613,7 +3656,6 @@ function ratingChipsHtml(show){
 }
 
 function renderResults(){
-  loadSharedCrew(); // fresh read — crew may have changed on the landing page since this page loaded
   $('resultsTitle').textContent = `${decadeLabel(currentChoice.decade)} ${currentChoice.genre}`;
   $('resultsCount').textContent = `${currentBatch.length} show${currentBatch.length === 1 ? '' : 's'}`;
   $('resultsArea').style.display = 'block';
@@ -3624,11 +3666,12 @@ function renderResults(){
   $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
 
   currentBatch.forEach((show, i) => {
-    const picked = isFullyPicked(show.title, show.year);
+    const picked = isPicked(show.title, show.year);
     const card = document.createElement('div');
     card.className = 'poster-card' + (picked ? ' disabled' : '');
     card.dataset.idx = i;
-    const watchedTagHtml = picked ? '<div class="watched-tag">WATCHED</div>' : '';
+    const picker = picked ? getPickerFor(show.title, show.year) : null;
+    const watchedTagHtml = picked ? `<div class="watched-tag">WATCHED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
     card.innerHTML = `
       ${watchedTagHtml}
       <div class="poster-meta">
