@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.9.0'; // tracked independently from next-up-movies.html — app title + spacing fixes
+const APP_VERSION = '0.10.0'; // tracked independently from next-up-movies.html — same circuit-breaker reset-on-fresh-search fix
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2735,6 +2735,13 @@ async function spin(){
   setSpinStatus('');
   apiCallLog = [];
   forceRefreshedThisSpin.clear();
+  // Reset the circuit breaker on every fresh search — Watchmode's quota
+  // resets monthly, and a genuine outage can clear up too, so a
+  // deliberate new attempt deserves a real chance rather than being
+  // permanently blocked for the rest of the browser session by
+  // whatever happened on a previous search.
+  wmQuotaExhausted = false;
+  wmConsecutiveExhaustedCalls = 0;
 
   const decadePool = DECADES.filter(d => enabledDecades.includes(d));
   const genrePool = GENRES.filter(g => enabledGenres.includes(g));

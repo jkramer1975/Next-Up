@@ -817,7 +817,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.0.1'; // fixed a real 400 error — floating-point drift in the rating-band search could produce a min-rating value in scientific notation, which the API rejected. Also renamed the Search button.
+const APP_VERSION = '2.1.0'; // removed duplicate detail links in modal + tonight banner, removed movie-specific text/icons, fixed a dangling variable reference caught while cleaning this up
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2117,6 +2117,14 @@ async function spin(){
   setSpinStatus('');
   apiCallLog = [];
   forceRefreshedThisSpin.clear();
+  // Reset both circuit breakers on every fresh search — the daily quota
+  // resets at midnight UTC, and a genuine outage can clear up too, so a
+  // deliberate new attempt deserves a real chance rather than being
+  // permanently blocked for the rest of the browser session by
+  // whatever happened on a previous search.
+  bbQuotaExhausted = false;
+  bbUnavailable = false;
+  bbConsecutiveFailedCalls = 0;
 
   const decadePool = DECADES.filter(d => enabledDecades.includes(d));
   const genrePool = GENRES.filter(g => enabledGenres.includes(g));
@@ -3004,12 +3012,12 @@ function openConfirm(book){
   const root = $('modalRoot');
   const posterUrl = bookCoverUrl(book);
   const posterHtml = posterUrl
-    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(book.title)} poster">`
-    : `<div class="m-icon" id="modalPoster">🎬</div>`;
-  const showStreamingLookup = currentSource === 'bigbook' && book.bigBookId;
+    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(book.title)} cover">`
+    : `<div class="m-icon" id="modalPoster">📖</div>`;
+  const showDetailsLookup = currentSource === 'bigbook' && book.bigBookId;
   const canForceRefresh = !!book.bigBookId;
   const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(book.bigBookId);
-  const showExtrasContainer = showStreamingLookup || canForceRefresh;
+  const showExtrasContainer = showDetailsLookup || canForceRefresh;
   root.innerHTML = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
@@ -3020,9 +3028,7 @@ function openConfirm(book){
         <div id="modalRatings">${ratingChipsHtml(book)}</div>
         <div id="modalGenres">${genreChipsHtml(book)}</div>
         <p id="modalDescription" class="modal-description" style="${book.description ? '' : 'display:none;'}">${escapeHtml(book.description || '')}</p>
-        <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin: 10px 0;">🔗 View on ${bookLinkLabel(book)} / find trailer</a>
-        ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showStreamingLookup ? 'Checking where to stream…' : ''}</div>` : ''}
-        <p style="margin-top:6px;">Lock this in for tonight? It'll be marked watched and won't be selectable again.</p>
+        ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showDetailsLookup ? 'Loading details…' : ''}</div>` : ''}
         <div class="row">
           <button class="btn-ghost" id="cancelPick">Cancel</button>
           <button class="btn-primary" id="confirmPick">Pick This Book</button>
@@ -3065,7 +3071,7 @@ function openConfirm(book){
     });
   }
 
-  if (showStreamingLookup){
+  if (showDetailsLookup){
     fetchBigBookExtras(book).then(extras => appendModalExtras(extras, book));
   }
 }
@@ -3194,7 +3200,7 @@ function appendTonightExtras(extras, book){
 
 function showTonightBanner(book, picker){
   const posterUrl = bookCoverUrl(book);
-  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🍿</div>';
+  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">📖</div>';
   $('tonightBanner').innerHTML = `
     <div class="tonight">
       ${posterHtml}
@@ -3202,8 +3208,7 @@ function showTonightBanner(book, picker){
         <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
         <h3>${escapeHtml(book.title)}</h3>
         <div id="tonightRatings">${ratingChipsHtml(book)}</div>
-        <p>${book.year || '—'} · ${currentChoice.genre} · Enjoy the show</p>
-        <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener">🔗 Find trailer on ${bookLinkLabel(book)}</a>
+        <p>${book.year || '—'} · ${currentChoice.genre} · Happy reading</p>
       </div>
     </div>
   `;
