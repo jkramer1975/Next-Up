@@ -570,7 +570,7 @@
         </div>
       </div>
       <div class="spin-btn-row">
-        <button class="btn-primary spin-btn" id="spinBtn">🎞 Spin the Reel</button>
+        <button class="btn-primary spin-btn" id="spinBtn">📚 Search the Library</button>
         <div class="error" id="spinError" style="display:none;"></div>
         <div class="source-note" id="spinStatusNote"></div>
         <div class="source-boxes">
@@ -817,7 +817,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.0.0'; // Books rebuilt on Big Book API (via Cloudflare Worker proxy) instead of Open Library, whose CORS restrictions made it unreachable from a browser
+const APP_VERSION = '2.0.1'; // fixed a real 400 error — floating-point drift in the rating-band search could produce a min-rating value in scientific notation, which the API rejected. Also renamed the Search button.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1633,7 +1633,7 @@ async function bbThrottleGate(){
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
 }
 
-// Log of every Big Book API request since the last Spin the Reel press —
+// Log of every Big Book API request since the last Search the Library press —
 // past that for any click-triggered lookups that happen afterward, until
 // the next spin resets it. Shown in Admin for optimization purposes.
 let apiCallLog = [];
@@ -2104,9 +2104,9 @@ function withTimeout(promise, ms, message){
   ]);
 }
 
-// Writes live progress underneath the Spin button instead of into the
-// button's own label — the label stays "🎞 Spin the Reel" throughout so it
-// never changes size or becomes hard to read mid-spin.
+// Writes live progress underneath the Search button instead of into the
+// button's own label — the label stays "📚 Search the Library" throughout
+// so it never changes size or becomes hard to read mid-search.
 function setSpinStatus(text){
   $('spinStatusNote').textContent = text || '';
 }
@@ -2548,8 +2548,8 @@ async function fetchBigBookPage(startYear, genreName, limit, reason, minRatingPa
     'latest-publish-year': String(endYear),
     number: String(limit)
   };
-  if (minRatingParam != null) params['min-rating'] = String(minRatingParam);
-  if (maxRatingParam != null) params['max-rating'] = String(maxRatingParam);
+  if (minRatingParam != null) params['min-rating'] = minRatingParam.toFixed(2);
+  if (maxRatingParam != null) params['max-rating'] = maxRatingParam.toFixed(2);
   const data = await bbFetch('/search-books', params, 0, 6, reason || 'Discovery list');
   const flatBooks = (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean);
   return flatBooks.map(b => ({
@@ -2580,10 +2580,18 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
   const ceiling = 1;
   const floor = 0;
   const collected = [];
-  let low = 0.8;
+  let step = 0;
   while (true){
+    // Computed fresh from 0.8 each time (not by repeatedly subtracting
+    // from the previous value) — floating-point subtraction drifts over
+    // several iterations (0.8 - 0.2 - 0.2 - 0.2 - 0.2 lands on
+    // 5.55e-17, not exactly 0), and that stray value getting serialized
+    // in scientific notation is exactly what caused a real 400 from the
+    // API. toFixed(2) below is a second, independent safeguard against
+    // the same class of problem.
+    const low = Math.max(floor, 0.8 - step * 0.2);
     setSpinStatus(`${reasonPrefix} — searching rated ${(low * 10).toFixed(1)}–${(ceiling * 10).toFixed(1)}…`);
-    const batch = await fetchBigBookPage(decade, genre, targetCount, `${reasonPrefix}: rated ${low}-${ceiling}`, low, ceiling);
+    const batch = await fetchBigBookPage(decade, genre, targetCount, `${reasonPrefix}: rated ${low.toFixed(2)}-${ceiling}`, low, ceiling);
     batch.forEach(b => {
       if (!seenIds.has(b.bigBookId) && !collected.some(c => c.bigBookId === b.bigBookId)){
         collected.push(b);
@@ -2591,7 +2599,7 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
     });
     if (collected.length >= targetCount) break;
     if (low <= floor) break;
-    low = Math.max(floor, low - 0.2);
+    step++;
   }
   return collected;
 }
