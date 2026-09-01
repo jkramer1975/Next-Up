@@ -301,7 +301,7 @@
     </div>
   </div>
 <script>
-const INDEX_VERSION = '2.1.1'; // tracked independently from next-up-movies.html's own version — this is a separate file
+const INDEX_VERSION = '2.2.0'; // tracked independently from next-up-movies.html's own version — this is a separate file
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
 function escapeHtml(s){
@@ -400,7 +400,11 @@ async function clearPersonStats(name){
   delete pickStats[name];
   savePickStatsLocal();
   renderStatsBars();
-  if (!currentUser) return;
+  if (!currentUser){
+    showAuthStatus(`Cleared locally. Sign in to also clear ${name}'s stats from the cloud.`);
+    return;
+  }
+  const ref = fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats');
   try{
     // name is used as a plain top-level key here (no dot notation) — safe
     // with FieldValue.delete(), since it targets exactly that one
@@ -409,9 +413,21 @@ async function clearPersonStats(name){
     // (e.g. { [name]: {...} }), which Firestore would treat as
     // replacing the *entire* parent object rather than one field within
     // it — not what's happening here.
-    await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats')
-      .set({ [name]: firebase.firestore.FieldValue.delete() }, { merge: true });
-  } catch(e){ console.warn('Could not clear pick stats in the cloud', e.message); }
+    await ref.set({ [name]: firebase.firestore.FieldValue.delete() }, { merge: true });
+    // Verify it actually took, rather than just trusting the write call
+    // didn't throw — a silent failure would otherwise look identical to
+    // success from here, with no way to tell the difference.
+    const snap = await ref.get();
+    const data = snap.data() || {};
+    if (data[name]){
+      showAuthStatus(`Cleared locally, but the cloud copy still shows data for ${name} — try again, or check your connection.`);
+    } else {
+      showAuthStatus('');
+    }
+  } catch(e){
+    console.warn('Could not clear pick stats in the cloud', e.message);
+    showAuthStatus(`Cleared locally, but couldn't reach the cloud to clear ${name}'s stats there: ${e.message}`);
+  }
 }
 
 document.getElementById('addCrewBtn').addEventListener('click', addCrewMember);
