@@ -301,7 +301,7 @@
     </div>
   </div>
 <script>
-const INDEX_VERSION = '2.2.0'; // tracked independently from next-up-movies.html's own version — this is a separate file
+const INDEX_VERSION = '2.2.1'; // tracked independently from next-up-movies.html's own version — this is a separate file
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
 function escapeHtml(s){
@@ -414,10 +414,13 @@ async function clearPersonStats(name){
     // replacing the *entire* parent object rather than one field within
     // it — not what's happening here.
     await ref.set({ [name]: firebase.firestore.FieldValue.delete() }, { merge: true });
-    // Verify it actually took, rather than just trusting the write call
-    // didn't throw — a silent failure would otherwise look identical to
-    // success from here, with no way to tell the difference.
-    const snap = await ref.get();
+    // Verify it actually took, reading from the SERVER specifically — a
+    // plain get() applies "latency compensation" and shows pending
+    // writes as already applied in its result, even if they haven't
+    // actually reached the server yet (or never do). That made this
+    // check worthless before: it was confirming against the client's
+    // own optimistic view of its own write, not genuine server state.
+    const snap = await ref.get({ source: 'server' });
     const data = snap.data() || {};
     if (data[name]){
       showAuthStatus(`Cleared locally, but the cloud copy still shows data for ${name} — try again, or check your connection.`);
