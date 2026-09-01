@@ -542,7 +542,7 @@
 
     <div class="marquee">
       <div class="sprockets"></div>
-      <h1>NEXT UP - TV SHOWS</h1>
+      <h1>📺 NEXT UP - TV SHOWS</h1>
       <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
@@ -550,9 +550,9 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn active" id="tabMainBtn">🎬 Next Up</button>
+      <button class="tab-btn active" id="tabMainBtn">📺 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Show Filters</button>
-      <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Show List</button>
+      <button class="tab-btn" id="tabBuiltinBtn">📺 Built-In Show List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -570,13 +570,13 @@
         </div>
       </div>
       <div class="spin-btn-row">
-        <button class="btn-primary spin-btn" id="spinBtn">🎞 Spin the Reel</button>
+        <button class="btn-primary spin-btn" id="spinBtn">📺 Flip the Channel</button>
         <div class="error" id="spinError" style="display:none;"></div>
         <div class="source-note" id="spinStatusNote"></div>
         <div class="source-boxes">
           <div class="source-box" id="sourceBoxBuiltin">
             <div class="source-box-top">
-              <span class="source-box-icon">📚</span>
+              <span class="source-box-icon">📋</span>
               <span class="source-box-title">Built-in List</span>
               <span class="source-live-badge">● LIVE</span>
             </div>
@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.10.0'; // tracked independently from next-up-movies.html — same circuit-breaker reset-on-fresh-search fix
+const APP_VERSION = '0.11.0'; // icon consistency pass — fixed several leftover Movies/Books icons never adapted for TV (main tab, modal fallback, tonight banner), renamed Spin button to Flip the Channel
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2722,9 +2722,9 @@ function withTimeout(promise, ms, message){
   ]);
 }
 
-// Writes live progress underneath the Spin button instead of into the
-// button's own label — the label stays "🎞 Spin the Reel" throughout so it
-// never changes size or becomes hard to read mid-spin.
+// Writes live progress underneath the Search button instead of into the
+// button's own label — the label stays "📺 Flip the Channel" throughout so
+// it never changes size or becomes hard to read mid-search.
 function setSpinStatus(text){
   $('spinStatusNote').textContent = text || '';
 }
@@ -3726,7 +3726,7 @@ function openConfirm(show){
   const posterUrl = showPosterUrl(show);
   const posterHtml = posterUrl
     ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(show.title)} poster">`
-    : `<div class="m-icon" id="modalPoster">🎬</div>`;
+    : `<div class="m-icon" id="modalPoster">📺</div>`;
   const showStreamingLookup = currentSource === 'watchmode' && show.watchmodeId;
   const canForceRefresh = !!wmKey && !!show.watchmodeId;
   const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(show.watchmodeId);
@@ -4108,7 +4108,7 @@ function appendTonightExtras(extras, show){
 
 function showTonightBanner(show, picker){
   const posterUrl = showPosterUrl(show);
-  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🍿</div>';
+  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🛋️</div>';
   $('tonightBanner').innerHTML = `
     <div class="tonight">
       ${posterHtml}

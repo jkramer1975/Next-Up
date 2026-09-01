@@ -542,7 +542,7 @@
 
     <div class="marquee">
       <div class="sprockets"></div>
-      <h1>NEXT UP - MOVIES</h1>
+      <h1>🎬 NEXT UP - MOVIES</h1>
       <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
@@ -552,7 +552,7 @@
     <div class="tabs">
       <button class="tab-btn active" id="tabMainBtn">🎬 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Movie Filters</button>
-      <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Movie List</button>
+      <button class="tab-btn" id="tabBuiltinBtn">🎬 Built-In Movie List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -570,13 +570,13 @@
         </div>
       </div>
       <div class="spin-btn-row">
-        <button class="btn-primary spin-btn" id="spinBtn">🎞 Spin the Reel</button>
+        <button class="btn-primary spin-btn" id="spinBtn">🎬 Spin the Reel</button>
         <div class="error" id="spinError" style="display:none;"></div>
         <div class="source-note" id="spinStatusNote"></div>
         <div class="source-boxes">
           <div class="source-box" id="sourceBoxBuiltin">
             <div class="source-box-top">
-              <span class="source-box-icon">📚</span>
+              <span class="source-box-icon">📋</span>
               <span class="source-box-title">Built-in List</span>
               <span class="source-live-badge">● LIVE</span>
             </div>
@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '1.33.0'; // Watchmode circuit breaker (quota + consecutive-failure) now resets on every fresh search, instead of permanently blocking for the rest of the browser session after one bad stretch
+const APP_VERSION = '1.34.0'; // icon consistency pass across all three apps — app-specific icons in H1 banner, tabs, and modal/tonight-banner fallbacks, replacing several leftover cross-app icons
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2716,7 +2716,7 @@ function withTimeout(promise, ms, message){
 }
 
 // Writes live progress underneath the Spin button instead of into the
-// button's own label — the label stays "🎞 Spin the Reel" throughout so it
+// button's own label — the label stays "🎬 Spin the Reel" throughout so it
 // never changes size or becomes hard to read mid-spin.
 function setSpinStatus(text){
   $('spinStatusNote').textContent = text || '';

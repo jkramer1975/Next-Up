@@ -542,7 +542,7 @@
 
     <div class="marquee">
       <div class="sprockets"></div>
-      <h1>NEXT UP - BOOKS</h1>
+      <h1>📚 NEXT UP - BOOKS</h1>
       <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
@@ -550,7 +550,7 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn active" id="tabMainBtn">🎬 Next Up</button>
+      <button class="tab-btn active" id="tabMainBtn">📚 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Book Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Book List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
@@ -817,7 +817,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.2.0'; // added author + page count display, and an on-demand Similar Books feature using Big Book API's /similar endpoint
+const APP_VERSION = '2.3.0'; // icon consistency pass — added H1 icon (was missing), unified fallback icons to the app's own icon, themed tonight-banner flourish
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -3047,7 +3047,7 @@ function openConfirm(book){
   const posterUrl = bookCoverUrl(book);
   const posterHtml = posterUrl
     ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(book.title)} cover">`
-    : `<div class="m-icon" id="modalPoster">📖</div>`;
+    : `<div class="m-icon" id="modalPoster">📚</div>`;
   const showDetailsLookup = currentSource === 'bigbook' && book.bigBookId;
   const canForceRefresh = !!book.bigBookId;
   const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(book.bigBookId);
@@ -3204,7 +3204,7 @@ function renderSimilarBooks(list){
     <a href="https://openlibrary.org/search?q=${encodeURIComponent(b.title)}" target="_blank" rel="noopener" style="flex-shrink:0; width:72px; text-align:center; text-decoration:none; color:inherit;">
       ${b.image
         ? `<img src="${b.image}" alt="${escapeHtml(b.title)}" style="width:64px; height:96px; object-fit:cover; border-radius:4px; border:1px solid var(--line);">`
-        : `<div style="width:64px; height:96px; background:var(--surface); border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:20px;">📖</div>`}
+        : `<div style="width:64px; height:96px; background:var(--surface); border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:20px;">📚</div>`}
       <div style="font-size:10px; margin-top:4px; line-height:1.2; color:var(--muted);">${escapeHtml(b.title)}</div>
     </a>
   `).join('');
@@ -3304,7 +3304,7 @@ function appendTonightExtras(extras, book){
 
 function showTonightBanner(book, picker){
   const posterUrl = bookCoverUrl(book);
-  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">📖</div>';
+  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">☕</div>';
   const byline = bylineHtml(book);
   $('tonightBanner').innerHTML = `
     <div class="tonight">
