@@ -543,7 +543,7 @@
     <div class="marquee">
       <div class="sprockets"></div>
       <h1>NEXT UP - TV SHOWS</h1>
-      <div class="tagline">Spin for a random decade + genre, then whoever's turn it is picks from the list.</div>
+      <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
       <div class="version-badge" id="versionBadge"></div>
@@ -633,7 +633,7 @@
 
       <div class="card" id="wmConnectionCard">
         <h2>Watchmode Connection <span id="wmStatusPill" class="status-pill status-off">NOT CONNECTED</span></h2>
-        <p class="desc">Optional. If you connect a free Watchmode API key, spins pull live show lists filtered by decade + genre straight from Watchmode, with posters, trailer links, and (when a title is picked) which streaming service it's on. Without one, the app uses its built-in curated list. Don't have a key yet? <a href="https://api.watchmode.com/requestApiKey" target="_blank" rel="noopener">Request a free one here</a> — 2,500 requests/month, no credit card required.</p>
+        <p class="desc">Optional. Connect a free Watchmode API key to pull live show lists by decade + genre, with posters, trailer links, and streaming availability. Without one, the app uses its built-in curated list. <a href="https://api.watchmode.com/requestApiKey" target="_blank" rel="noopener">Request a free key</a> — 2,500 requests/month, no credit card required.</p>
         <div class="row">
           <input type="password" id="wmKeyInput" placeholder="Paste your Watchmode API key">
           <button class="btn-primary" id="saveWmKeyBtn">Save & Test</button>
@@ -647,7 +647,7 @@
           <button class="btn-danger" id="clearCacheBtn" style="display:none;">Clear Cache</button>
         </div>
 
-        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many shows are already cached for a given decade/genre. Those spins should feel noticeably faster since little or no live lookup is needed.</p>
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many shows are already cached for a decade/genre. Those spins feel faster since little or no live lookup is needed.</p>
         <div class="row">
           <select id="cacheStatsDecade" style="max-width:140px;">
             <option value="all">All Decades</option>
@@ -670,13 +670,13 @@
 
       <div class="card">
         <h2>Max Results</h2>
-        <p class="desc">How many titles you'll see after a Watchmode spin (10–100). The app fetches this many first; if filtering leaves you short, it fetches more (roughly double the shortfall) to try to make up the difference. A higher number means more titles fetched and enriched, so a longer wait. The built-in list isn't affected by this setting.</p>
+        <p class="desc">How many titles you'll see after a Watchmode spin (10–100). If filtering leaves you short, it fetches more to make up the difference — higher numbers mean a longer wait. Doesn't affect the built-in list.</p>
         <input type="number" id="maxResultsInput" min="10" max="100" step="1" style="max-width:120px;">
       </div>
 
       <div class="card">
         <h2>API Call Log <span class="hint" id="apiLogCount" style="margin:0;"></span></h2>
-        <p class="desc">Every Watchmode network request made since the last time you pressed Spin the Reel, and why — useful for spotting where a spin's time and API budget are actually going. Clears and starts fresh on the next spin.</p>
+        <p class="desc">Every Watchmode request made since your last spin, and why — useful for seeing where time and API budget go. Clears on the next spin.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="apiLogToggleBtn">Show Log</button>
         </div>
@@ -699,14 +699,14 @@
 
       <div class="card" id="rerunFiltersCard" style="display:none;">
         <h2>Apply Changes</h2>
-        <p class="desc">Changed something above after already spinning? Re-run your filters against the same fetched shows — no new spin, no new API calls, just re-checks who currently passes.</p>
+        <p class="desc">Re-run your filters against the same fetched shows — no new spin, no new API calls, just re-checks who currently passes.</p>
         <button class="btn-primary" id="rerunFiltersBtn">🔄 Re-run Filters</button>
       </div>
 
       <div class="card">
 
         <h2>Decades</h2>
-        <p class="desc">Uncheck any decade you don't want in the random spin.</p>
+        <p class="desc">Check which decades you want included.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="decadesAllBtn">Select All</button>
           <button class="btn-ghost" id="decadesNoneBtn">Select None</button>
@@ -716,7 +716,7 @@
 
       <div class="card">
         <h2>Genres</h2>
-        <p class="desc">Uncheck any genre you don't want in the random spin.</p>
+        <p class="desc">Check which genres you want included.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="genresAllBtn">Select All</button>
           <button class="btn-ghost" id="genresNoneBtn">Select None</button>
@@ -726,11 +726,11 @@
 
       <div class="card">
         <h2>Streaming Services</h2>
-        <p class="desc">Uncheck a service to hide titles that aren't available on any of the remaining checked ones. This is applied by Watchmode itself during the search, so it only affects Watchmode-sourced spins — the built-in list isn't checked against streaming availability until you actually open a title.</p>
+        <p class="desc">Check the services you want titles available on. Applied by Watchmode during the search, so it only affects Watchmode-sourced spins — the built-in list isn't checked until you open a title.</p>
         <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:10px;">
           <input type="checkbox" id="ignoreStreamingCheckbox"> Ignore streaming service (don't filter by this at all)
         </label>
-        <p class="desc" id="streamingServicesGreyedHint" style="display:none; margin-bottom:10px;">Our list only covers 8 of Watchmode's 200+ tracked services — narrowing to specific ones here means titles exclusive to any of the others get excluded too, not just the ones you've unchecked. Turn this off if you want to filter by service anyway.</p>
+        <p class="desc" id="streamingServicesGreyedHint" style="display:none; margin-bottom:10px;">This list only covers 8 of Watchmode's 200+ services — filtering here also excludes titles exclusive to any of the other 190+, not just the ones you've unchecked.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="servicesAllBtn">Select All</button>
           <button class="btn-ghost" id="servicesNoneBtn">Select None</button>
@@ -741,7 +741,7 @@
 
       <div class="card">
         <h2>Content Ratings</h2>
-        <p class="desc">Uncheck a rating to hide titles Watchmode has confirmed to carry it. "NR" is for titles explicitly marked Not Rated by Watchmode; "No Rating Available" is separate — it covers titles Watchmode simply has no content rating on file for at all. This filter only affects Watchmode-sourced spins — the built-in list has no rating data to filter on.</p>
+        <p class="desc">Check the ratings you want included. "NR" means Watchmode explicitly marked it Not Rated; "No Rating Available" means Watchmode has no rating on file at all — two different things. Only affects Watchmode-sourced spins.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="ratingsAllBtn">Select All</button>
           <button class="btn-ghost" id="ratingsNoneBtn">Select None</button>
@@ -751,7 +751,7 @@
 
       <div class="card">
         <h2>Languages</h2>
-        <p class="desc">Only titles in a checked language are shown. Defaults to English only — check more to allow them in. Watchmode's own language field for a title isn't always populated; "Unknown" covers those, and is unchecked by default like everything else here, so unrecognized-language results don't slip through silently. This filter only affects Watchmode-sourced spins.</p>
+        <p class="desc">Only checked languages are shown — defaults to English only. "Unknown" covers titles Watchmode hasn't tagged with a language, unchecked by default so those don't slip through silently. Only affects Watchmode-sourced spins.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="languagesAllBtn">Select All</button>
           <button class="btn-ghost" id="languagesNoneBtn">Select None</button>
@@ -761,7 +761,7 @@
 
       <div class="card">
         <h2>User Rating</h2>
-        <p class="desc">Hide titles outside this rating range (0–10 scale). Only applies when Watchmode provides a rating — titles with no rating data (including the built-in list) are never excluded by either of these.</p>
+        <p class="desc">Only shows titles within this rating range (0–10). Titles with no rating data (including the built-in list) are never excluded by this.</p>
         <div class="row">
           <div>
             <div class="hint" style="margin:0 0 4px;">Minimum</div>
@@ -799,7 +799,7 @@
 
       <div class="card">
         <h2>Critic Score</h2>
-        <p class="desc">Only include titles that actually have a critic score on file — this checks for the presence of a score, not any particular value. Only affects Watchmode-sourced spins; the built-in list has no critic score data to check.</p>
+        <p class="desc">Only includes titles with a critic score on file — checks for presence, not any particular value. Only affects Watchmode-sourced spins.</p>
         <label class="toggle-chip" style="justify-content:flex-start;">
           <input type="checkbox" id="requireCriticScoreCheckbox"> Require a critic score
         </label>
@@ -807,7 +807,7 @@
 
       <div class="card">
         <h2>Explicit Content Filter</h2>
-        <p class="desc">Best-effort only — this checks a title and description against a list of keywords, it doesn't actually analyze the film itself. It can miss titles with no telling words in their description, and can very occasionally flag something legitimate. There's a built-in list of common terms included automatically (its contents aren't shown here); you can add your own on top of it below. Matching is case-insensitive and checks for the phrase anywhere in the text.</p>
+        <p class="desc">Best-effort — checks title and description against a keyword list, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
         <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
           <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Shows With Explicit Content
         </label>
@@ -838,7 +838,7 @@
 
       <div class="card">
         <h2>Edit Built-in List</h2>
-        <p class="desc">Add or remove shows from the built-in list for one decade + genre. Used whenever the built-in list is the active source (no Watchmode key, or "Always use built-in list" selected in Admin). If Watchmode is connected, these titles now also get looked up automatically for ratings, posters, and genres — same as a live Watchmode spin, just for a fixed list instead of a live search.</p>
+        <p class="desc">Add or remove shows from the built-in list for one decade + genre — used whenever that's the active source. If Watchmode is connected, these titles also get looked up automatically for ratings, posters, and genres.</p>
         <div class="row">
           <select id="editListDecade"></select>
           <select id="editListGenre"></select>
@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.7.0'; // tracked independently from next-up-movies.html — built-in list expanded to 14 genres x 5 decades (460 entries), content-rating filter fixed to TV scale, Watchmode TV discovery params still unverified, no shared Firestore caching yet
+const APP_VERSION = '0.8.0'; // tracked independently from next-up-movies.html — description text pass + streaming-hint visibility fix
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2295,7 +2295,7 @@ function renderAdmin(){
   });
 
   $('ignoreStreamingCheckbox').checked = ignoreStreamingService;
-  $('streamingServicesGreyedHint').style.display = ignoreStreamingService ? 'block' : 'none';
+  $('streamingServicesGreyedHint').style.display = ignoreStreamingService ? 'none' : 'block';
   $('servicesAllBtn').disabled = ignoreStreamingService;
   $('servicesNoneBtn').disabled = ignoreStreamingService;
   $('streamingServiceToggles').innerHTML = STREAMING_SERVICES.map(s => `
