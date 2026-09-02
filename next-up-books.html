@@ -844,7 +844,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.5.0'; // Find Similar moved to the far-left tab (Next Up stays the default landing tab); search and similar-book results now display as full poster-card grids matching the Next Up page, each fully enriched via lookup; fixed a crash when blocking a book from Find Similar before ever spinning
+const APP_VERSION = '2.5.1'; // fixed a misread of the last request — clicking a card in Find Similar's results now shows that book's info (via the same modal used elsewhere), instead of automatically re-triggering a similar-books search; also fixed a matching crash risk in Pick This Book when used outside the spin flow
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -3356,7 +3356,7 @@ async function enrichAndRenderBooksGrid(candidates, containerId, statusText){
   const grid = document.createElement('div');
   grid.className = 'grid';
   books.forEach((book, i) => {
-    grid.appendChild(buildBookCard(book, i, (b) => showSimilarFor(b.bigBookId, b.title)));
+    grid.appendChild(buildBookCard(book, i, openConfirm));
   });
   container.appendChild(grid);
 }
@@ -3454,15 +3454,17 @@ window.handleNativeBackPress = function(){
 };
 
 async function confirmPick(book, picker){
+  const decade = currentChoice ? decadeLabel(currentChoice.decade) : (book.year ? decadeLabel(Math.floor(book.year / 10) * 10) : 'Unknown');
+  const genre = currentChoice ? currentChoice.genre : 'Found via search';
   picks.push({
     title: book.title, year: book.year,
-    decade: decadeLabel(currentChoice.decade), genre: currentChoice.genre,
+    decade: decade, genre: genre,
     picker: picker, pickedAt: new Date().toISOString().slice(0, 10),
     bigBookId: book.bigBookId || null // lets the Find Similar tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
   });
   closeModal();
   showTonightBanner(book, picker);
-  renderResults();
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. picked from the Find Similar tab) — nothing to re-render
   renderHistory();
   await savePicks();
   await recordPick(picker);
