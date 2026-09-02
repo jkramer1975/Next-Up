@@ -550,10 +550,10 @@
     </div>
 
     <div class="tabs">
+      <button class="tab-btn" id="tabSimilarBtn">🔍 Find Similar</button>
       <button class="tab-btn active" id="tabMainBtn">📚 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Book Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Book List</button>
-      <button class="tab-btn" id="tabSimilarBtn">🔍 Find Similar</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -844,7 +844,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.4.0'; // new "Find Similar" tab — search Big Book API directly, or pick from your crew's pick history, then browse (and chain into) similar books
+const APP_VERSION = '2.5.0'; // Find Similar moved to the far-left tab (Next Up stays the default landing tab); search and similar-book results now display as full poster-card grids matching the Next Up page, each fully enriched via lookup; fixed a crash when blocking a book from Find Similar before ever spinning
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1553,7 +1553,7 @@ async function runSimilarSearch(){
   $('similarSearchResults').innerHTML = '<p class="hint">Searching…</p>';
   try{
     const results = await searchBooksByTitle(query);
-    renderSearchResultsForSimilar(results);
+    await renderSearchResultsForSimilar(results);
   } catch(e){
     errorEl.textContent = e.message;
     errorEl.style.display = 'block';
@@ -3002,7 +3002,7 @@ function getPickerFor(title, year){
 }
 
 function bookGenres(book){
-  if (book.genresOverride && book.genresOverride.length) return book.genresOverride;
+  if (book.genresOverride) return book.genresOverride;
   const key = `${book.title}|${book.year}`;
   if (EXTRA_GENRES[key]) return EXTRA_GENRES[key];
   return currentChoice ? [currentChoice.genre] : [];
@@ -3036,7 +3036,9 @@ function bylineHtml(book){
 }
 
 function metaLineHtml(book){
-  const bits = [book.year || '—', currentChoice.genre];
+  const genres = bookGenres(book);
+  const bits = [book.year || '—'];
+  if (genres.length) bits.push(genres.join(', '));
   if (book.pageCount) bits.push(`${book.pageCount} pages`);
   return bits.join(' · ');
 }
@@ -3050,6 +3052,43 @@ function ratingChipsHtml(book){
   return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
 }
 
+// Builds a single .poster-card element — shared between the main
+// results grid and the Find Similar tab's grid, so both stay visually
+// identical rather than maintaining two copies of the same template.
+// onClick decides what happens when an unpicked card is clicked (opens
+// the pick modal on the main grid; chains into a new similar-books
+// search on the Find Similar tab, which has no meaningful decade/genre
+// to record a pick under).
+function buildBookCard(book, index, onClick){
+  const picked = isPicked(book.title, book.year);
+  const card = document.createElement('div');
+  card.className = 'poster-card' + (picked ? ' disabled' : '');
+  card.dataset.idx = index;
+  const picker = picked ? getPickerFor(book.title, book.year) : null;
+  const watchedTagHtml = picked ? `<div class="watched-tag">WATCHED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
+  card.innerHTML = `
+    ${watchedTagHtml}
+    <div class="poster-meta">
+      <div class="p-num">${String(index + 1).padStart(2, '0')}</div>
+      <div class="p-title-row"><div class="p-title">${escapeHtml(book.title)}</div></div>
+      <div class="p-year">${book.year || '—'}</div>
+      <div class="rating-row">${ratingChipsHtml(book)}</div>
+      <div class="genre-row">${genreChipsHtml(book)}</div>
+      <div class="meta-footer">
+        <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" title="View on ${bookLinkLabel(book)}">🔗 ${bookLinkLabel(book)}</a>
+        <button class="block-card-btn" title="Block this book">⛔</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
+  card.querySelector('.block-card-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    blockBookFromGrid(book);
+  });
+  if (!picked && onClick) card.addEventListener('click', () => onClick(book));
+  return card;
+}
+
 function renderResults(){
   $('resultsTitle').textContent = `${decadeLabel(currentChoice.decade)} ${currentChoice.genre}`;
   $('resultsCount').textContent = `${currentBatch.length} book${currentBatch.length === 1 ? '' : 's'}`;
@@ -3061,33 +3100,7 @@ function renderResults(){
   $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
 
   currentBatch.forEach((book, i) => {
-    const picked = isPicked(book.title, book.year);
-    const card = document.createElement('div');
-    card.className = 'poster-card' + (picked ? ' disabled' : '');
-    card.dataset.idx = i;
-    const picker = picked ? getPickerFor(book.title, book.year) : null;
-    const watchedTagHtml = picked ? `<div class="watched-tag">WATCHED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
-    card.innerHTML = `
-      ${watchedTagHtml}
-      <div class="poster-meta">
-        <div class="p-num">${String(i + 1).padStart(2, '0')}</div>
-        <div class="p-title-row"><div class="p-title">${escapeHtml(book.title)}</div></div>
-        <div class="p-year">${book.year || '—'}</div>
-        <div class="rating-row">${ratingChipsHtml(book)}</div>
-        <div class="genre-row">${genreChipsHtml(book)}</div>
-        <div class="meta-footer">
-          <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" title="View on ${bookLinkLabel(book)}">🔗 ${bookLinkLabel(book)}</a>
-          <button class="block-card-btn" title="Block this book">⛔</button>
-        </div>
-      </div>
-    `;
-    card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
-    card.querySelector('.block-card-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      blockBookFromGrid(book);
-    });
-    if (!picked) card.addEventListener('click', () => openConfirm(book));
-    grid.appendChild(card);
+    grid.appendChild(buildBookCard(book, i, openConfirm));
   });
 }
 
@@ -3101,7 +3114,7 @@ async function blockBookFromGrid(book){
   // book just silently vanishing from the grid with no trace of what
   // happened to it.
   lastFilteredOut.push({ book, reason: 'Blocked' });
-  renderResults();
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. blocked from the Find Similar tab) — nothing to re-render
   renderFilteredOut();
   renderBlockList();
 }
@@ -3299,37 +3312,70 @@ function renderSimilarBooks(list, containerId, chainable){
 // Core flow for the Find Similar tab — given a book (from search results,
 // past picks, or chained from a similar-book result), fetches and
 // displays what's similar to it in the tab's results card.
+// Converts a search-result or similar-book candidate (id/title/image/
+// authors/userRating) into the shape buildBookCard/ratingChipsHtml/
+// genreChipsHtml expect. genresOverride is explicitly set to an empty
+// array (not left unset) — Big Book API never returns genre tags for
+// these, and an explicit empty array is what tells bookGenres to
+// correctly show no genre chips here, rather than falling back to
+// whatever the last spin happened to be for.
+function toGridBook(candidate){
+  return {
+    title: candidate.title,
+    year: candidate.year || null,
+    bigBookId: candidate.id,
+    posterUrl: candidate.image || null,
+    userRating: candidate.userRating ?? null,
+    authors: candidate.authors || null,
+    genresOverride: []
+  };
+}
+
+// Shared by both the search results and the similar-books results in
+// the Find Similar tab — looks up full details (cover, rating,
+// description, authors, page count) for each candidate via the same
+// enrichment + cache path the rest of the app uses, then renders them
+// as the same poster-card grid the main Next Up page uses. Clicking a
+// card here chains into a fresh similar-books search for that title,
+// rather than opening the pick modal — there's no decade/genre context
+// to sensibly record a pick under outside the actual spin flow.
+async function enrichAndRenderBooksGrid(candidates, containerId, statusText){
+  const container = $(containerId);
+  if (!candidates.length){
+    container.innerHTML = `<p class="hint">${statusText || 'No books found.'}</p>`;
+    return;
+  }
+  const books = candidates.map(toGridBook);
+  container.innerHTML = '<p class="hint">Loading details…</p>';
+  await mapWithConcurrency(books, 3, async (book) => {
+    if (!book.bigBookId) return;
+    try{ await enrichOneBook(book, 3); }
+    catch(e){ /* best-effort — card still renders with whatever it already had */ }
+  });
+  container.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  books.forEach((book, i) => {
+    grid.appendChild(buildBookCard(book, i, (b) => showSimilarFor(b.bigBookId, b.title)));
+  });
+  container.appendChild(grid);
+}
+
 async function showSimilarFor(bigBookId, title){
   const card = $('similarSelectedCard');
   card.style.display = 'block';
   $('similarSelectedHeading').textContent = `Similar to: ${title}`;
-  $('similarSelectedResults').innerHTML = '<p class="hint">Loading…</p>';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   try{
     const similar = await fetchSimilarBooks(bigBookId);
-    renderSimilarBooks(similar, 'similarSelectedResults', true);
+    await enrichAndRenderBooksGrid(similar, 'similarSelectedResults', 'No similar books found.');
   } catch(e){
     $('similarSelectedResults').innerHTML = `<p class="hint">Couldn't load similar books (${escapeHtml(e.message)}).</p>`;
   }
 }
 
-function renderSearchResultsForSimilar(list){
-  const container = $('similarSearchResults');
-  if (!list.length){
-    container.innerHTML = '<p class="hint">No books found for that search.</p>';
-    return;
-  }
-  container.innerHTML = list.map(b => `
-    <div class="history-item clickable" data-search-id="${b.id}" data-search-title="${escapeHtml(b.title)}" title="Find books similar to this one">
-      <span class="h-name">${escapeHtml(b.title)}${b.authors && b.authors.length ? ` <span class="h-meta">by ${escapeHtml(b.authors.join(', '))}</span>` : ''}</span>
-      <span class="h-meta">${b.userRating != null ? `⭐ ${b.userRating.toFixed(1)}` : ''}</span>
-    </div>
-  `).join('');
-  container.querySelectorAll('[data-search-id]').forEach(el => {
-    el.addEventListener('click', () => {
-      showSimilarFor(Number(el.dataset.searchId), el.dataset.searchTitle);
-    });
-  });
+async function renderSearchResultsForSimilar(list){
+  await enrichAndRenderBooksGrid(list, 'similarSearchResults', 'No books found for that search.');
 }
 
 function renderPastPicksForSimilar(){
