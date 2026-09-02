@@ -844,7 +844,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.5.1'; // fixed a misread of the last request — clicking a card in Find Similar's results now shows that book's info (via the same modal used elsewhere), instead of automatically re-triggering a similar-books search; also fixed a matching crash risk in Pick This Book when used outside the spin flow
+const APP_VERSION = '2.5.2'; // "Show Similar Books" in the modal now closes the modal and redirects to the Find Similar tab with full-size, clickable poster-cards, instead of cramming small unreadable thumbnails into the modal itself
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -3144,11 +3144,7 @@ function openConfirm(book){
         <div id="modalGenres">${genreChipsHtml(book)}</div>
         <p id="modalDescription" class="modal-description" style="${book.description ? '' : 'display:none;'}">${escapeHtml(book.description || '')}</p>
         ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showDetailsLookup ? 'Loading details…' : ''}</div>` : ''}
-        ${canForceRefresh ? `
-        <div id="similarBooksSection" style="margin-top:10px;">
-          <button class="btn-ghost" id="similarBooksBtn" style="font-size:12px; padding:6px 10px;">📚 Show Similar Books</button>
-          <div id="similarBooksResults"></div>
-        </div>` : ''}
+        ${canForceRefresh ? `<button class="btn-ghost" id="similarBooksBtn" style="font-size:12px; padding:6px 10px; margin-top:10px;">📚 Show Similar Books</button>` : ''}
         <div class="row">
           <button class="btn-ghost" id="cancelPick">Cancel</button>
           <button class="btn-primary" id="confirmPick">Pick This Book</button>
@@ -3158,19 +3154,14 @@ function openConfirm(book){
   `;
   $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
   if (canForceRefresh){
-    $('similarBooksBtn').addEventListener('click', async () => {
-      const btn = $('similarBooksBtn');
-      btn.disabled = true;
-      btn.textContent = 'Loading…';
-      try{
-        const similar = await fetchSimilarBooks(book.bigBookId);
-        renderSimilarBooks(similar);
-      } catch(e){
-        const resultsEl = document.getElementById('similarBooksResults');
-        if (resultsEl) resultsEl.innerHTML = `<p class="hint">Couldn't load similar books (${escapeHtml(e.message)}).</p>`;
-      } finally {
-        btn.style.display = 'none'; // one lookup per modal open — no need to click again once shown, or after it's failed
-      }
+    // Full-size, clickable poster-cards read far better than the small
+    // thumbnails that used to render inside this modal — so this now
+    // closes the modal and hands off to the Find Similar tab's own
+    // results grid instead of rendering anything in place here.
+    $('similarBooksBtn').addEventListener('click', () => {
+      closeModal();
+      switchTab('similar');
+      showSimilarFor(book.bigBookId, book.title);
     });
   }
   $('cancelPick').addEventListener('click', closeModal);
@@ -3266,47 +3257,6 @@ function appendModalExtras(extras, book){
 // "Search" link shown before extras load.
 function detailLinkHtml(book){
   return `<a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
-}
-
-// Similar-books results only ever include id/title/image — not enough
-// for a real bookDetailLink (no openLibraryId or ISBN comes back from
-// this endpoint), so each one links out to a plain Open Library title
-// search instead, same fallback bookDetailLink itself uses when it
-// doesn't have anything better to go on.
-//
-// containerId defaults to the modal's results area; the Find Similar tab
-// passes its own container so both places share this same rendering
-// logic instead of duplicating it. When chainable is true (used by the
-// tab, not the modal), each result is also clickable to immediately
-// search similar-to-that-one instead of just linking out.
-function renderSimilarBooks(list, containerId, chainable){
-  const container = document.getElementById(containerId || 'similarBooksResults');
-  if (!container) return; // modal already closed, or tab no longer showing
-  if (!list.length){
-    container.innerHTML = '<p class="hint">No similar books found.</p>';
-    return;
-  }
-  const cards = list.map(b => {
-    const coverHtml = b.image
-      ? `<img src="${b.image}" alt="${escapeHtml(b.title)}" style="width:64px; height:96px; object-fit:cover; border-radius:4px; border:1px solid var(--line);">`
-      : `<div style="width:64px; height:96px; background:var(--surface); border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:20px;">📚</div>`;
-    const label = `<div style="font-size:10px; margin-top:4px; line-height:1.2; color:var(--muted);">${escapeHtml(b.title)}</div>`;
-    if (chainable){
-      return `<button type="button" class="similar-card-btn" data-similar-id="${b.id}" data-similar-title="${escapeHtml(b.title)}" style="flex-shrink:0; width:72px; text-align:center; background:none; border:none; padding:0; cursor:pointer; color:inherit; font-family:inherit;">${coverHtml}${label}</button>`;
-    }
-    return `<a href="https://openlibrary.org/search?q=${encodeURIComponent(b.title)}" target="_blank" rel="noopener" style="flex-shrink:0; width:72px; text-align:center; text-decoration:none; color:inherit;">${coverHtml}${label}</a>`;
-  }).join('');
-  container.innerHTML = `
-    <div class="hint" style="margin:8px 0 6px;">You might also like:</div>
-    <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:6px;">${cards}</div>
-  `;
-  if (chainable){
-    container.querySelectorAll('[data-similar-id]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        showSimilarFor(Number(btn.dataset.similarId), btn.dataset.similarTitle);
-      });
-    });
-  }
 }
 
 // Core flow for the Find Similar tab — given a book (from search results,
