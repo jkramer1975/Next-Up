@@ -553,6 +553,7 @@
       <button class="tab-btn active" id="tabMainBtn">📚 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Book Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Book List</button>
+      <button class="tab-btn" id="tabSimilarBtn">🔍 Find Similar</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -779,6 +780,32 @@
 
     </div>
 
+    <div id="similarTab" style="display:none;">
+
+      <div class="card">
+        <h2>Search for a Book</h2>
+        <p class="desc">Search Big Book API directly by title, pick the one you mean, then see what's similar to it.</p>
+        <div class="row">
+          <input type="text" id="similarSearchInput" placeholder="Book title">
+          <button class="btn-primary" id="similarSearchBtn">Search</button>
+        </div>
+        <div class="error" id="similarSearchError" style="display:none;"></div>
+        <div id="similarSearchResults" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="card">
+        <h2>Or Pick From Your History</h2>
+        <p class="desc">Find books similar to something your crew already picked and enjoyed.</p>
+        <div id="pastPicksForSimilar" class="crew-list"></div>
+      </div>
+
+      <div class="card" id="similarSelectedCard" style="display:none;">
+        <h2 id="similarSelectedHeading">Similar Books</h2>
+        <div id="similarSelectedResults"></div>
+      </div>
+
+    </div>
+
   </div>
 </div>
 
@@ -817,7 +844,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.3.0'; // icon consistency pass — added H1 icon (was missing), unified fallback icons to the app's own icon, themed tonight-banner flourish
+const APP_VERSION = '2.4.0'; // new "Find Similar" tab — search Big Book API directly, or pick from your crew's pick history, then browse (and chain into) similar books
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1515,18 +1542,43 @@ function updateStorageNote(){
 $('tabMainBtn').addEventListener('click', () => switchTab('main'));
 $('tabFiltersBtn').addEventListener('click', () => switchTab('filters'));
 $('tabBuiltinBtn').addEventListener('click', () => switchTab('builtin'));
+$('tabSimilarBtn').addEventListener('click', () => switchTab('similar'));
+
+async function runSimilarSearch(){
+  const query = $('similarSearchInput').value.trim();
+  const errorEl = $('similarSearchError');
+  errorEl.style.display = 'none';
+  if (!query) return;
+  $('similarSearchBtn').disabled = true;
+  $('similarSearchResults').innerHTML = '<p class="hint">Searching…</p>';
+  try{
+    const results = await searchBooksByTitle(query);
+    renderSearchResultsForSimilar(results);
+  } catch(e){
+    errorEl.textContent = e.message;
+    errorEl.style.display = 'block';
+    $('similarSearchResults').innerHTML = '';
+  } finally {
+    $('similarSearchBtn').disabled = false;
+  }
+}
+$('similarSearchBtn').addEventListener('click', runSimilarSearch);
+$('similarSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSimilarSearch(); });
 $('tabAdminBtn').addEventListener('click', () => switchTab('admin'));
 function switchTab(tab){
   $('mainTab').style.display = tab === 'main' ? 'block' : 'none';
   $('filtersTab').style.display = tab === 'filters' ? 'block' : 'none';
   $('builtinTab').style.display = tab === 'builtin' ? 'block' : 'none';
+  $('similarTab').style.display = tab === 'similar' ? 'block' : 'none';
   $('adminTab').style.display = tab === 'admin' ? 'block' : 'none';
   $('tabMainBtn').classList.toggle('active', tab === 'main');
   $('tabFiltersBtn').classList.toggle('active', tab === 'filters');
   $('tabBuiltinBtn').classList.toggle('active', tab === 'builtin');
+  $('tabSimilarBtn').classList.toggle('active', tab === 'similar');
   $('tabAdminBtn').classList.toggle('active', tab === 'admin');
   if (tab === 'admin') updateCacheStats();
   if (tab === 'builtin') renderEditList();
+  if (tab === 'similar') renderPastPicksForSimilar();
 }
 
 /* ==================================================================
@@ -2340,6 +2392,21 @@ async function fetchSimilarBooks(bigBookId){
   }));
   similarBooksCache.set(bigBookId, results);
   return results;
+}
+
+// User-facing title search for the Find Similar tab — returns several
+// candidates to choose from, unlike searchBigBookForBook (used
+// internally to enrich the built-in list), which just takes the single
+// top result since there's no user present there to disambiguate.
+async function searchBooksByTitle(query){
+  const data = await bbFetch('/search-books', { query, number: '10' }, 0, 3, `Book search: "${query}"`);
+  return (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean).map(b => ({
+    id: b.id,
+    title: b.title,
+    image: b.image || null,
+    authors: (b.authors || []).map(a => a.name).filter(Boolean),
+    userRating: (b.rating && b.rating.average != null) ? b.rating.average * 10 : null
+  }));
 }
 
 async function enrichOneBook(book, maxAttempts, forceRefresh){
@@ -3193,30 +3260,128 @@ function detailLinkHtml(book){
 // this endpoint), so each one links out to a plain Open Library title
 // search instead, same fallback bookDetailLink itself uses when it
 // doesn't have anything better to go on.
-function renderSimilarBooks(list){
-  const container = document.getElementById('similarBooksResults');
-  if (!container) return; // modal already closed
+//
+// containerId defaults to the modal's results area; the Find Similar tab
+// passes its own container so both places share this same rendering
+// logic instead of duplicating it. When chainable is true (used by the
+// tab, not the modal), each result is also clickable to immediately
+// search similar-to-that-one instead of just linking out.
+function renderSimilarBooks(list, containerId, chainable){
+  const container = document.getElementById(containerId || 'similarBooksResults');
+  if (!container) return; // modal already closed, or tab no longer showing
   if (!list.length){
     container.innerHTML = '<p class="hint">No similar books found.</p>';
     return;
   }
-  const cards = list.map(b => `
-    <a href="https://openlibrary.org/search?q=${encodeURIComponent(b.title)}" target="_blank" rel="noopener" style="flex-shrink:0; width:72px; text-align:center; text-decoration:none; color:inherit;">
-      ${b.image
-        ? `<img src="${b.image}" alt="${escapeHtml(b.title)}" style="width:64px; height:96px; object-fit:cover; border-radius:4px; border:1px solid var(--line);">`
-        : `<div style="width:64px; height:96px; background:var(--surface); border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:20px;">📚</div>`}
-      <div style="font-size:10px; margin-top:4px; line-height:1.2; color:var(--muted);">${escapeHtml(b.title)}</div>
-    </a>
-  `).join('');
+  const cards = list.map(b => {
+    const coverHtml = b.image
+      ? `<img src="${b.image}" alt="${escapeHtml(b.title)}" style="width:64px; height:96px; object-fit:cover; border-radius:4px; border:1px solid var(--line);">`
+      : `<div style="width:64px; height:96px; background:var(--surface); border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:20px;">📚</div>`;
+    const label = `<div style="font-size:10px; margin-top:4px; line-height:1.2; color:var(--muted);">${escapeHtml(b.title)}</div>`;
+    if (chainable){
+      return `<button type="button" class="similar-card-btn" data-similar-id="${b.id}" data-similar-title="${escapeHtml(b.title)}" style="flex-shrink:0; width:72px; text-align:center; background:none; border:none; padding:0; cursor:pointer; color:inherit; font-family:inherit;">${coverHtml}${label}</button>`;
+    }
+    return `<a href="https://openlibrary.org/search?q=${encodeURIComponent(b.title)}" target="_blank" rel="noopener" style="flex-shrink:0; width:72px; text-align:center; text-decoration:none; color:inherit;">${coverHtml}${label}</a>`;
+  }).join('');
   container.innerHTML = `
     <div class="hint" style="margin:8px 0 6px;">You might also like:</div>
     <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:6px;">${cards}</div>
   `;
+  if (chainable){
+    container.querySelectorAll('[data-similar-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        showSimilarFor(Number(btn.dataset.similarId), btn.dataset.similarTitle);
+      });
+    });
+  }
 }
 
-// Updates a book's already-rendered grid card in place — used once a
-// click-triggered (or pick-triggered) Big Book API lookup fills in data
-// the eager batch enrichment missed, so the main grid reflects it without
+// Core flow for the Find Similar tab — given a book (from search results,
+// past picks, or chained from a similar-book result), fetches and
+// displays what's similar to it in the tab's results card.
+async function showSimilarFor(bigBookId, title){
+  const card = $('similarSelectedCard');
+  card.style.display = 'block';
+  $('similarSelectedHeading').textContent = `Similar to: ${title}`;
+  $('similarSelectedResults').innerHTML = '<p class="hint">Loading…</p>';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  try{
+    const similar = await fetchSimilarBooks(bigBookId);
+    renderSimilarBooks(similar, 'similarSelectedResults', true);
+  } catch(e){
+    $('similarSelectedResults').innerHTML = `<p class="hint">Couldn't load similar books (${escapeHtml(e.message)}).</p>`;
+  }
+}
+
+function renderSearchResultsForSimilar(list){
+  const container = $('similarSearchResults');
+  if (!list.length){
+    container.innerHTML = '<p class="hint">No books found for that search.</p>';
+    return;
+  }
+  container.innerHTML = list.map(b => `
+    <div class="history-item clickable" data-search-id="${b.id}" data-search-title="${escapeHtml(b.title)}" title="Find books similar to this one">
+      <span class="h-name">${escapeHtml(b.title)}${b.authors && b.authors.length ? ` <span class="h-meta">by ${escapeHtml(b.authors.join(', '))}</span>` : ''}</span>
+      <span class="h-meta">${b.userRating != null ? `⭐ ${b.userRating.toFixed(1)}` : ''}</span>
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-search-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      showSimilarFor(Number(el.dataset.searchId), el.dataset.searchTitle);
+    });
+  });
+}
+
+function renderPastPicksForSimilar(){
+  const container = $('pastPicksForSimilar');
+  if (!picks.length){
+    container.innerHTML = '<div class="empty-note">No books picked yet.</div>';
+    return;
+  }
+  // Same book can appear more than once (different crew members, or
+  // picked again after being un-blocked) — de-duplicated by title+year,
+  // newest first, so the history-inspired list here isn't full of
+  // repeats.
+  const seen = new Set();
+  const unique = [];
+  for (let i = picks.length - 1; i >= 0; i--){
+    const p = picks[i];
+    const key = `${p.title}|${p.year}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(p);
+  }
+  container.innerHTML = unique.map((p, i) => `
+    <div class="history-item clickable" data-past-idx="${i}" title="Find books similar to this one">
+      <span class="h-name">${escapeHtml(p.title)} <span class="h-meta">(${p.year || '—'})</span></span>
+      <span class="h-meta">${p.picker ? 'picked by ' + escapeHtml(p.picker) : ''}</span>
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-past-idx]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const p = unique[Number(el.dataset.pastIdx)];
+      const card = $('similarSelectedCard');
+      card.style.display = 'block';
+      $('similarSelectedHeading').textContent = `Similar to: ${p.title}`;
+      $('similarSelectedResults').innerHTML = '<p class="hint">Finding this book on Big Book API…</p>';
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      try{
+        // Reuses the same search-and-cache helper the built-in list uses
+        // to resolve a title/year to an id — older picks made before this
+        // feature existed never had one stored.
+        const bigBookId = p.bigBookId || await searchBigBookForBook(p);
+        if (!bigBookId){
+          $('similarSelectedResults').innerHTML = `<p class="hint">Couldn't find "${escapeHtml(p.title)}" on Big Book API.</p>`;
+          return;
+        }
+        await showSimilarFor(bigBookId, p.title);
+      } catch(e){
+        $('similarSelectedResults').innerHTML = `<p class="hint">Couldn't load similar books (${escapeHtml(e.message)}).</p>`;
+      }
+    });
+  });
+}
+
 // needing a full re-render.
 function backfillGridCard(book){
   const idx = currentBatch.indexOf(book);
@@ -3246,7 +3411,8 @@ async function confirmPick(book, picker){
   picks.push({
     title: book.title, year: book.year,
     decade: decadeLabel(currentChoice.decade), genre: currentChoice.genre,
-    picker: picker, pickedAt: new Date().toISOString().slice(0, 10)
+    picker: picker, pickedAt: new Date().toISOString().slice(0, 10),
+    bigBookId: book.bigBookId || null // lets the Find Similar tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
   });
   closeModal();
   showTonightBanner(book, picker);
