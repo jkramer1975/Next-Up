@@ -301,7 +301,7 @@
     </div>
   </div>
 <script>
-const INDEX_VERSION = '2.4.0'; // tracked independently from next-up-movies.html's own version — this is a separate file
+const INDEX_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH, same scheme as the individual apps — MAJOR stays 0 until told otherwise; tracked independently from each app's own version, since this is a separate file. All apps reset to 0.1.0 together when this scheme was adopted.
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
 function escapeHtml(s){

@@ -863,7 +863,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '3.5.0'; // "Find Similar" renamed to "Discover Books" throughout — tab label, HTML IDs, and function names (tabDiscoverBtn, discoverTab, runDiscoverSearch, searchBooksByQuery, etc.) — while keeping the genuine find-similar-books feature's own naming (fetchSimilarBooks, showSimilarFor) intact, since that name is still accurate for what it does. Search box now explicitly supports title-or-topic queries, matching what Big Book API's query parameter has always semantically supported. Also added group-results=true to both search calls, to collapse different editions of the same book server-side.
+const APP_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. All apps reset to 0.1.0 together when this scheme was adopted.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
