@@ -863,7 +863,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. Discover Books search now tries a keyword match against every book the crew has already enriched (via a new searchWords field on sharedBookRatings) before ever spending a live API call — a query only skips the live call when at least 10 books match on 75%+ of the query's words.
+const APP_VERSION = '0.3.1'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. Cross-app audit (prompted by a real bug found in Games): window.storage calls were unprefixed, unlike the properly-prefixed localStorage fallback — harmless in practice since window.storage never actually activates in either real deployment (confirmed via MainActivity.kt, which only enables localStorage), but fixed for consistency.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1310,7 +1310,7 @@ function warnStorageFallback(){
 
 async function loadJSON(key, fallback){
   if (HAS_CLAUDE_STORAGE){
-    try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : fallback; }
+    try{ const r = await window.storage.get('nbk_' + key); return r ? JSON.parse(r.value) : fallback; }
     catch(e){ return fallback; }
   }
   warnStorageFallback();
@@ -1319,7 +1319,7 @@ async function loadJSON(key, fallback){
 }
 async function saveJSON(key, value){
   if (HAS_CLAUDE_STORAGE){
-    try{ await window.storage.set(key, JSON.stringify(value)); }
+    try{ await window.storage.set('nbk_' + key, JSON.stringify(value)); }
     catch(e){ console.error('Storage save failed for ' + key, e); }
   } else {
     warnStorageFallback();
@@ -1442,7 +1442,7 @@ async function resetLocalStateToDefaults(){
   for (const key of SYNCED_KEYS){
     const getDefault = SYNCED_KEY_DEFAULTS[key];
     const value = getDefault ? getDefault() : null;
-    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(value));
+    if (HAS_CLAUDE_STORAGE) await window.storage.set('nbk_' + key, JSON.stringify(value));
     else localStorage.setItem('nbk_' + key, JSON.stringify(value));
   }
 }
@@ -1525,7 +1525,7 @@ async function syncOnSignIn(user){
         // read back as a real (empty) value instead of falling through to
         // the app's actual defaults.
         if (data[key] !== undefined && data[key] !== null){
-          if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(data[key]));
+          if (HAS_CLAUDE_STORAGE) await window.storage.set('nbk_' + key, JSON.stringify(data[key]));
           else localStorage.setItem('nbk_' + key, JSON.stringify(data[key]));
         }
       }

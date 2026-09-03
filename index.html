@@ -269,6 +269,15 @@
           </div>
           <div class="badge">Beta</div>
         </a>
+
+        <a class="app-card" href="next-up-games.html">
+          <div class="icon">🎮</div>
+          <div>
+            <div class="title">Games</div>
+            <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
+          </div>
+          <div class="badge">Beta</div>
+        </a>
       </div>
 
       <div class="footer-note">Next Up Suite — a free, independent project</div>
@@ -290,10 +299,7 @@
         <h2>Pick Stats</h2>
         <p class="desc">Who's picked the least in each section — sorted so whoever's due comes first, rather than tracking a strict rotation.</p>
         <div class="row">
-          <select id="statsSection">
-            <option value="movies">Movies</option>
-            <option value="tv">TV Shows</option>
-          </select>
+          <select id="statsSection"></select>
         </div>
         <div id="statsBars" class="stats-bars"></div>
         <div class="hint" id="statsEmptyHint" style="display:none;"></div>
@@ -301,7 +307,7 @@
     </div>
   </div>
 <script>
-const INDEX_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH, same scheme as the individual apps — MAJOR stays 0 until told otherwise; tracked independently from each app's own version, since this is a separate file. All apps reset to 0.1.0 together when this scheme was adopted.
+const INDEX_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH, same scheme as the individual apps — MAJOR stays 0 until told otherwise; tracked independently from each app's own version, since this is a separate file. Added the Games app card. Also fixed a real, pre-existing gap found during a cross-app audit: the Pick Stats dropdown only ever had Movies/TV Shows — Books had never been added despite tracking its own stats this whole time. STAT_SECTIONS existed but was never actually wired up to the dropdown (which was hardcoded HTML); now the dropdown is generated from STAT_SECTIONS directly, so a future app only needs one array updated, not two places kept in sync by hand.
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
 function escapeHtml(s){
@@ -354,11 +360,18 @@ function switchTab(tab){
    already used for the shared Watchmode key.
    ================================================================== */
 let crew = [];
-let pickStats = {}; // { [name]: { movies: N, tv: N } }
+let pickStats = {}; // { [name]: { movies: N, tv: N, books: N, games: N } }
 const STAT_SECTIONS = [
   { key: 'movies', label: 'Movies' },
-  { key: 'tv', label: 'TV Shows' }
+  { key: 'tv', label: 'TV Shows' },
+  { key: 'books', label: 'Books' },
+  { key: 'games', label: 'Games' }
 ];
+
+function populateStatsSectionOptions(){
+  const select = document.getElementById('statsSection');
+  select.innerHTML = STAT_SECTIONS.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+}
 
 function loadCrewAndStatsLocal(){
   try{ crew = JSON.parse(localStorage.getItem('nextup_shared_crew') || '[]'); } catch(e){ crew = []; }
@@ -586,6 +599,7 @@ document.getElementById('signOutBtn').addEventListener('click', () => {
 });
 
 loadCrewAndStatsLocal();
+populateStatsSectionOptions();
 renderCrew();
 renderStatsBars();
 </script>

@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. All apps reset to 0.1.0 together when this scheme was adopted.
+const APP_VERSION = '0.1.1'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. Cross-app audit (prompted by a real bug found in Games): window.storage calls were unprefixed, unlike the properly-prefixed localStorage fallback — harmless in practice since window.storage never actually activates in either real deployment (confirmed via MainActivity.kt, which only enables localStorage), but fixed for consistency. watchmode_api_key intentionally left unprefixed — that's a deliberate, documented shared credential between Movies and TV.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1303,7 +1303,7 @@ function warnStorageFallback(){
 
 async function loadJSON(key, fallback){
   if (HAS_CLAUDE_STORAGE){
-    try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : fallback; }
+    try{ const r = await window.storage.get('ntv_' + key); return r ? JSON.parse(r.value) : fallback; }
     catch(e){ return fallback; }
   }
   warnStorageFallback();
@@ -1312,7 +1312,7 @@ async function loadJSON(key, fallback){
 }
 async function saveJSON(key, value){
   if (HAS_CLAUDE_STORAGE){
-    try{ await window.storage.set(key, JSON.stringify(value)); }
+    try{ await window.storage.set('ntv_' + key, JSON.stringify(value)); }
     catch(e){ console.error('Storage save failed for ' + key, e); }
   } else {
     warnStorageFallback();
@@ -1441,7 +1441,7 @@ async function resetLocalStateToDefaults(){
   for (const key of SYNCED_KEYS){
     const getDefault = SYNCED_KEY_DEFAULTS[key];
     const value = getDefault ? getDefault() : null;
-    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(value));
+    if (HAS_CLAUDE_STORAGE) await window.storage.set('ntv_' + key, JSON.stringify(value));
     else localStorage.setItem('ntv_' + key, JSON.stringify(value));
   }
   // watchmode_api_key is a shared, cross-app credential now (see
@@ -1454,7 +1454,7 @@ async function resetLocalStateToDefaults(){
   // These aren't synced themselves, but they're entirely derived from the
   // Watchmode key we just reset — leaving them would be stale/meaningless.
   for (const key of ['watchmode_api_key', 'watchmode_genre_map', 'watchmode_all_genre_names', 'watchmode_genre_map_resolved_at', 'watchmode_source_map', 'watchmode_source_names', 'watchmode_source_map_resolved_at', 'watchmode_warmup_done']){
-    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
+    if (HAS_CLAUDE_STORAGE) await window.storage.set('ntv_' + key, JSON.stringify(null));
     else localStorage.setItem('ntv_' + key, JSON.stringify(null));
   }
 }
@@ -1532,7 +1532,7 @@ async function syncOnSignIn(user){
         // read back as a real (empty) value instead of falling through to
         // the app's actual defaults.
         if (data[key] !== undefined && data[key] !== null){
-          if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(data[key]));
+          if (HAS_CLAUDE_STORAGE) await window.storage.set('ntv_' + key, JSON.stringify(data[key]));
           else localStorage.setItem('ntv_' + key, JSON.stringify(data[key]));
         }
       }
