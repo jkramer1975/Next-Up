@@ -362,17 +362,6 @@
     color: var(--amber); opacity: 0; transition: opacity .15s ease; flex-shrink:0;
   }
   .source-box.active .source-live-badge{ opacity: 1; }
-  .source-box-link-inline{
-    font-family: var(--font-body); font-size: 11px; font-weight: 500; letter-spacing: 0;
-    color: var(--amber); text-decoration: none;
-  }
-  .source-box-link-inline:hover{ color: var(--cream); text-decoration: underline; }
-
-  @keyframes jumpFlash{
-    0%, 100% { box-shadow: none; border-color: var(--line); }
-    20%, 60% { box-shadow: 0 0 0 2px var(--amber); border-color: var(--amber); }
-  }
-  .jump-highlight{ animation: jumpFlash 1.5s ease; }
 
   .results-head{
     display:flex; align-items: baseline; justify-content: space-between;
@@ -585,7 +574,7 @@
           <div class="source-box" id="sourceBoxOpenLibrary">
             <div class="source-box-top">
               <span class="source-box-icon">🌐</span>
-              <span class="source-box-title">Big Book API <a href="#" id="goToOpenLibraryConnection" class="source-box-link-inline">- Manage Connection→</a></span>
+              <span class="source-box-title">Big Book API</span>
               <span class="source-live-badge">● LIVE</span>
             </div>
           </div>
@@ -848,7 +837,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '3.2.0'; // Data Source can no longer even be set to Big Book API while signed out — both the Admin radio and the Next Up page's source-box show a sign-in alert and revert the selection; signing out also actively flips the setting back to built-in list rather than leaving a stale "auto" preference in place
+const APP_VERSION = '3.2.3'; // fixed the actual root cause of the 400 — Big Book API's live genre matching rejects underscores despite its own docs showing them; historical_fiction/science_fiction/young_adult/graphic_novel/true_crime all switched to spaces, confirmed working via direct live testing. Note: historical_fiction and science_fiction were likely silently broken since this app was first built on Big Book API.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1015,7 +1004,7 @@ Memoir:[{title:"Spare",year:2023}],
 // where there's real per-decade volume. Order here is the display order
 // everywhere (decade toggles, the built-in list editor, etc.).
 const DECADE_DEFS = [
-  { key: 'pre1900', label: 'Before 1900', startYear: 1000, endYear: 1899 },
+  { key: 'pre1900', label: 'Before 1900', startYear: 1500, endYear: 1899 },
   { key: '1900_1940s', label: '1900s-1940s', startYear: 1900, endYear: 1949 },
   { key: '1950_1970s', label: '1950s-1970s', startYear: 1950, endYear: 1979 },
   { key: '1980', label: '1980s', startYear: 1980, endYear: 1989 },
@@ -1050,27 +1039,29 @@ function yearToDecadeKey(year){
   return def ? def.key : null;
 }
 
-// Maps our genre names to Big Book API's genre values — confirmed
-// directly against their official documented list of 89 supported
-// genres (https://bigbookapi.com/docs/#Book_Genres), not guessed the
-// way Open Library's subject slugs had to be. Every one of our 8
-// genres has an exact, official match.
+// Confirmed via live testing against the real API (not just the docs):
+// Big Book API's documented genre list uses underscores for multi-word
+// genres (e.g. "historical_fiction"), but its actual genre matching
+// rejects underscores outright — a real discrepancy between their docs
+// and live behavior, not something guessable from the documentation
+// alone. Spaces work correctly (URLSearchParams encodes them
+// automatically), so every multi-word value here uses a space instead.
 const BB_GENRES = {
   'Biography': 'biography',
   'Classic Literature': 'classics',
   'Fantasy': 'fantasy',
-  'Historical Fiction': 'historical_fiction',
+  'Historical Fiction': 'historical fiction',
   'Horror': 'horror',
   'Mystery': 'mystery',
   'Romance': 'romance',
-  'Science Fiction': 'science_fiction',
+  'Science Fiction': 'science fiction',
   'Thriller': 'thriller',
-  'Young Adult': 'young_adult',
+  'Young Adult': 'young adult',
   'Humor': 'humor',
   'Adventure': 'adventure',
   'Memoir': 'memoir',
-  'Graphic Novel': 'graphic_novel',
-  'True Crime': 'true_crime'
+  'Graphic Novel': 'graphic novel',
+  'True Crime': 'true crime'
 };
 
 function comboKey(decade, genre){ return `${decade}|${genre}`; }
@@ -2290,16 +2281,6 @@ function updateSourceNote(){
   $('sourceBoxBuiltin').classList.toggle('active', !willUseWm);
   $('sourceBoxOpenLibrary').classList.toggle('active', !!willUseWm);
 }
-
-$('goToOpenLibraryConnection').addEventListener('click', (e) => {
-  e.preventDefault();
-  e.stopPropagation(); // don't also trigger the box's own click-to-select handler
-  switchTab('admin');
-  const card = $('bbConnectionCard');
-  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  card.classList.add('jump-highlight');
-  setTimeout(() => card.classList.remove('jump-highlight'), 1500);
-});
 
 $('sourceBoxBuiltin').addEventListener('click', async () => {
   if (dataSourcePref === 'builtin') return;
