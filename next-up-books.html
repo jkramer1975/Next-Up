@@ -624,9 +624,7 @@
       <div class="card" id="bbConnectionCard">
         <h2>Big Book API <span class="status-pill status-connected">ALWAYS CONNECTED</span></h2>
         <p class="desc">Books uses Big Book API, routed through a small proxy — no account or API key needed on this device, but you do need to be <strong style="color:var(--cream);">signed in with Google</strong> to actually use it. Spins pull live book lists by decade + genre, with covers, ratings, and (when a title is picked) a link to its Open Library or WorldCat page. If not signed in, "Always use built-in list" is selected below, or the service can't be reached, the app falls back to its built-in curated list.</p>
-        <div class="hint" id="bbWarmupStatus"></div>
         <div class="row" style="margin-top:8px;">
-          <button class="btn-ghost" id="rerunWarmupBtn">Re-run Cache Warmup</button>
           <button class="btn-danger" id="clearCacheBtn">Clear Cache</button>
         </div>
 
@@ -831,13 +829,13 @@ let currentUser = null; // set once signed in; null while signed out
 
 // Which localStorage/window.storage keys sync to the cloud when signed
 // in. Deliberately excludes anything device-local or easily regenerated
-// (the ratings/search caches, the resolved genre-ID map, warmup status)
-// — those stay local to each device rather than bloating the synced
-// document or fighting over which device's cache "wins."
+// (the ratings/search caches, the resolved genre-ID map) — those stay
+// local to each device rather than bloating the synced document or
+// fighting over which device's cache "wins."
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '3.2.3'; // fixed the actual root cause of the 400 — Big Book API's live genre matching rejects underscores despite its own docs showing them; historical_fiction/science_fiction/young_adult/graphic_novel/true_crime all switched to spaces, confirmed working via direct live testing. Note: historical_fiction and science_fiction were likely silently broken since this app was first built on Big Book API.
+const APP_VERSION = '3.3.0'; // removed the background cache warmup feature entirely — the function, its status hint, the Re-run Cache Warmup button, and all its persisted state
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1223,7 +1221,6 @@ function applyRecordToBook(book, record, tierFlags){
     if (record.pageCount != null) book.pageCount = record.pageCount;
   }
 }
-let bbWarmupDone = false;
 const wmDetailsCache = new Map(); // big book id -> {posterUrl, genres, description, userRating, openLibraryId, isbn, enrichedAt} — persisted locally, mirroring wmRatingsCache's shape
 const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
 const wmRatingsCache = new Map(); // big book id -> {title, year, genres, posterUrl, description, userRating, openLibraryId, isbn, discoveredAt, enrichedAt} — used for the whole grid (session only)
@@ -1442,14 +1439,6 @@ async function resetLocalStateToDefaults(){
     if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(value));
     else localStorage.setItem('nbk_' + key, JSON.stringify(value));
   }
-  // Books has no equivalent of a shared, cross-app credential (Open
-  // Library needs no key) — nothing else to clear here beyond what's
-  // already in SYNCED_KEYS, aside from the warmup flag below, which is
-  // derived state rather than a real setting.
-  for (const key of ['bigbook_warmup_done']){
-    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(null));
-    else localStorage.setItem('nbk_' + key, JSON.stringify(null));
-  }
 }
 
 async function signOutOfGoogle(){
@@ -1486,7 +1475,6 @@ fbAuth.onAuthStateChanged(async (user) => {
   renderAuthUI();
   if (user){
     triggerSyncOnce(user);
-    runStartupWarmup(); // never awaited — was skipped at page load if signed out at the time; this catches the case where sign-in happens after that
   } else if (dataSourcePref === 'auto'){
     // Big Book API requires sign-in — this actively reverts the setting
     // itself when signed out, rather than leaving it showing "auto" while
@@ -1625,7 +1613,6 @@ async function saveWmDetailsCache(){
   });
   await saveJSON('openlibrary_details_cache', obj);
 }
-async function saveBbWarmupDone(){ await saveJSON('bigbook_warmup_done', bbWarmupDone); }
 
 /* ==================================================================
    Init
@@ -1678,13 +1665,11 @@ async function init(){
   Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchBigBookExtras, not at load time
   const savedSimilarCache = await loadJSON('bigbook_similar_cache', {});
   Object.entries(savedSimilarCache).forEach(([k, v]) => similarBooksCache.set(Number(k), v)); // staleness checked at actual use time in fetchSimilarBooks, not at load time
-  bbWarmupDone = await loadJSON('bigbook_warmup_done', false);
 
   renderHistory();
   renderAdmin();
   updateSourceNote();
   updateStorageNote();
-  runStartupWarmup(); // never awaited — runs in the background, doesn't block anything above
 }
 
 function updateStorageNote(){
@@ -1948,17 +1933,10 @@ async function bbFetch(path, params, attempt, maxAttempts, reason){
   return res.json();
 }
 
-$('rerunWarmupBtn').addEventListener('click', () => {
-  bbWarmupDone = false; // otherwise runStartupWarmup's own guard would make this a no-op on anything but the very first run
-  runStartupWarmup();
-});
-
 $('clearCacheBtn').addEventListener('click', async () => {
   if (!confirm(`Clear all ${wmRatingsCache.size} cached book details? Spins will need to re-fetch from Big Book API until the cache rebuilds.`)) return;
   wmRatingsCache.clear();
   await saveWmRatingsCache();
-  bbWarmupDone = false;
-  await saveBbWarmupDone();
   updateCacheStats();
 });
 
@@ -2529,8 +2507,8 @@ function bookNeedsEnrichment(book){
 }
 
 // Big Book API's Get Book Information endpoint — same one used at
-// pick-time in fetchBigBookExtras, reused here for the
-// discovery/warmup enrichment path.
+// pick-time in fetchBigBookExtras, reused here for the discovery-time
+// enrichment path.
 async function fetchBigBookDetails(id, maxAttempts, reason){
   return bbFetch(`/${id}`, {}, 0, maxAttempts, reason);
 }
@@ -3140,49 +3118,6 @@ async function buildBigBookPool(decade, genre){
   }
 
   return pool;
-}
-
-// Runs once per session, in the background after the app loads — never awaited by anything, never blocks the UI. Pulls a small sample (10
-// titles) per enabled decade/genre combo and warms the persistent ratings
-// cache for them, so future spins into those combos start with a head
-// start already cached. Uses enrichBatchWithRatings's silent mode so it
-// never touches the spin button or status text, even if a real spin
-// happens to run at the same time.
-async function runStartupWarmup(){
-  if (bbWarmupDone) return;
-  if (!currentUser) return; // every combo would just fail the same sign-in check in bbFetch — leaves bbWarmupDone false so this can still run once someone signs in
-
-  const combos = [];
-  DECADES.filter(d => enabledDecades.includes(d)).forEach(d => {
-    GENRES.filter(g => enabledGenres.includes(g)).forEach(g => combos.push([d, g]));
-  });
-  if (!combos.length) return;
-
-  const setStatus = (text) => {
-    console.log('[warmup]', text);
-    const el = document.getElementById('bbWarmupStatus');
-    if (el) el.textContent = text;
-  };
-
-  setStatus(`Warming up cache in the background: 0/${combos.length} combos…`);
-  for (let i = 0; i < combos.length; i++){
-    const [decade, genre] = combos[i];
-    try{
-      // Sorted by popularity (edition count) — same as a real spin uses —
-      // so the most enduringly popular titles for this combo get cached
-      // first.
-      const pool = await fetchBigBookByRating(decade, genre, 10, new Set(), `Background cache warmup: ${decadeLabel(decade)} ${genre}`);
-      const toEnrich = pool.filter(m => !isBlocked(m.title, m.year));
-      await enrichBatchWithRatings(toEnrich, { silent: true });
-    } catch(e){
-      console.warn('[warmup] failed for', decade, genre, e.message);
-    }
-    setStatus(`Warming up cache in the background: ${i + 1}/${combos.length} combos…`);
-  }
-
-  bbWarmupDone = true;
-  await saveBbWarmupDone();
-  setStatus(`Cache warmup complete (${combos.length} decade/genre combos).`);
 }
 
 /* ==================================================================
