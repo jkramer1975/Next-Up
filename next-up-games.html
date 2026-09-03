@@ -17,7 +17,7 @@
       violet:   { bg:'#16131a', surface:'#211d27', surface2:'#2a2433', amber:'#b98af0', amberRgb:'185,138,240', amberDim:'#7d5aa6', cream:'#efe7f5', muted:'#948b9e', line:'#38313f' },
       popcorn:  { bg:'#f4ede0', surface:'#ffffff', surface2:'#f2e8d4', amber:'#d9822b', amberRgb:'217,130,43', amberDim:'#a85f18', cream:'#241a08', muted:'#7a6c54', line:'#ddd0b8' }
     };
-    var saved = localStorage.getItem('nbk_color_theme');
+    var saved = localStorage.getItem('nug_color_theme');
     var name = saved ? JSON.parse(saved) : 'amber';
     var t = THEME_VARS[name] || THEME_VARS.amber;
     var s = document.documentElement.style;
@@ -794,7 +794,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak. First working build — core spin flow (decade+genre discovery via IGDB, pick modal, tonight banner, history) and Admin (decade/genre toggles, sign-in, data source). Discover/search tab, rating filter, and platform filter deliberately deferred to follow-up work. Built-in list (GAME_DB) is a minimal starter set only.
+const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — fixed a real, significant bug: this file was still using Books' localStorage prefix ('nbk_'), Firestore sync document name ('books'), window.storage keys, and pick-stats field name — meaning every local setting (picks, blocked games, decade/genre toggles, color theme) and the entire cloud sync path were shared with Books instead of scoped to Games. Also fixed leftover Books icons/text (tonight banner fallback icon and "Happy reading", modal fallback icon, "WATCHED" badge) found through live testing.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1206,20 +1206,20 @@ function warnStorageFallback(){
 
 async function loadJSON(key, fallback){
   if (HAS_CLAUDE_STORAGE){
-    try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : fallback; }
+    try{ const r = await window.storage.get('nug_' + key); return r ? JSON.parse(r.value) : fallback; }
     catch(e){ return fallback; }
   }
   warnStorageFallback();
-  try{ const raw = localStorage.getItem('nbk_' + key); return raw ? JSON.parse(raw) : fallback; }
+  try{ const raw = localStorage.getItem('nug_' + key); return raw ? JSON.parse(raw) : fallback; }
   catch(e){ return fallback; }
 }
 async function saveJSON(key, value){
   if (HAS_CLAUDE_STORAGE){
-    try{ await window.storage.set(key, JSON.stringify(value)); }
+    try{ await window.storage.set('nug_' + key, JSON.stringify(value)); }
     catch(e){ console.error('Storage save failed for ' + key, e); }
   } else {
     warnStorageFallback();
-    try{ localStorage.setItem('nbk_' + key, JSON.stringify(value)); }
+    try{ localStorage.setItem('nug_' + key, JSON.stringify(value)); }
     catch(e){ console.error('Local storage save failed for ' + key, e); }
   }
   if (currentUser && SYNCED_KEYS.has(key)){
@@ -1230,7 +1230,7 @@ async function saveJSON(key, value){
 async function syncKeyToCloud(key, value){
   try{
     await fbDb.collection('users').doc(currentUser.uid)
-      .collection('nextUpApps').doc('books')
+      .collection('nextUpApps').doc('games')
       .set({ [key]: value }, { merge: true });
   } catch(e){
     console.warn('Cloud sync failed for ' + key, e.message);
@@ -1338,8 +1338,8 @@ async function resetLocalStateToDefaults(){
   for (const key of SYNCED_KEYS){
     const getDefault = SYNCED_KEY_DEFAULTS[key];
     const value = getDefault ? getDefault() : null;
-    if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(value));
-    else localStorage.setItem('nbk_' + key, JSON.stringify(value));
+    if (HAS_CLAUDE_STORAGE) await window.storage.set('nug_' + key, JSON.stringify(value));
+    else localStorage.setItem('nug_' + key, JSON.stringify(value));
   }
 }
 
@@ -1411,7 +1411,7 @@ fbAuth.onAuthStateChanged(async (user) => {
 async function syncOnSignIn(user){
   showAuthStatus('Syncing…');
   try{
-    const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('books');
+    const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('games');
     const snap = await ref.get();
     if (snap.exists){
       const data = snap.data();
@@ -1421,8 +1421,8 @@ async function syncOnSignIn(user){
         // read back as a real (empty) value instead of falling through to
         // the app's actual defaults.
         if (data[key] !== undefined && data[key] !== null){
-          if (HAS_CLAUDE_STORAGE) await window.storage.set(key, JSON.stringify(data[key]));
-          else localStorage.setItem('nbk_' + key, JSON.stringify(data[key]));
+          if (HAS_CLAUDE_STORAGE) await window.storage.set('nug_' + key, JSON.stringify(data[key]));
+          else localStorage.setItem('nug_' + key, JSON.stringify(data[key]));
         }
       }
       showAuthStatus('Synced from your account — reloading…');
@@ -1625,10 +1625,10 @@ function loadSharedCrew(){
 
 /* ==================================================================
    Pick stats — who picked what, per section. Written here (this
-   section is "books"), but owned and displayed on the landing page
+   section is "games"), but owned and displayed on the landing page
    alongside every other section's numbers. Same unprefixed shared
    local storage pattern as crew; synced to Firestore via a dotted
-   top-level key (e.g. "Alan.books") so FieldValue.increment only
+   top-level key (e.g. "Alan.games") so FieldValue.increment only
    ever touches that one nested leaf — a plain nested object under
    {merge:true} would silently overwrite the whole per-person map
    instead of adding to it.
@@ -1645,12 +1645,12 @@ async function recordPick(name){
   if (!name || name === 'Unknown') return;
   loadSharedPickStats(); // fresh read — another tab/section may have changed this since page load
   if (!pickStats[name]) pickStats[name] = {};
-  pickStats[name].books = (pickStats[name].books || 0) + 1;
+  pickStats[name].games = (pickStats[name].games || 0) + 1;
   localStorage.setItem('nextup_shared_pickstats', JSON.stringify(pickStats));
   if (!currentUser) return;
   try{
     await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats')
-      .set({ [`${name}.books`]: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+      .set({ [`${name}.games`]: firebase.firestore.FieldValue.increment(1) }, { merge: true });
   } catch(e){ console.warn('Could not sync pick stat to cloud', e.message); }
 }
 
@@ -1673,7 +1673,7 @@ function openPickerPrompt(book){
         <h3>Who's picking?</h3>
         <div class="crew-list" style="margin-top:14px;">
           ${crew.map(name => {
-            const count = (pickStats[name] && pickStats[name].books) || 0;
+            const count = (pickStats[name] && pickStats[name].games) || 0;
             return `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;"><span>${escapeHtml(name)}</span><span class="hint" style="margin:0;">${count} picked</span></button>`;
           }).join('')}
         </div>
