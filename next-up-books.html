@@ -863,7 +863,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. All apps reset to 0.1.0 together when this scheme was adopted.
+const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. Discover Books' title/topic search (searchBooksByQuery) now cached the same three-tier way as similar-books lookups — local persistent cache plus shared Firestore cache once signed in — so the same search string only ever costs one live API call across the whole crew.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1683,6 +1683,8 @@ async function init(){
   Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchBigBookExtras, not at load time
   const savedSimilarCache = await loadJSON('bigbook_similar_cache', {});
   Object.entries(savedSimilarCache).forEach(([k, v]) => similarBooksCache.set(Number(k), v)); // staleness checked at actual use time in fetchSimilarBooks, not at load time
+  const savedSearchQueryCache = await loadJSON('bigbook_search_query_cache', {});
+  Object.entries(savedSearchQueryCache).forEach(([k, v]) => searchQueryCache.set(k, v)); // staleness checked at actual use time in searchBooksByQuery, not at load time
 
   renderHistory();
   renderAdmin();
@@ -2615,6 +2617,36 @@ async function fetchSimilarBooks(bigBookId){
   return books;
 }
 
+// Short, deterministic, non-cryptographic hash of a normalized query
+// string — used as the cache key below since Firestore document IDs
+// can't safely hold arbitrary user-typed text (slashes break path
+// parsing, length limits, etc.). A 32-bit hash gives ~4 billion buckets,
+// which is effectively collision-free at the scale of distinct searches
+// one crew will ever run — and the normalized query is also stored as a
+// field in the cached record, so a collision (however unlikely) is
+// still caught by comparing it before trusting the cached results.
+function hashQueryKey(query){
+  const normalized = query.trim().toLowerCase();
+  let hash = 5381;
+  for (let i = 0; i < normalized.length; i++){
+    hash = ((hash * 33) ^ normalized.charCodeAt(i)) >>> 0; // DJB2 variant, unsigned 32-bit
+  }
+  return hash.toString(36);
+}
+
+// Discover Books tab's title-or-topic search — cached the same
+// three-tier way as everything else in this app: locally (persists
+// across sessions on this device) and, once signed in, shared via
+// Firestore so the exact same search string is free for every
+// signed-in user from then on, not just the one who first ran it.
+// 90-day staleness, matching the other Big Book API caches — what a
+// given search string returns shouldn't shift meaningfully day to day.
+const searchQueryCache = new Map(); // hash -> {query, results, cachedAt}
+async function saveSearchQueryCache(){
+  const obj = {};
+  searchQueryCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('bigbook_search_query_cache', obj);
+}
 // User-facing title-or-topic search for the Discover Books tab —
 // returns several candidates to choose from, unlike searchBigBookForBook
 // (used internally to enrich the built-in list), which just takes the
@@ -2624,14 +2656,42 @@ async function fetchSimilarBooks(bigBookId){
 // handles both an exact title and a topic like "books about dragons" —
 // no separate keyword-search mechanism is needed.
 async function searchBooksByQuery(query){
+  const normalized = query.trim().toLowerCase();
+  const key = hashQueryKey(query);
+
+  const local = searchQueryCache.get(key);
+  if (local && local.query === normalized && isFresh(local.cachedAt, WM_ENRICHMENT_STALE_MS)) return local.results;
+
+  if (currentUser){
+    try{
+      const sharedDoc = await fbDb.collection('sharedBookSearches').doc(key).get();
+      if (sharedDoc.exists){
+        const data = sharedDoc.data();
+        if (data.query === normalized && isFresh(data.cachedAt, WM_ENRICHMENT_STALE_MS)){
+          searchQueryCache.set(key, data);
+          saveSearchQueryCache(); // fire-and-forget
+          return data.results;
+        }
+      }
+    } catch(e){ console.warn('Shared search-query cache lookup failed, falling back to Big Book API directly', e.message); }
+  }
+
   const data = await bbFetch('/search-books', { query, number: '10', 'group-results': 'true' }, 0, 3, `Book search: "${query}"`);
-  return (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean).map(b => ({
+  const results = (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean).map(b => ({
     id: b.id,
     title: b.title,
     image: b.image || null,
     authors: (b.authors || []).map(a => a.name).filter(Boolean),
     userRating: (b.rating && b.rating.average != null) ? b.rating.average * 10 : null
   }));
+  const fresh = { query: normalized, results, cachedAt: Date.now() };
+  searchQueryCache.set(key, fresh);
+  saveSearchQueryCache(); // fire-and-forget — don't block on a local storage write
+  if (currentUser){
+    fbDb.collection('sharedBookSearches').doc(key).set(fresh)
+      .catch(e => console.warn('Could not write shared search-query cache entry', e.message)); // fire-and-forget — never blocks showing the result
+  }
+  return results;
 }
 
 async function enrichOneBook(book, maxAttempts, forceRefresh){
