@@ -634,7 +634,7 @@
 
       <div class="card" id="bbConnectionCard">
         <h2>Big Book API <span class="status-pill status-connected">ALWAYS CONNECTED</span></h2>
-        <p class="desc">Books uses Big Book API, routed through a small proxy — no account or API key needed on this device. Spins pull live book lists by decade + genre, with covers, ratings, and (when a title is picked) a link to its Open Library or WorldCat page. If "Always use built-in list" is selected below, or if the service can't be reached, the app falls back to its built-in curated list.</p>
+        <p class="desc">Books uses Big Book API, routed through a small proxy — no account or API key needed on this device, but you do need to be <strong style="color:var(--cream);">signed in with Google</strong> to actually use it. Spins pull live book lists by decade + genre, with covers, ratings, and (when a title is picked) a link to its Open Library or WorldCat page. If not signed in, "Always use built-in list" is selected below, or the service can't be reached, the app falls back to its built-in curated list.</p>
         <div class="hint" id="bbWarmupStatus"></div>
         <div class="row" style="margin-top:8px;">
           <button class="btn-ghost" id="rerunWarmupBtn">Re-run Cache Warmup</button>
@@ -655,9 +655,9 @@
 
       <div class="card">
         <h2>Data Source</h2>
-        <p class="desc">Which source to use when you spin.</p>
+        <p class="desc">Which source to use when you spin. Big Book API requires being signed in with Google — without that, this falls back to the built-in list automatically regardless of which option is selected.</p>
         <div class="crew-list">
-          <label class="toggle-chip" style="justify-content:flex-start;"><input type="radio" name="dataSource" value="auto"> Use Big Book API, falling back to the built-in list if unreachable</label>
+          <label class="toggle-chip" style="justify-content:flex-start;"><input type="radio" name="dataSource" value="auto"> Use Big Book API, falling back to the built-in list if unreachable or not signed in</label>
           <label class="toggle-chip" style="justify-content:flex-start;"><input type="radio" name="dataSource" value="builtin"> Always use built-in list only</label>
         </div>
       </div>
@@ -782,6 +782,10 @@
 
     <div id="similarTab" style="display:none;">
 
+      <div class="card" id="similarSignInRequired" style="display:none; text-align:center;">
+        <p class="desc" style="margin:0;">🔒 Sign in with Google to use Find Similar — every part of this tab runs on Big Book API directly, and signing in means the whole crew shares the same cached lookups instead of each device repeating the same searches.</p>
+      </div>
+
       <div class="card">
         <h2>Search for a Book</h2>
         <p class="desc">Search Big Book API directly by title, pick the one you mean, then see what's similar to it.</p>
@@ -844,7 +848,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '2.5.2'; // "Show Similar Books" in the modal now closes the modal and redirects to the Find Similar tab with full-size, clickable poster-cards, instead of cramming small unreadable thumbnails into the modal itself
+const APP_VERSION = '3.2.0'; // Data Source can no longer even be set to Big Book API while signed out — both the Admin radio and the Next Up page's source-box show a sign-in alert and revert the selection; signing out also actively flips the setting back to built-in list rather than leaving a stale "auto" preference in place
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -864,6 +868,57 @@ const SYNCED_KEYS = new Set([
    Expanding this to real scale is an explicit, separate next step.
    ================================================================== */
 const BOOK_DB = {
+pre1900:{
+Biography:[{title:"Narrative of the Life of Frederick Douglass",year:1845}],
+"Classic Literature":[{title:"Pride and Prejudice",year:1813},{title:"Great Expectations",year:1861}],
+Fantasy:[{title:"Alice's Adventures in Wonderland",year:1865}],
+"Historical Fiction":[{title:"A Tale of Two Cities",year:1859}],
+Horror:[{title:"Frankenstein",year:1818},{title:"Dracula",year:1897}],
+Mystery:[{title:"The Adventures of Sherlock Holmes",year:1892}],
+Romance:[{title:"Jane Eyre",year:1847}],
+"Science Fiction":[{title:"Twenty Thousand Leagues Under the Sea",year:1870},{title:"The War of the Worlds",year:1898}],
+Thriller:[{title:"The Strange Case of Dr Jekyll and Mr Hyde",year:1886}],
+"Young Adult":[],
+Humor:[{title:"The Adventures of Huckleberry Finn",year:1884}],
+Adventure:[{title:"Treasure Island",year:1883},{title:"Around the World in Eighty Days",year:1873}],
+Memoir:[{title:"Walden",year:1854}],
+"Graphic Novel":[],
+"True Crime":[]
+},
+"1900_1940s":{
+Biography:[{title:"The Story of My Life",year:1903}],
+"Classic Literature":[{title:"The Great Gatsby",year:1925},{title:"To the Lighthouse",year:1927}],
+Fantasy:[{title:"The Hobbit",year:1937}],
+"Historical Fiction":[{title:"Gone with the Wind",year:1936}],
+Horror:[{title:"Rebecca",year:1938}],
+Mystery:[{title:"The Murder of Roger Ackroyd",year:1926},{title:"The Maltese Falcon",year:1930}],
+Romance:[{title:"Gone with the Wind",year:1936}],
+"Science Fiction":[{title:"Brave New World",year:1932}],
+Thriller:[{title:"The 39 Steps",year:1915}],
+"Young Adult":[{title:"Anne of Green Gables",year:1908}],
+Humor:[{title:"Right Ho, Jeeves",year:1934}],
+Adventure:[{title:"The Lost World",year:1912}],
+Memoir:[{title:"Down and Out in Paris and London",year:1933}],
+"Graphic Novel":[],
+"True Crime":[]
+},
+"1950_1970s":{
+Biography:[{title:"The Diary of a Young Girl",year:1952}],
+"Classic Literature":[{title:"To Kill a Mockingbird",year:1960},{title:"One Hundred Years of Solitude",year:1967}],
+Fantasy:[{title:"The Lord of the Rings",year:1954}],
+"Historical Fiction":[{title:"Roots",year:1976}],
+Horror:[{title:"The Haunting of Hill House",year:1959},{title:"Rosemary's Baby",year:1967}],
+Mystery:[{title:"The Talented Mr. Ripley",year:1955}],
+Romance:[{title:"Love Story",year:1970}],
+"Science Fiction":[{title:"Fahrenheit 451",year:1953},{title:"Dune",year:1965},{title:"Slaughterhouse-Five",year:1969}],
+Thriller:[{title:"The Day of the Jackal",year:1971}],
+"Young Adult":[{title:"The Outsiders",year:1967}],
+Humor:[{title:"Catch-22",year:1961}],
+Adventure:[{title:"Watership Down",year:1972}],
+Memoir:[{title:"Night",year:1960}],
+"Graphic Novel":[],
+"True Crime":[{title:"In Cold Blood",year:1966}]
+},
 1980:{
 Biography:[{title:"Iacocca: An Autobiography",year:1984}],
 "Classic Literature":[{title:"Beloved",year:1987},{title:"The Color Purple",year:1982}],
@@ -872,7 +927,14 @@ Fantasy:[{title:"The Belgariad: Pawn of Prophecy",year:1982},{title:"The Dark To
 Horror:[{title:"It",year:1986},{title:"Misery",year:1987},{title:"Pet Sematary",year:1983}],
 Mystery:[{title:"The Name of the Rose",year:1980}],
 Romance:[{title:"Lace",year:1982}],
-"Science Fiction":[{title:"Ender's Game",year:1985},{title:"Neuromancer",year:1984},{title:"Contact",year:1985},{title:"The Handmaid's Tale",year:1985}]
+"Science Fiction":[{title:"Ender's Game",year:1985},{title:"Neuromancer",year:1984},{title:"Contact",year:1985},{title:"The Handmaid's Tale",year:1985}],
+Thriller:[{title:"The Hunt for Red October",year:1984}],
+"Young Adult":[{title:"Hatchet",year:1987}],
+Humor:[{title:"A Confederacy of Dunces",year:1980}],
+Adventure:[{title:"Congo",year:1980}],
+Memoir:[{title:"This Boy's Life",year:1989}],
+"Graphic Novel":[{title:"Watchmen",year:1986},{title:"Maus",year:1986},{title:"The Dark Knight Returns",year:1986}],
+"True Crime":[{title:"The Stranger Beside Me",year:1980}]
 },
 1990:{
 Biography:[{title:"Angela's Ashes",year:1996}],
@@ -882,7 +944,14 @@ Fantasy:[{title:"A Game of Thrones",year:1996},{title:"Harry Potter and the Sorc
 Horror:[{title:"The Green Mile",year:1996}],
 Mystery:[{title:"The Alienist",year:1994}],
 Romance:[{title:"The Bridges of Madison County",year:1992}],
-"Science Fiction":[{title:"Snow Crash",year:1992},{title:"Jurassic Park",year:1990}]
+"Science Fiction":[{title:"Snow Crash",year:1992},{title:"Jurassic Park",year:1990}],
+Thriller:[{title:"The Pelican Brief",year:1992}],
+"Young Adult":[{title:"Speak",year:1999}],
+Humor:[{title:"Bridget Jones's Diary",year:1996}],
+Adventure:[{title:"The Perfect Storm",year:1997}],
+Memoir:[{title:"The Liars' Club",year:1995}],
+"Graphic Novel":[{title:"Ghost World",year:1997}],
+"True Crime":[{title:"A Civil Action",year:1995}]
 },
 2000:{
 Biography:[{title:"Eat, Pray, Love",year:2006}],
@@ -892,7 +961,14 @@ Fantasy:[{title:"Harry Potter and the Goblet of Fire",year:2000},{title:"Eragon"
 Horror:[{title:"The Road",year:2006}],
 Mystery:[{title:"The Da Vinci Code",year:2003},{title:"The Girl with the Dragon Tattoo",year:2005}],
 Romance:[{title:"Twilight",year:2005}],
-"Science Fiction":[{title:"World War Z",year:2006}]
+"Science Fiction":[{title:"World War Z",year:2006}],
+Thriller:[{title:"Angels & Demons",year:2000}],
+"Young Adult":[{title:"The Hunger Games",year:2008}],
+Humor:[{title:"Confessions of a Shopaholic",year:2000}],
+Adventure:[{title:"Life of Pi",year:2001}],
+Memoir:[{title:"A Long Way Gone",year:2007}],
+"Graphic Novel":[{title:"Persepolis",year:2000}],
+"True Crime":[{title:"Devil in the White City",year:2003}]
 },
 2010:{
 Biography:[{title:"Becoming",year:2018}],
@@ -902,7 +978,14 @@ Fantasy:[{title:"Six of Crows",year:2015},{title:"A Court of Thorns and Roses",y
 Horror:[{title:"Bird Box",year:2014}],
 Mystery:[{title:"Gone Girl",year:2012},{title:"Big Little Lies",year:2014}],
 Romance:[{title:"The Fault in Our Stars",year:2012},{title:"Me Before You",year:2012}],
-"Science Fiction":[{title:"The Martian",year:2011},{title:"Ready Player One",year:2011}]
+"Science Fiction":[{title:"The Martian",year:2011},{title:"Ready Player One",year:2011}],
+Thriller:[{title:"The Girl on the Train",year:2015}],
+"Young Adult":[{title:"Divergent",year:2011}],
+Humor:[{title:"Bossypants",year:2011}],
+Adventure:[{title:"Wild",year:2012}],
+Memoir:[{title:"Educated",year:2018}],
+"Graphic Novel":[{title:"March: Book One",year:2013}],
+"True Crime":[{title:"I'll Be Gone in the Dark",year:2018}]
 },
 2020:{
 Biography:[{title:"Spare",year:2023}],
@@ -912,12 +995,60 @@ Fantasy:[{title:"House of Earth and Blood",year:2020}],
 Horror:[{title:"The Only Good Indians",year:2020}],
 Mystery:[{title:"The Thursday Murder Club",year:2020}],
 Romance:[{title:"Book Lovers",year:2022}],
-"Science Fiction":[{title:"Project Hail Mary",year:2021}]
+"Science Fiction":[{title:"Project Hail Mary",year:2021}],
+Thriller:[{title:"The Guest List",year:2020}],
+"Young Adult":[{title:"Legendborn",year:2020}],
+Humor:[],
+Adventure:[],
+Memoir:[{title:"Spare",year:2023}],
+"Graphic Novel":[],
+"True Crime":[]
 }
 };
 
-const DECADES = Object.keys(BOOK_DB).map(Number).sort((a,b)=>a-b);
+// Books have existed for centuries, unlike Movies/TV — so "decade"
+// buckets here aren't uniform 10-year blocks the way they are in those
+// apps. Well-known-book density drops off sharply before 1980, so the
+// three oldest buckets are intentionally wide (a single "Before 1900"
+// bucket, then two 30-40 year spans) rather than forcing genuinely
+// sparse individual decades. 1980s onward stays as individual decades,
+// where there's real per-decade volume. Order here is the display order
+// everywhere (decade toggles, the built-in list editor, etc.).
+const DECADE_DEFS = [
+  { key: 'pre1900', label: 'Before 1900', startYear: 1000, endYear: 1899 },
+  { key: '1900_1940s', label: '1900s-1940s', startYear: 1900, endYear: 1949 },
+  { key: '1950_1970s', label: '1950s-1970s', startYear: 1950, endYear: 1979 },
+  { key: '1980', label: '1980s', startYear: 1980, endYear: 1989 },
+  { key: '1990', label: '1990s', startYear: 1990, endYear: 1999 },
+  { key: '2000', label: '2000s', startYear: 2000, endYear: 2009 },
+  { key: '2010', label: '2010s', startYear: 2010, endYear: 2019 },
+  { key: '2020', label: '2020s', startYear: 2020, endYear: 2029 }
+];
+const DECADE_DEF_BY_KEY = Object.fromEntries(DECADE_DEFS.map(d => [d.key, d]));
+const DECADES = DECADE_DEFS.map(d => d.key);
 const GENRES = Object.keys(BOOK_DB[DECADES[0]]).sort();
+
+function decadeLabel(key){
+  const def = DECADE_DEF_BY_KEY[key];
+  return def ? def.label : String(key);
+}
+function decadeStartYear(key){
+  const def = DECADE_DEF_BY_KEY[key];
+  return def ? def.startYear : Number(key);
+}
+function decadeEndYear(key){
+  const def = DECADE_DEF_BY_KEY[key];
+  return def ? def.endYear : Number(key) + 9;
+}
+// Used by confirmPick's fallback when a book is picked outside the spin
+// flow (e.g. from Find Similar) — maps a raw publish year back to
+// whichever bucket it actually falls in, so a 1925 book correctly
+// resolves to "1900s-1940s" rather than a literal (and non-existent)
+// "1920s" label.
+function yearToDecadeKey(year){
+  const def = DECADE_DEFS.find(d => year >= d.startYear && year <= d.endYear);
+  return def ? def.key : null;
+}
 
 // Maps our genre names to Big Book API's genre values — confirmed
 // directly against their official documented list of 89 supported
@@ -932,7 +1063,14 @@ const BB_GENRES = {
   'Horror': 'horror',
   'Mystery': 'mystery',
   'Romance': 'romance',
-  'Science Fiction': 'science_fiction'
+  'Science Fiction': 'science_fiction',
+  'Thriller': 'thriller',
+  'Young Adult': 'young_adult',
+  'Humor': 'humor',
+  'Adventure': 'adventure',
+  'Memoir': 'memoir',
+  'Graphic Novel': 'graphic_novel',
+  'True Crime': 'true_crime'
 };
 
 function comboKey(decade, genre){ return `${decade}|${genre}`; }
@@ -1045,11 +1183,25 @@ function isFresh(timestamp, windowMs){
   return timestamp != null && timestamp >= Date.now() - windowMs;
 }
 
+// Big Book API never returns genre tags directly — the only genre
+// knowledge this app ever has for a book comes from which genre filter
+// it happened to be discovered under during a spin. A book can
+// genuinely belong to more than one of the app's genres, and different
+// spins over time can surface the same book under different ones — so
+// this always unions rather than replaces, or a later discovery under
+// one genre would silently erase an earlier one. Returns null (not [])
+// when there's nothing at all, consistent with how "no genre known yet"
+// is represented everywhere else.
+function mergeGenreLists(a, b){
+  const set = new Set([...(a || []), ...(b || [])]);
+  return set.size ? Array.from(set) : null;
+}
+
 function mergeFreshestTiers(local, shared){
   const merged = Object.assign({}, local);
+  merged.genres = mergeGenreLists(local.genres, shared.genres); // always merged, independent of which side is "fresher" below
   if ((shared.discoveredAt || 0) > (local.discoveredAt || 0)){
     merged.title = shared.title;
-    merged.genres = shared.genres;
     merged.discoveredAt = shared.discoveredAt;
   }
   if ((shared.enrichedAt || 0) > (local.enrichedAt || 0)){
@@ -1138,7 +1290,6 @@ let customRemovals = {}; // "decade|genre" -> ["title|year", ...] — built-in e
 let maxResults = MAX_RESULTS_DEFAULT;
 
 const $ = (id) => document.getElementById(id);
-const decadeLabel = (y) => y + 's';
 function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 function randomFrom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -1342,7 +1493,20 @@ function showAuthStatus(text){
 fbAuth.onAuthStateChanged(async (user) => {
   currentUser = user;
   renderAuthUI();
-  if (user) triggerSyncOnce(user);
+  if (user){
+    triggerSyncOnce(user);
+    runStartupWarmup(); // never awaited — was skipped at page load if signed out at the time; this catches the case where sign-in happens after that
+  } else if (dataSourcePref === 'auto'){
+    // Big Book API requires sign-in — this actively reverts the setting
+    // itself when signed out, rather than leaving it showing "auto" while
+    // silently falling back to the built-in list at spin-time. Covers
+    // both an active sign-out and opening the app already signed out
+    // with 'auto' persisted from an earlier session.
+    dataSourcePref = 'builtin';
+    await saveDataSourcePref();
+    renderAdmin();
+    updateSourceNote();
+  }
 });
 
 // Runs once right after a sign-in is confirmed. If cloud data already
@@ -1400,6 +1564,8 @@ function renderAuthUI(){
     signedOutBox.style.display = 'block';
     signedInBox.style.display = 'none';
   }
+  const similarBanner = document.getElementById('similarSignInRequired');
+  if (similarBanner) similarBanner.style.display = currentUser ? 'none' : 'block';
 }
 
 async function savePicks(){ await saveJSON('book_picks', picks); }
@@ -1519,6 +1685,8 @@ async function init(){
   Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
   const savedDetailsCache = await loadJSON('openlibrary_details_cache', {});
   Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchBigBookExtras, not at load time
+  const savedSimilarCache = await loadJSON('bigbook_similar_cache', {});
+  Object.entries(savedSimilarCache).forEach(([k, v]) => similarBooksCache.set(Number(k), v)); // staleness checked at actual use time in fetchSimilarBooks, not at load time
   bbWarmupDone = await loadJSON('bigbook_warmup_done', false);
 
   renderHistory();
@@ -1578,7 +1746,10 @@ function switchTab(tab){
   $('tabAdminBtn').classList.toggle('active', tab === 'admin');
   if (tab === 'admin') updateCacheStats();
   if (tab === 'builtin') renderEditList();
-  if (tab === 'similar') renderPastPicksForSimilar();
+  if (tab === 'similar'){
+    renderPastPicksForSimilar();
+    $('similarSignInRequired').style.display = currentUser ? 'none' : 'block';
+  }
 }
 
 /* ==================================================================
@@ -1737,6 +1908,9 @@ let bbQuotaLeft = null; // from the X-API-Quota-Left response header, when prese
 const BB_PER_CALL_TIMEOUT_MS = 10000;
 
 async function bbFetch(path, params, attempt, maxAttempts, reason){
+  if (!currentUser){
+    throw new Error('Sign in to use Big Book API — this keeps everyone reading from the same shared cache instead of each device repeating the same lookups.');
+  }
   if (bbQuotaExhausted){
     throw new Error('Today\'s free Big Book API quota is used up — using the built-in list instead until it resets.');
   }
@@ -1799,6 +1973,11 @@ $('clearCacheBtn').addEventListener('click', async () => {
 
 document.querySelectorAll('input[name=dataSource]').forEach(radio => {
   radio.addEventListener('change', async (e) => {
+    if (e.target.value === 'auto' && !currentUser){
+      alert('Sign in with Google to use Big Book API.');
+      renderAdmin(); // reverts the radio's checked state back to the actual (unchanged) dataSourcePref
+      return;
+    }
     dataSourcePref = e.target.value;
     await saveDataSourcePref();
     updateSourceNote();
@@ -1930,7 +2109,7 @@ function populateEditListDropdowns(){
 }
 
 function renderEditList(){
-  const decade = Number($('editListDecade').value);
+  const decade = $('editListDecade').value;
   const genre = $('editListGenre').value;
   const key = comboKey(decade, genre);
   const removedSet = new Set(customRemovals[key] || []);
@@ -1978,7 +2157,7 @@ async function addEditListBook(){
     $('editListError').style.display = 'block';
     return;
   }
-  const decade = Number($('editListDecade').value);
+  const decade = $('editListDecade').value;
   const genre = $('editListGenre').value;
   const key = comboKey(decade, genre);
   if (!customAdditions[key]) customAdditions[key] = [];
@@ -1994,7 +2173,7 @@ $('editListGenre').addEventListener('change', renderEditList);
 $('editListAddBtn').addEventListener('click', addEditListBook);
 $('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListBook(); });
 $('editListResetBtn').addEventListener('click', async () => {
-  const decade = Number($('editListDecade').value);
+  const decade = $('editListDecade').value;
   const genre = $('editListGenre').value;
   const key = comboKey(decade, genre);
   if (!confirm(`Reset ${decadeLabel(decade)} ${genre} back to the default built-in list? This removes anything you've added or removed for this combo.`)) return;
@@ -2089,15 +2268,14 @@ function updateCacheStats(){
   wmRatingsCache.forEach((entry) => {
     if (decadeSel !== 'all'){
       if (entry.year == null){ missingYearData++; return; }
-      const entryDecade = Math.floor(entry.year / 10) * 10;
-      if (entryDecade !== Number(decadeSel)) return;
+      if (yearToDecadeKey(entry.year) !== decadeSel) return;
     }
     if (genreSel !== 'all'){
       if (!entry.genres || !entry.genres.includes(genreSel)) return;
     }
     count++;
   });
-  let text = `${count} book${count === 1 ? '' : 's'} cached for ${decadeSel === 'all' ? 'all decades' : decadeLabel(Number(decadeSel))} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
+  let text = `${count} book${count === 1 ? '' : 's'} cached for ${decadeSel === 'all' ? 'all decades' : decadeLabel(decadeSel)} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
   if (decadeSel !== 'all' && missingYearData){
     text += ` (${missingYearData} cached entries from before this feature can't be counted by decade until re-fetched.)`;
   }
@@ -2108,7 +2286,7 @@ $('cacheStatsDecade').addEventListener('change', updateCacheStats);
 $('cacheStatsGenre').addEventListener('change', updateCacheStats);
 
 function updateSourceNote(){
-  const willUseWm = dataSourcePref === 'auto';
+  const willUseWm = dataSourcePref === 'auto' && !!currentUser;
   $('sourceBoxBuiltin').classList.toggle('active', !willUseWm);
   $('sourceBoxOpenLibrary').classList.toggle('active', !!willUseWm);
 }
@@ -2133,6 +2311,10 @@ $('sourceBoxBuiltin').addEventListener('click', async () => {
 
 $('sourceBoxOpenLibrary').addEventListener('click', async () => {
   if (dataSourcePref === 'auto') return;
+  if (!currentUser){
+    alert('Sign in with Google to use Big Book API.');
+    return;
+  }
   dataSourcePref = 'auto';
   await saveDataSourcePref();
   renderAdmin();
@@ -2219,7 +2401,7 @@ async function spin(){
 
   currentChoice = { decade: finalDecade, genre: finalGenre };
 
-  const useWm = dataSourcePref === 'auto' && !!BB_GENRES[finalGenre];
+  const useWm = dataSourcePref === 'auto' && !!currentUser && !!BB_GENRES[finalGenre];
 
   if (useWm){
     try{
@@ -2280,12 +2462,7 @@ function computeFilteredSurvivors(pool){
     if (a.userRating == null && b.userRating == null) return 0;
     if (a.userRating == null) return 1;
     if (b.userRating == null) return -1;
-    if (a.userRating !== b.userRating) return b.userRating - a.userRating;
-    // Tied on user rating — break the tie with critic score, when available.
-    if (a.criticScore == null && b.criticScore == null) return 0;
-    if (a.criticScore == null) return 1;
-    if (b.criticScore == null) return -1;
-    return b.criticScore - a.criticScore;
+    return b.userRating - a.userRating;
   });
 
   const allQualified = survivors.slice(); // everything that passed real content criteria, before the display-only max-results trim below
@@ -2379,19 +2556,54 @@ async function fetchBigBookDetails(id, maxAttempts, reason){
 
 // Similar-books lookups are deliberately NOT part of the automatic
 // enrichment flow — they're a separate API call per book, only spent
-// when someone actually asks for it via the button in the modal, not
-// fired automatically for every title a spin turns up.
-const similarBooksCache = new Map(); // bigBookId -> array of {id, title, image} — session only, avoids re-spending the call if the same book's modal is reopened
+// when someone actually asks for it via a button, not fired
+// automatically for every title a spin turns up. Once someone does ask,
+// though, the result is cached the same three-tier way everything else
+// in this app is: locally (persists across sessions on this device) and,
+// once signed in, shared via Firestore so the exact same lookup is free
+// for every signed-in user from then on, not just the one who first
+// asked. 90-day staleness — matches WM_ENRICHMENT_STALE_MS, since which
+// books are "similar" to a given title is arguably even more stable
+// than a description or cover, and there's no reason to expect it
+// changes often.
+const similarBooksCache = new Map(); // bigBookId -> {books: [{id, title, image}], cachedAt}
+async function saveSimilarBooksCache(){
+  const obj = {};
+  similarBooksCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('bigbook_similar_cache', obj);
+}
 async function fetchSimilarBooks(bigBookId){
-  if (similarBooksCache.has(bigBookId)) return similarBooksCache.get(bigBookId);
+  const local = similarBooksCache.get(bigBookId);
+  if (local && isFresh(local.cachedAt, WM_ENRICHMENT_STALE_MS)) return local.books;
+
+  if (currentUser){
+    try{
+      const sharedDoc = await fbDb.collection('sharedSimilarBooks').doc(String(bigBookId)).get();
+      if (sharedDoc.exists){
+        const data = sharedDoc.data();
+        if (isFresh(data.cachedAt, WM_ENRICHMENT_STALE_MS)){
+          similarBooksCache.set(bigBookId, data);
+          saveSimilarBooksCache(); // fire-and-forget
+          return data.books;
+        }
+      }
+    } catch(e){ console.warn('Shared similar-books cache lookup failed, falling back to Big Book API directly', e.message); }
+  }
+
   const data = await bbFetch(`/${bigBookId}/similar`, {}, 0, 3, `Similar books lookup: id ${bigBookId}`);
-  const results = (data.similar_books || []).map(b => ({
+  const books = (data.similar_books || []).map(b => ({
     id: b.id,
     title: b.title,
     image: b.image || null
   }));
-  similarBooksCache.set(bigBookId, results);
-  return results;
+  const fresh = { books, cachedAt: Date.now() };
+  similarBooksCache.set(bigBookId, fresh);
+  saveSimilarBooksCache(); // fire-and-forget — don't block on a local storage write
+  if (currentUser){
+    fbDb.collection('sharedSimilarBooks').doc(String(bigBookId)).set(fresh)
+      .catch(e => console.warn('Could not write shared similar-books cache entry', e.message)); // fire-and-forget — never blocks showing the result
+  }
+  return books;
 }
 
 // User-facing title search for the Find Similar tab — returns several
@@ -2457,7 +2669,7 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
     const fresh = {
       title: book.title,
       year: (details.publish_date != null) ? Math.round(details.publish_date) : (book.year || null),
-      genres: book.genresOverride || record.genres || null, // Big Book API's own responses don't return genre tags — carried over from the genre we searched for at discovery time
+      genres: mergeGenreLists(book.genresOverride, record.genres), // merged, not overwritten — see mergeGenreLists
       discoveredAt: now,
       posterUrl: details.image || book.posterUrl || null,
       description: details.description || null,
@@ -2594,6 +2806,7 @@ async function searchBigBookForBook(book){
 // have. Silently does nothing for a title it can't resolve — the
 // built-in list still displays exactly as before either way.
 async function enrichBuiltinListWithBigBook(books){
+  if (!currentUser) return; // every attempt would just fail the same sign-in check in bbFetch — skip the whole pass rather than waste it book by book
   let done = 0;
   await mapWithConcurrency(books, 1, async (book) => {
     if (!book.bigBookId){
@@ -2636,10 +2849,11 @@ function matchesLanguage(book){
 // search-books' response nests each result as a single-element array —
 // {"books": [[{...}], [{...}]]} — confirmed directly from a real response,
 // not a guess. Flattened here so nothing downstream has to know about it.
-async function fetchBigBookPage(startYear, genreName, limit, reason, minRatingParam, maxRatingParam){
+async function fetchBigBookPage(decadeKey, genreName, limit, reason, minRatingParam, maxRatingParam){
   const genreValue = BB_GENRES[genreName];
   if (!genreValue) return [];
-  const endYear = Math.min(startYear + 9, CURRENT_YEAR);
+  const startYear = decadeStartYear(decadeKey);
+  const endYear = Math.min(decadeEndYear(decadeKey), CURRENT_YEAR);
   const params = {
     genres: genreValue,
     'earliest-publish-year': String(startYear),
@@ -2721,7 +2935,7 @@ function getCachedBooksForCombo(decade, genre){
     // matching it into a combo it may no longer actually belong to.
     if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return;
     if (entry.year == null) return;
-    if (Math.floor(entry.year / 10) * 10 !== decade) return;
+    if (yearToDecadeKey(entry.year) !== decade) return;
     if (!entry.genres || !entry.genres.includes(genre)) return;
     const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
     const languageFresh = isFresh(entry.languageAt, WM_ENRICHMENT_STALE_MS);
@@ -2776,8 +2990,8 @@ async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
   try{
     let query = fbDb.collection('sharedBookRatings')
       .where('genres', 'array-contains', genre)
-      .where('year', '>=', decade)
-      .where('year', '<=', decade + 9)
+      .where('year', '>=', decadeStartYear(decade))
+      .where('year', '<=', decadeEndYear(decade))
       .orderBy('year')
       .limit(batchSize);
     if (cursor) query = query.startAfter(cursor);
@@ -2955,6 +3169,7 @@ async function buildBigBookPool(decade, genre){
 // happens to run at the same time.
 async function runStartupWarmup(){
   if (bbWarmupDone) return;
+  if (!currentUser) return; // every combo would just fail the same sign-in check in bbFetch — leaves bbWarmupDone false so this can still run once someone signs in
 
   const combos = [];
   DECADES.filter(d => enabledDecades.includes(d)).forEach(d => {
@@ -3302,6 +3517,16 @@ async function enrichAndRenderBooksGrid(candidates, containerId, statusText){
     try{ await enrichOneBook(book, 3); }
     catch(e){ /* best-effort — card still renders with whatever it already had */ }
   });
+  // Sorted by rating descending, same as the main Next Up grid — ratings
+  // only become known/accurate after enrichment above, so this has to
+  // happen after that pass completes, not before. Unrated books sort to
+  // the end rather than being treated as a 0.
+  books.sort((a, b) => {
+    if (a.userRating == null && b.userRating == null) return 0;
+    if (a.userRating == null) return 1;
+    if (b.userRating == null) return -1;
+    return b.userRating - a.userRating;
+  });
   container.innerHTML = '';
   const grid = document.createElement('div');
   grid.className = 'grid';
@@ -3404,7 +3629,8 @@ window.handleNativeBackPress = function(){
 };
 
 async function confirmPick(book, picker){
-  const decade = currentChoice ? decadeLabel(currentChoice.decade) : (book.year ? decadeLabel(Math.floor(book.year / 10) * 10) : 'Unknown');
+  const yearDecadeKey = book.year ? yearToDecadeKey(book.year) : null;
+  const decade = currentChoice ? decadeLabel(currentChoice.decade) : (yearDecadeKey ? decadeLabel(yearDecadeKey) : 'Unknown');
   const genre = currentChoice ? currentChoice.genre : 'Found via search';
   picks.push({
     title: book.title, year: book.year,
