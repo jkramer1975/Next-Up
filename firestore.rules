@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /sharedMovieRatings/{movieId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && movieId.matches('^[0-9]+$')
+        && request.resource.data.keys().hasOnly([
+          'title', 'year', 'genres', 'discoveredAt',
+          'posterUrl', 'description', 'usRating', 'enrichedAt',
+          'language', 'languageAt',
+          'userRating', 'criticScore', 'ratedAt',
+          'trailerUrl', 'streamNames', 'rentNames', 'buyNames', 'streamingCheckedAt',
+          'imdbId', 'tmdbId'
+        ])
+        && (!('title' in request.resource.data) || request.resource.data.title is string)
+        && (!('year' in request.resource.data) || request.resource.data.year is number)
+        && (!('genres' in request.resource.data) || request.resource.data.genres == null || request.resource.data.genres is list)
+        && (!('discoveredAt' in request.resource.data) || (request.resource.data.discoveredAt is number && request.resource.data.discoveredAt <= request.time.toMillis() + 300000))
+        && (!('posterUrl' in request.resource.data) || request.resource.data.posterUrl == null || request.resource.data.posterUrl is string)
+        && (!('description' in request.resource.data) || request.resource.data.description == null || request.resource.data.description is string)
+        && (!('usRating' in request.resource.data) || request.resource.data.usRating == null || request.resource.data.usRating is string)
+        && (!('enrichedAt' in request.resource.data) || (request.resource.data.enrichedAt is number && request.resource.data.enrichedAt <= request.time.toMillis() + 300000))
+        && (!('language' in request.resource.data) || request.resource.data.language == null || request.resource.data.language is string)
+        && (!('languageAt' in request.resource.data) || (request.resource.data.languageAt is number && request.resource.data.languageAt <= request.time.toMillis() + 300000))
+        && (!('userRating' in request.resource.data) || request.resource.data.userRating == null || request.resource.data.userRating is number)
+        && (!('criticScore' in request.resource.data) || request.resource.data.criticScore == null || request.resource.data.criticScore is number)
+        && (!('ratedAt' in request.resource.data) || (request.resource.data.ratedAt is number && request.resource.data.ratedAt <= request.time.toMillis() + 300000))
+        && (!('trailerUrl' in request.resource.data) || request.resource.data.trailerUrl == null || request.resource.data.trailerUrl is string)
+        && (!('streamNames' in request.resource.data) || request.resource.data.streamNames is list)
+        && (!('rentNames' in request.resource.data) || request.resource.data.rentNames is list)
+        && (!('buyNames' in request.resource.data) || request.resource.data.buyNames is list)
+        && (!('streamingCheckedAt' in request.resource.data) || (request.resource.data.streamingCheckedAt is number && request.resource.data.streamingCheckedAt <= request.time.toMillis() + 300000))
+        && (!('imdbId' in request.resource.data) || request.resource.data.imdbId == null || request.resource.data.imdbId is string)
+        && (!('tmdbId' in request.resource.data) || request.resource.data.tmdbId == null || request.resource.data.tmdbId is number);
+    }
+    match /sharedShowRatings/{showId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && showId.matches('^[0-9]+$')
+        && request.resource.data.keys().hasOnly([
+          'title', 'year', 'genres', 'discoveredAt',
+          'posterUrl', 'description', 'usRating', 'enrichedAt',
+          'language', 'languageAt',
+          'userRating', 'criticScore', 'ratedAt',
+          'trailerUrl', 'streamNames', 'rentNames', 'buyNames', 'streamingCheckedAt',
+          'imdbId', 'tmdbId'
+        ])
+        && (!('title' in request.resource.data) || request.resource.data.title is string)
+        && (!('year' in request.resource.data) || request.resource.data.year is number)
+        && (!('genres' in request.resource.data) || request.resource.data.genres == null || request.resource.data.genres is list)
+        && (!('discoveredAt' in request.resource.data) || (request.resource.data.discoveredAt is number && request.resource.data.discoveredAt <= request.time.toMillis() + 300000))
+        && (!('posterUrl' in request.resource.data) || request.resource.data.posterUrl == null || request.resource.data.posterUrl is string)
+        && (!('description' in request.resource.data) || request.resource.data.description == null || request.resource.data.description is string)
+        && (!('usRating' in request.resource.data) || request.resource.data.usRating == null || request.resource.data.usRating is string)
+        && (!('enrichedAt' in request.resource.data) || (request.resource.data.enrichedAt is number && request.resource.data.enrichedAt <= request.time.toMillis() + 300000))
+        && (!('language' in request.resource.data) || request.resource.data.language == null || request.resource.data.language is string)
+        && (!('languageAt' in request.resource.data) || (request.resource.data.languageAt is number && request.resource.data.languageAt <= request.time.toMillis() + 300000))
+        && (!('userRating' in request.resource.data) || request.resource.data.userRating == null || request.resource.data.userRating is number)
+        && (!('criticScore' in request.resource.data) || request.resource.data.criticScore == null || request.resource.data.criticScore is number)
+        && (!('ratedAt' in request.resource.data) || (request.resource.data.ratedAt is number && request.resource.data.ratedAt <= request.time.toMillis() + 300000))
+        && (!('trailerUrl' in request.resource.data) || request.resource.data.trailerUrl == null || request.resource.data.trailerUrl is string)
+        && (!('streamNames' in request.resource.data) || request.resource.data.streamNames is list)
+        && (!('rentNames' in request.resource.data) || request.resource.data.rentNames is list)
+        && (!('buyNames' in request.resource.data) || request.resource.data.buyNames is list)
+        && (!('streamingCheckedAt' in request.resource.data) || (request.resource.data.streamingCheckedAt is number && request.resource.data.streamingCheckedAt <= request.time.toMillis() + 300000))
+        && (!('imdbId' in request.resource.data) || request.resource.data.imdbId == null || request.resource.data.imdbId is string)
+        && (!('tmdbId' in request.resource.data) || request.resource.data.tmdbId == null || request.resource.data.tmdbId is number);
+    }
+    match /sharedBookRatings/{bookId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && bookId.matches('^[0-9]+$')
+        && request.resource.data.keys().hasOnly([
+          'title', 'year', 'genres', 'discoveredAt',
+          'posterUrl', 'description', 'userRating',
+          'openLibraryId', 'isbn', 'authors', 'pageCount', 'searchWords', 'enrichedAt'
+        ])
+        && (!('title' in request.resource.data) || request.resource.data.title is string)
+        && (!('year' in request.resource.data) || request.resource.data.year is number)
+        && (!('genres' in request.resource.data) || request.resource.data.genres == null || request.resource.data.genres is list)
+        && (!('discoveredAt' in request.resource.data) || (request.resource.data.discoveredAt is number && request.resource.data.discoveredAt <= request.time.toMillis() + 300000))
+        && (!('posterUrl' in request.resource.data) || request.resource.data.posterUrl == null || request.resource.data.posterUrl is string)
+        && (!('description' in request.resource.data) || request.resource.data.description == null || request.resource.data.description is string)
+        && (!('userRating' in request.resource.data) || request.resource.data.userRating == null || request.resource.data.userRating is number)
+        && (!('openLibraryId' in request.resource.data) || request.resource.data.openLibraryId == null || request.resource.data.openLibraryId is string)
+        && (!('isbn' in request.resource.data) || request.resource.data.isbn == null || request.resource.data.isbn is string)
+        && (!('authors' in request.resource.data) || request.resource.data.authors == null || request.resource.data.authors is list)
+        && (!('pageCount' in request.resource.data) || request.resource.data.pageCount == null || request.resource.data.pageCount is number)
+        && (!('searchWords' in request.resource.data) || request.resource.data.searchWords == null || request.resource.data.searchWords is list)
+        && (!('enrichedAt' in request.resource.data) || (request.resource.data.enrichedAt is number && request.resource.data.enrichedAt <= request.time.toMillis() + 300000));
+    }
+    match /sharedSimilarBooks/{bookId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && bookId.matches('^[0-9]+$')
+        && request.resource.data.keys().hasOnly(['books', 'cachedAt'])
+        && request.resource.data.books is list
+        && request.resource.data.cachedAt is number
+        && request.resource.data.cachedAt <= request.time.toMillis() + 300000;
+    }
+    match /sharedBookSearches/{queryHash} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && queryHash.matches('^[0-9a-z]+$')
+        && request.resource.data.keys().hasOnly(['query', 'results', 'cachedAt'])
+        && request.resource.data.query is string
+        && request.resource.data.results is list
+        && request.resource.data.cachedAt is number
+        && request.resource.data.cachedAt <= request.time.toMillis() + 300000;
+    }
+  }
+}

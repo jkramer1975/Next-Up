@@ -863,7 +863,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. Discover Books' title/topic search (searchBooksByQuery) now cached the same three-tier way as similar-books lookups — local persistent cache plus shared Firestore cache once signed in — so the same search string only ever costs one live API call across the whole crew.
+const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. Discover Books search now tries a keyword match against every book the crew has already enriched (via a new searchWords field on sharedBookRatings) before ever spending a live API call — a query only skips the live call when at least 10 books match on 75%+ of the query's words.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2655,6 +2655,49 @@ async function saveSearchQueryCache(){
 // own ontology (confirmed directly from their docs), so this already
 // handles both an exact title and a topic like "books about dragons" —
 // no separate keyword-search mechanism is needed.
+// Tries to answer a Discover Books search entirely from books this
+// crew (or the wider signed-in user base) has already discovered and
+// enriched, before ever spending a live API call. Firestore's
+// array-contains-any only accepts up to 10 values, so at most the
+// first 10 query words go into the actual query to narrow the
+// candidate set — the real match percentage against the FULL query is
+// then computed client-side, and only candidates matching at least 75%
+// of the query's words survive. Requires sign-in, same as everything
+// else that touches Firestore.
+async function searchSharedRatingsByKeywords(query){
+  const queryWords = tokenizeForSearch(query);
+  if (!queryWords.length) return [];
+  const probeWords = queryWords.slice(0, 10); // array-contains-any's hard limit
+  const threshold = Math.ceil(queryWords.length * 0.75);
+
+  try{
+    const snap = await fbDb.collection('sharedBookRatings')
+      .where('searchWords', 'array-contains-any', probeWords)
+      .limit(50) // enough candidates to find real matches without pulling the whole collection
+      .get();
+    const matches = [];
+    snap.forEach(doc => {
+      const data = doc.data();
+      if (!data.searchWords || !data.searchWords.length) return;
+      const matchCount = queryWords.filter(w => data.searchWords.includes(w)).length;
+      if (matchCount < threshold) return;
+      matches.push({
+        id: Number(doc.id) || doc.id,
+        title: data.title,
+        image: data.posterUrl || null,
+        authors: data.authors || [],
+        userRating: data.userRating ?? null,
+        matchCount
+      });
+    });
+    matches.sort((a, b) => b.matchCount - a.matchCount || (b.userRating || 0) - (a.userRating || 0));
+    return matches.map(({ matchCount, ...rest }) => rest);
+  } catch(e){
+    console.warn('Shared-ratings keyword search failed, falling back to live search', e.message);
+    return [];
+  }
+}
+
 async function searchBooksByQuery(query){
   const normalized = query.trim().toLowerCase();
   const key = hashQueryKey(query);
@@ -2676,6 +2719,26 @@ async function searchBooksByQuery(query){
     } catch(e){ console.warn('Shared search-query cache lookup failed, falling back to Big Book API directly', e.message); }
   }
 
+  // Before spending a live call, see if this query can be answered
+  // entirely from books already known to the crew — every book that's
+  // ever been enriched has a searchWords field, so a keyword match
+  // against that pool costs Firestore reads, not API quota. Only
+  // trusted when it turns up a genuinely full page of results (10);
+  // fewer than that and a live search is still run so the result isn't
+  // artificially thin compared to what a real search would return.
+  if (currentUser){
+    const keywordMatches = await searchSharedRatingsByKeywords(query);
+    if (keywordMatches.length >= 10){
+      const results = keywordMatches.slice(0, 10);
+      const fresh = { query: normalized, results, cachedAt: Date.now() };
+      searchQueryCache.set(key, fresh);
+      saveSearchQueryCache(); // fire-and-forget
+      fbDb.collection('sharedBookSearches').doc(key).set(fresh)
+        .catch(e => console.warn('Could not write shared search-query cache entry', e.message)); // fire-and-forget
+      return results;
+    }
+  }
+
   const data = await bbFetch('/search-books', { query, number: '10', 'group-results': 'true' }, 0, 3, `Book search: "${query}"`);
   const results = (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean).map(b => ({
     id: b.id,
@@ -2692,6 +2755,29 @@ async function searchBooksByQuery(query){
       .catch(e => console.warn('Could not write shared search-query cache entry', e.message)); // fire-and-forget — never blocks showing the result
   }
   return results;
+}
+
+// Firestore has no text search — no LIKE, no substring matching, just
+// exact equality/range queries and array-contains-any (checks whether
+// an array field contains any of up to 10 given values). This is what
+// makes a real keyword search against sharedBookRatings possible at
+// all: every book gets a normalized "searchWords" array (built from its
+// title + description) at enrichment time, and a query tokenizes the
+// same way, so array-contains-any can find candidates sharing at least
+// one word — the real match percentage against the full query gets
+// computed client-side afterward, not left to Firestore.
+const SEARCH_STOP_WORDS = new Set([
+  'a','an','and','are','as','at','be','but','by','for','if','in','into','is','it','no','not',
+  'of','on','or','such','that','the','their','then','there','these','they','this','to','was',
+  'will','with','about','from','has','have','had','been','do','does','did','can','could','would',
+  'should','i','you','he','she','we','his','her','its','our','your','my','me','him','them','us'
+]);
+const SEARCH_WORDS_MAX = 40; // caps how many words get stored per book, so a long description doesn't balloon the document
+function tokenizeForSearch(text){
+  if (!text) return [];
+  const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+    .filter(w => w.length > 1 && !SEARCH_STOP_WORDS.has(w));
+  return Array.from(new Set(words)).slice(0, SEARCH_WORDS_MAX);
 }
 
 async function enrichOneBook(book, maxAttempts, forceRefresh){
@@ -2745,18 +2831,20 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
     }
     const now = Date.now();
     const ids = details.identifiers || {};
+    const description = details.description || null;
     const fresh = {
       title: book.title,
       year: (details.publish_date != null) ? Math.round(details.publish_date) : (book.year || null),
       genres: mergeGenreLists(book.genresOverride, record.genres), // merged, not overwritten — see mergeGenreLists
       discoveredAt: now,
       posterUrl: details.image || book.posterUrl || null,
-      description: details.description || null,
+      description: description,
       userRating: (details.rating && details.rating.average != null) ? details.rating.average * 10 : (book.userRating ?? null),
       openLibraryId: ids.open_library_id || null,
       isbn: ids.isbn_13 || ids.isbn_10 || null,
       authors: (details.authors && details.authors.length) ? details.authors.map(a => a.name).filter(Boolean) : (book.authors || null),
       pageCount: (details.number_of_pages != null) ? Math.round(details.number_of_pages) : null,
+      searchWords: tokenizeForSearch(`${book.title || ''} ${description || ''}`),
       enrichedAt: now
     };
     const hasData = bookHasEnrichmentData(fresh);
