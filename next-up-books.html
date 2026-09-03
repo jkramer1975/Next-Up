@@ -539,7 +539,7 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn" id="tabSimilarBtn">🔍 Find Similar</button>
+      <button class="tab-btn" id="tabDiscoverBtn">🔍 Discover Books</button>
       <button class="tab-btn active" id="tabMainBtn">📚 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Book Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Book List</button>
@@ -795,27 +795,27 @@
 
     </div>
 
-    <div id="similarTab" style="display:none;">
+    <div id="discoverTab" style="display:none;">
 
-      <div class="card" id="similarSignInRequired" style="display:none; text-align:center;">
-        <p class="desc" style="margin:0;">🔒 Sign in with Google to use Find Similar — every part of this tab runs on Big Book API directly, and signing in means the whole crew shares the same cached lookups instead of each device repeating the same searches.</p>
+      <div class="card" id="discoverSignInRequired" style="display:none; text-align:center;">
+        <p class="desc" style="margin:0;">🔒 Sign in with Google to use Discover Books — every part of this tab runs on Big Book API directly, and signing in means the whole crew shares the same cached lookups instead of each device repeating the same searches.</p>
       </div>
 
       <div class="card">
-        <h2>Search for a Book</h2>
-        <p class="desc">Search Big Book API directly by title, pick the one you mean, then see what's similar to it.</p>
+        <h2>Search the Library</h2>
+        <p class="desc">Search by title or topic — try a book title, or something like "books about dragons" or "space exploration". Pick a result to see its info, or find what's similar to it.</p>
         <div class="row">
-          <input type="text" id="similarSearchInput" placeholder="Book title">
-          <button class="btn-primary" id="similarSearchBtn">Search</button>
+          <input type="text" id="discoverSearchInput" placeholder='Title or topic — e.g. "books about dragons"'>
+          <button class="btn-primary" id="discoverSearchBtn">Search</button>
         </div>
-        <div class="error" id="similarSearchError" style="display:none;"></div>
-        <div id="similarSearchResults" style="margin-top:12px;"></div>
+        <div class="error" id="discoverSearchError" style="display:none;"></div>
+        <div id="discoverSearchResults" style="margin-top:12px;"></div>
       </div>
 
       <div class="card">
-        <h2>Or Pick From Your History</h2>
+        <h2>Or Browse Your History</h2>
         <p class="desc">Find books similar to something your crew already picked and enjoyed.</p>
-        <div id="pastPicksForSimilar" class="crew-list"></div>
+        <div id="pastPicksForDiscover" class="crew-list"></div>
       </div>
 
       <div class="card" id="similarSelectedCard" style="display:none;">
@@ -863,7 +863,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '3.4.1'; // removed the Languages filter entirely — neither data source has ever provided language data, so it was misleading dead UI. While cleaning out its references, found and fixed a real bug: getCachedBooksForCombo/getSharedBooksForComboBatch gated userRating on a field ("ratedAt") that's never actually written anywhere, so cache-reconstructed books during a spin shortfall always showed no rating at all — silently undermining the rating filter just added. Also cleaned up other dead leftover fields from the original movies.html copy (imdbId, tmdbId, criticScore, usRating) that never applied to Books.
+const APP_VERSION = '3.5.0'; // "Find Similar" renamed to "Discover Books" throughout — tab label, HTML IDs, and function names (tabDiscoverBtn, discoverTab, runDiscoverSearch, searchBooksByQuery, etc.) — while keeping the genuine find-similar-books feature's own naming (fetchSimilarBooks, showSimilarFor) intact, since that name is still accurate for what it does. Search box now explicitly supports title-or-topic queries, matching what Big Book API's query parameter has always semantically supported. Also added group-results=true to both search calls, to collapse different editions of the same book server-side.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1057,7 +1057,7 @@ function decadeEndYear(key){
   return def ? def.endYear : Number(key) + 9;
 }
 // Used by confirmPick's fallback when a book is picked outside the spin
-// flow (e.g. from Find Similar) — maps a raw publish year back to
+// flow (e.g. from Discover Books) — maps a raw publish year back to
 // whichever bucket it actually falls in, so a 1925 book correctly
 // resolves to "1900s-1940s" rather than a literal (and non-existent)
 // "1920s" label.
@@ -1560,7 +1560,7 @@ function renderAuthUI(){
     signedOutBox.style.display = 'block';
     signedInBox.style.display = 'none';
   }
-  const similarBanner = document.getElementById('similarSignInRequired');
+  const similarBanner = document.getElementById('discoverSignInRequired');
   if (similarBanner) similarBanner.style.display = currentUser ? 'none' : 'block';
 }
 
@@ -1704,45 +1704,45 @@ function updateStorageNote(){
 $('tabMainBtn').addEventListener('click', () => switchTab('main'));
 $('tabFiltersBtn').addEventListener('click', () => switchTab('filters'));
 $('tabBuiltinBtn').addEventListener('click', () => switchTab('builtin'));
-$('tabSimilarBtn').addEventListener('click', () => switchTab('similar'));
+$('tabDiscoverBtn').addEventListener('click', () => switchTab('discover'));
 
-async function runSimilarSearch(){
-  const query = $('similarSearchInput').value.trim();
-  const errorEl = $('similarSearchError');
+async function runDiscoverSearch(){
+  const query = $('discoverSearchInput').value.trim();
+  const errorEl = $('discoverSearchError');
   errorEl.style.display = 'none';
   if (!query) return;
-  $('similarSearchBtn').disabled = true;
-  $('similarSearchResults').innerHTML = '<p class="hint">Searching…</p>';
+  $('discoverSearchBtn').disabled = true;
+  $('discoverSearchResults').innerHTML = '<p class="hint">Searching…</p>';
   try{
-    const results = await searchBooksByTitle(query);
-    await renderSearchResultsForSimilar(results);
+    const results = await searchBooksByQuery(query);
+    await renderDiscoverSearchResults(results);
   } catch(e){
     errorEl.textContent = e.message;
     errorEl.style.display = 'block';
-    $('similarSearchResults').innerHTML = '';
+    $('discoverSearchResults').innerHTML = '';
   } finally {
-    $('similarSearchBtn').disabled = false;
+    $('discoverSearchBtn').disabled = false;
   }
 }
-$('similarSearchBtn').addEventListener('click', runSimilarSearch);
-$('similarSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSimilarSearch(); });
+$('discoverSearchBtn').addEventListener('click', runDiscoverSearch);
+$('discoverSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') runDiscoverSearch(); });
 $('tabAdminBtn').addEventListener('click', () => switchTab('admin'));
 function switchTab(tab){
   $('mainTab').style.display = tab === 'main' ? 'block' : 'none';
   $('filtersTab').style.display = tab === 'filters' ? 'block' : 'none';
   $('builtinTab').style.display = tab === 'builtin' ? 'block' : 'none';
-  $('similarTab').style.display = tab === 'similar' ? 'block' : 'none';
+  $('discoverTab').style.display = tab === 'discover' ? 'block' : 'none';
   $('adminTab').style.display = tab === 'admin' ? 'block' : 'none';
   $('tabMainBtn').classList.toggle('active', tab === 'main');
   $('tabFiltersBtn').classList.toggle('active', tab === 'filters');
   $('tabBuiltinBtn').classList.toggle('active', tab === 'builtin');
-  $('tabSimilarBtn').classList.toggle('active', tab === 'similar');
+  $('tabDiscoverBtn').classList.toggle('active', tab === 'discover');
   $('tabAdminBtn').classList.toggle('active', tab === 'admin');
   if (tab === 'admin') updateCacheStats();
   if (tab === 'builtin') renderEditList();
-  if (tab === 'similar'){
-    renderPastPicksForSimilar();
-    $('similarSignInRequired').style.display = currentUser ? 'none' : 'block';
+  if (tab === 'discover'){
+    renderPastPicksForDiscover();
+    $('discoverSignInRequired').style.display = currentUser ? 'none' : 'block';
   }
 }
 
@@ -2615,12 +2615,16 @@ async function fetchSimilarBooks(bigBookId){
   return books;
 }
 
-// User-facing title search for the Find Similar tab — returns several
-// candidates to choose from, unlike searchBigBookForBook (used
-// internally to enrich the built-in list), which just takes the single
-// top result since there's no user present there to disambiguate.
-async function searchBooksByTitle(query){
-  const data = await bbFetch('/search-books', { query, number: '10' }, 0, 3, `Book search: "${query}"`);
+// User-facing title-or-topic search for the Discover Books tab —
+// returns several candidates to choose from, unlike searchBigBookForBook
+// (used internally to enrich the built-in list), which just takes the
+// single top result since there's no user present there to disambiguate.
+// Big Book API's query parameter is semantically parsed against their
+// own ontology (confirmed directly from their docs), so this already
+// handles both an exact title and a topic like "books about dragons" —
+// no separate keyword-search mechanism is needed.
+async function searchBooksByQuery(query){
+  const data = await bbFetch('/search-books', { query, number: '10', 'group-results': 'true' }, 0, 3, `Book search: "${query}"`);
   return (data.books || []).map(entry => Array.isArray(entry) ? entry[0] : entry).filter(Boolean).map(b => ({
     id: b.id,
     title: b.title,
@@ -2874,7 +2878,8 @@ async function fetchBigBookPage(decadeKey, genreName, limit, reason, minRatingPa
     genres: genreValue,
     'earliest-publish-year': String(startYear),
     'latest-publish-year': String(endYear),
-    number: String(limit)
+    number: String(limit),
+    'group-results': 'true' // collapses different editions of the same book server-side — a real fix for the "same book showing up many times" issue, on top of (not instead of) the client-side title-normalization dedup already in place
   };
   if (minRatingParam != null) params['min-rating'] = minRatingParam.toFixed(2);
   if (maxRatingParam != null) params['max-rating'] = maxRatingParam.toFixed(2);
@@ -3271,11 +3276,11 @@ function ratingChipsHtml(book){
 }
 
 // Builds a single .poster-card element — shared between the main
-// results grid and the Find Similar tab's grid, so both stay visually
+// results grid and the Discover Books tab's grid, so both stay visually
 // identical rather than maintaining two copies of the same template.
 // onClick decides what happens when an unpicked card is clicked (opens
 // the pick modal on the main grid; chains into a new similar-books
-// search on the Find Similar tab, which has no meaningful decade/genre
+// search on the Discover Books tab, which has no meaningful decade/genre
 // to record a pick under).
 function buildBookCard(book, index, onClick){
   const picked = isPicked(book.title, book.year);
@@ -3332,7 +3337,7 @@ async function blockBookFromGrid(book){
   // book just silently vanishing from the grid with no trace of what
   // happened to it.
   lastFilteredOut.push({ book, reason: 'Blocked' });
-  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. blocked from the Find Similar tab) — nothing to re-render
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. blocked from the Discover Books tab) — nothing to re-render
   renderFilteredOut();
   renderBlockList();
 }
@@ -3374,11 +3379,11 @@ function openConfirm(book){
   if (canForceRefresh){
     // Full-size, clickable poster-cards read far better than the small
     // thumbnails that used to render inside this modal — so this now
-    // closes the modal and hands off to the Find Similar tab's own
+    // closes the modal and hands off to the Discover Books tab's own
     // results grid instead of rendering anything in place here.
     $('similarBooksBtn').addEventListener('click', () => {
       closeModal();
-      switchTab('similar');
+      switchTab('discover');
       showSimilarFor(book.bigBookId, book.title);
     });
   }
@@ -3477,7 +3482,7 @@ function detailLinkHtml(book){
   return `<a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
 }
 
-// Core flow for the Find Similar tab — given a book (from search results,
+// Core flow for the Discover Books tab — given a book (from search results,
 // past picks, or chained from a similar-book result), fetches and
 // displays what's similar to it in the tab's results card.
 // Converts a search-result or similar-book candidate (id/title/image/
@@ -3500,7 +3505,7 @@ function toGridBook(candidate){
 }
 
 // Shared by both the search results and the similar-books results in
-// the Find Similar tab — looks up full details (cover, rating,
+// the Discover Books tab — looks up full details (cover, rating,
 // description, authors, page count) for each candidate via the same
 // enrichment + cache path the rest of the app uses, then renders them
 // as the same poster-card grid the main Next Up page uses. Clicking a
@@ -3552,12 +3557,12 @@ async function showSimilarFor(bigBookId, title){
   }
 }
 
-async function renderSearchResultsForSimilar(list){
-  await enrichAndRenderBooksGrid(list, 'similarSearchResults', 'No books found for that search.');
+async function renderDiscoverSearchResults(list){
+  await enrichAndRenderBooksGrid(list, 'discoverSearchResults', 'No books found for that search.');
 }
 
-function renderPastPicksForSimilar(){
-  const container = $('pastPicksForSimilar');
+function renderPastPicksForDiscover(){
+  const container = $('pastPicksForDiscover');
   if (!picks.length){
     container.innerHTML = '<div class="empty-note">No books picked yet.</div>';
     return;
@@ -3639,11 +3644,11 @@ async function confirmPick(book, picker){
     title: book.title, year: book.year,
     decade: decade, genre: genre,
     picker: picker, pickedAt: new Date().toISOString().slice(0, 10),
-    bigBookId: book.bigBookId || null // lets the Find Similar tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
+    bigBookId: book.bigBookId || null // lets the Discover Books tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
   });
   closeModal();
   showTonightBanner(book, picker);
-  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. picked from the Find Similar tab) — nothing to re-render
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. picked from the Discover Books tab) — nothing to re-render
   renderHistory();
   await savePicks();
   await recordPick(picker);
