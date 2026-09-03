@@ -706,13 +706,41 @@
       </div>
 
       <div class="card">
-        <h2>Languages</h2>
-        <p class="desc">Currently not applied — neither Big Book API nor the built-in list provides language data to filter on. Left here in case a future data source supports it.</p>
-        <div class="select-all-row">
-          <button class="btn-ghost" id="languagesAllBtn">Select All</button>
-          <button class="btn-ghost" id="languagesNoneBtn">Select None</button>
+        <h2>User Rating</h2>
+        <p class="desc">Only shows books within this rating range (0–10). Books with no rating data (including the built-in list, until enriched) are never excluded by this.</p>
+        <div class="row">
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Minimum</div>
+            <select id="minRatingSelect">
+              <option value="0">0.0+</option>
+              <option value="1">1.0+</option>
+              <option value="2">2.0+</option>
+              <option value="3">3.0+</option>
+              <option value="4">4.0+</option>
+              <option value="5">5.0+</option>
+              <option value="6">6.0+</option>
+              <option value="7">7.0+</option>
+              <option value="8">8.0+</option>
+              <option value="9">9.0+</option>
+            </select>
+          </div>
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Maximum</div>
+            <select id="maxRatingSelect">
+              <option value="1">Up to 1.0</option>
+              <option value="2">Up to 2.0</option>
+              <option value="3">Up to 3.0</option>
+              <option value="4">Up to 4.0</option>
+              <option value="5">Up to 5.0</option>
+              <option value="6">Up to 6.0</option>
+              <option value="7">Up to 7.0</option>
+              <option value="8">Up to 8.0</option>
+              <option value="9">Up to 9.0</option>
+              <option value="10">Up to 10.0</option>
+            </select>
+          </div>
         </div>
-        <div id="languageToggles" class="toggle-grid"></div>
+        <div class="hint" id="ratingRangeNote" style="display:none; margin-top:8px; color: var(--amber);"></div>
       </div>
 
       <div class="card">
@@ -835,13 +863,14 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '3.3.2'; // fixed two real bugs surfaced by a live screenshot: (1) genres could show inconsistently for the same book because enrichOneBook's cache-hit fast-path overwrote genres instead of merging them, unlike the live-call path; (2) added title-normalization dedup so different editions of the same book (e.g. "Anne of Green Gables" appearing 15+ times with minor title variations) collapse to one entry per spin
+const APP_VERSION = '3.4.1'; // removed the Languages filter entirely — neither data source has ever provided language data, so it was misleading dead UI. While cleaning out its references, found and fixed a real bug: getCachedBooksForCombo/getSharedBooksForComboBatch gated userRating on a field ("ratedAt") that's never actually written anywhere, so cache-reconstructed books during a spin shortfall always showed no rating at all — silently undermining the rating filter just added. Also cleaned up other dead leftover fields from the original movies.html copy (imdbId, tmdbId, criticScore, usRating) that never applied to Books.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
   'book_picks', 'blocked_books',
   'custom_book_additions', 'custom_book_removals', 'enabled_decades',
-  'enabled_genres', 'enabled_languages',
+  'enabled_genres',
+  'min_rating', 'max_rating_ceiling',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
   'data_source_pref', 'color_theme'
 ]);
@@ -1076,27 +1105,6 @@ function getEffectiveBookList(decade, genre){
   const additions = customAdditions[key] || [];
   return kept.concat(additions);
 }
-// Currently unused for filtering (see matchesLanguage) — kept as a
-// display/normalization helper only, in case a future data source
-// provides language data to actually filter on.
-const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Japanese', 'Korean', 'Hindi', 'Italian', 'Portuguese', 'Chinese', 'Other', 'Unknown'];
-const LANG_CODE_TO_NAME = {
-  en: 'English', es: 'Spanish', fr: 'French', de: 'German', ja: 'Japanese',
-  ko: 'Korean', hi: 'Hindi', it: 'Italian', pt: 'Portuguese', zh: 'Chinese', cn: 'Chinese'
-};
-const LANG_NAME_TO_CODE = {};
-Object.entries(LANG_CODE_TO_NAME).forEach(([code, name]) => {
-  if (!LANG_NAME_TO_CODE[name]) LANG_NAME_TO_CODE[name] = code; // first code wins (zh over cn)
-});
-function normalizeLanguage(raw){
-  if (!raw) return 'Unknown';
-  const s = String(raw).trim();
-  if (!s) return 'Unknown';
-  const lower = s.toLowerCase();
-  if (LANG_CODE_TO_NAME[lower]) return LANG_CODE_TO_NAME[lower];
-  const match = LANGUAGES.find(l => l.toLowerCase() === lower);
-  return match || 'Other';
-}
 // User-configurable in Admin — how many titles a Big Book API spin pulls
 // back. Requesting more costs nothing extra for discovery itself (still
 // one call either way); the actual state variable and its bounds are set
@@ -1162,10 +1170,11 @@ let currentChoice = null;
 let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
 
 let dataSourcePref = 'auto'; // 'auto' | 'builtin'
+let minRating = 0;
+let maxRating = 10; // top of the 0-10 scale — "Any rating" was removed as a selectable option, matching Movies/TV
 
 const WM_DISCOVERY_STALE_MS = 20 * 24 * 60 * 60 * 1000;
 const WM_ENRICHMENT_STALE_MS = 90 * 24 * 60 * 60 * 1000;
-const WM_RATING_STALE_MS = 5 * 24 * 60 * 60 * 1000;
 const WM_GLOBAL_MAX_STALE_MS = 90 * 24 * 60 * 60 * 1000;
 
 function isFresh(timestamp, windowMs){
@@ -1227,7 +1236,6 @@ const wmRatingsCache = new Map(); // big book id -> {title, year, genres, poster
 const wmSearchCache = new Map(); // "title|year" -> big book id (or null for a confirmed no-match), used to enrich the built-in list
 let enabledDecades = DECADES.slice();
 let enabledGenres = GENRES.slice();
-let enabledLanguages = ['English']; // default: English only, unlike other filters which default to "everything"
 
 // Color themes — each swaps the accent + base palette; danger (velvet) and
 // success (green) colors stay fixed across all of them so status colors
@@ -1414,10 +1422,8 @@ const SYNCED_KEY_DEFAULTS = {
   custom_book_removals: () => ({}),
   enabled_decades: () => DECADES.slice(),
   enabled_genres: () => GENRES.slice(),
-  enabled_languages: () => ['English'],
   min_rating: () => 0,
   max_rating_ceiling: () => 10,
-  require_critic_score: () => true,
   filter_explicit_content: () => true,
   custom_explicit_keywords: () => [],
   max_results: () => MAX_RESULTS_DEFAULT,
@@ -1560,9 +1566,10 @@ function renderAuthUI(){
 
 async function savePicks(){ await saveJSON('book_picks', picks); }
 async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
+async function saveMinRating(){ await saveJSON('min_rating', minRating); }
+async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
 async function saveEnabledDecades(){ await saveJSON('enabled_decades', enabledDecades); }
 async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
-async function saveEnabledLanguages(){ await saveJSON('enabled_languages', enabledLanguages); }
 
 function applyColorTheme(name){
   const theme = COLOR_THEMES[name] || COLOR_THEMES.amber;
@@ -1619,8 +1626,7 @@ async function saveWmDetailsCache(){
   const obj = {};
   const cutoff = Date.now() - WM_DETAILS_PRUNE_MS;
   wmDetailsCache.forEach((v, k) => {
-    const newestTouch = Math.max(v?.enrichedAt || 0, v?.ratedAt || 0);
-    if (newestTouch >= cutoff) obj[k] = v; // drop only once BOTH tiers are past the 90-day floor
+    if ((v?.enrichedAt || 0) >= cutoff) obj[k] = v;
   });
   await saveJSON('openlibrary_details_cache', obj);
 }
@@ -1632,6 +1638,8 @@ async function init(){
   picks = await loadJSON('book_picks', []);
   loadSharedCrew();
   dataSourcePref = await loadJSON('data_source_pref', 'auto');
+  minRating = await loadJSON('min_rating', 0);
+  maxRating = await loadJSON('max_rating_ceiling', 10);
   enabledDecades = await loadJSON('enabled_decades', DECADES.slice());
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
   // Migration: a genre added to the app after someone already saved their
@@ -1663,7 +1671,6 @@ async function init(){
     customExplicitKeywords = oldCombined.filter(k => !defaultsLower.has(k.toLowerCase()));
     await saveCustomExplicitKeywords();
   }
-  enabledLanguages = await loadJSON('enabled_languages', ['English']);
   blockedBooks = await loadJSON('blocked_books', []);
   customAdditions = await loadJSON('custom_book_additions', {});
   customRemovals = await loadJSON('custom_book_removals', {});
@@ -1975,6 +1982,8 @@ function renderAdmin(){
   renderEditList();
 
   document.querySelectorAll('input[name=dataSource]').forEach(r => { r.checked = (r.value === dataSourcePref); });
+  $('minRatingSelect').value = String(minRating);
+  $('maxRatingSelect').value = String(maxRating);
 
   $('decadeToggles').innerHTML = DECADES.map(d => `
     <label class="toggle-chip ${enabledDecades.includes(d) ? '' : 'off'}">
@@ -1983,7 +1992,7 @@ function renderAdmin(){
   `).join('');
   $('decadeToggles').querySelectorAll('input').forEach(cb => {
     cb.addEventListener('change', async () => {
-      const d = Number(cb.dataset.decade);
+      const d = cb.dataset.decade;
       if (cb.checked) { if (!enabledDecades.includes(d)) enabledDecades.push(d); }
       else { enabledDecades = enabledDecades.filter(x => x !== d); }
       renderAdmin();
@@ -2003,21 +2012,6 @@ function renderAdmin(){
       else { enabledGenres = enabledGenres.filter(x => x !== g); }
       renderAdmin();
       await saveEnabledGenres();
-    });
-  });
-
-  $('languageToggles').innerHTML = LANGUAGES.map(l => `
-    <label class="toggle-chip ${enabledLanguages.includes(l) ? '' : 'off'}">
-      <input type="checkbox" data-lang="${escapeHtml(l)}" ${enabledLanguages.includes(l) ? 'checked' : ''}> ${escapeHtml(l)}
-    </label>
-  `).join('');
-  $('languageToggles').querySelectorAll('input').forEach(cb => {
-    cb.addEventListener('change', async () => {
-      const l = cb.dataset.lang;
-      if (cb.checked) { if (!enabledLanguages.includes(l)) enabledLanguages.push(l); }
-      else { enabledLanguages = enabledLanguages.filter(x => x !== l); }
-      renderAdmin();
-      await saveEnabledLanguages();
     });
   });
 
@@ -2171,8 +2165,50 @@ $('decadesAllBtn').addEventListener('click', async () => { enabledDecades = DECA
 $('decadesNoneBtn').addEventListener('click', async () => { enabledDecades = []; renderAdmin(); await saveEnabledDecades(); });
 $('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES.slice(); renderAdmin(); await saveEnabledGenres(); });
 $('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
-$('languagesAllBtn').addEventListener('click', async () => { enabledLanguages = LANGUAGES.slice(); renderAdmin(); await saveEnabledLanguages(); });
-$('languagesNoneBtn').addEventListener('click', async () => { enabledLanguages = []; renderAdmin(); await saveEnabledLanguages(); });
+
+function showRatingRangeNote(text){
+  const el = $('ratingRangeNote');
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(showRatingRangeNote._t);
+  showRatingRangeNote._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+const RATING_GAP = 1;
+function ratingOptionValues(selectId){
+  return Array.from($(selectId).options).map(o => Number(o.value)).sort((a, b) => a - b);
+}
+function smallestRatingAtLeast(value, selectId){
+  const opts = ratingOptionValues(selectId);
+  return opts.find(v => v >= value - 1e-9) ?? null;
+}
+function largestRatingAtMost(value, selectId){
+  const opts = ratingOptionValues(selectId);
+  let result = null;
+  for (const v of opts){ if (v <= value + 1e-9) result = v; else break; }
+  return result;
+}
+$('minRatingSelect').addEventListener('change', async (e) => {
+  minRating = Number(e.target.value);
+  if (maxRating !== 0 && (maxRating - minRating) < RATING_GAP - 1e-9){
+    const bumped = smallestRatingAtLeast(minRating + RATING_GAP, 'maxRatingSelect');
+    maxRating = bumped != null ? bumped : 0; // no room left above — remove the cap entirely
+    $('maxRatingSelect').value = String(maxRating);
+    await saveMaxRating();
+    showRatingRangeNote(`Maximum adjusted to keep at least a ${RATING_GAP}-point gap from the minimum.`);
+  }
+  await saveMinRating();
+});
+$('maxRatingSelect').addEventListener('change', async (e) => {
+  maxRating = Number(e.target.value);
+  if (maxRating !== 0 && minRating !== 0 && (maxRating - minRating) < RATING_GAP - 1e-9){
+    const lowered = largestRatingAtMost(maxRating - RATING_GAP, 'minRatingSelect');
+    minRating = lowered != null ? lowered : 0; // no room left below — remove the floor entirely
+    $('minRatingSelect').value = String(minRating);
+    await saveMinRating();
+    showRatingRangeNote(`Minimum adjusted to keep at least a ${RATING_GAP}-point gap from the maximum.`);
+  }
+  await saveMaxRating();
+});
 
 $('signInBtn').addEventListener('click', signInWithGoogle);
 $('signOutBtn').addEventListener('click', signOutOfGoogle);
@@ -2420,9 +2456,12 @@ function computeFilteredSurvivors(pool){
       filteredOut.push({ book: m, reason: 'Excluded by explicit content filter' });
       return;
     }
-    if (!matchesLanguage(m)){
-      const lang = m.language ? normalizeLanguage(m.language) : 'Unknown';
-      filteredOut.push({ book: m, reason: `Language "${lang}" excluded` });
+    if (!matchesMinRating(m)){
+      filteredOut.push({ book: m, reason: `Rating ${m.userRating.toFixed(1)} below your ${minRating.toFixed(1)}+ minimum` });
+      return;
+    }
+    if (!matchesMaxRating(m)){
+      filteredOut.push({ book: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
       return;
     }
     survivors.push(m);
@@ -2811,15 +2850,16 @@ function matchesExplicitContentFilter(book){
   return !allKeywords.some(kw => kw && haystack.includes(kw.toLowerCase()));
 }
 
-function matchesLanguage(book){
-  // Neither Open Library nor Big Book API's endpoints return a language
-  // field at all — this filter has no real data to work with for any
-  // live source this app has used, so it passes through unconditionally
-  // rather than silently excluding everything by defaulting to
-  // "Unknown" for every single result.
-  return true;
-  const lang = book.language ? normalizeLanguage(book.language) : 'Unknown';
-  return enabledLanguages.includes(lang);
+function matchesMinRating(book){
+  if (!minRating) return true;
+  if (book.userRating == null) return true; // no data — don't punish it
+  return book.userRating >= minRating;
+}
+
+function matchesMaxRating(book){
+  if (!maxRating) return true;
+  if (book.userRating == null) return true; // no data — don't punish it
+  return book.userRating <= maxRating;
 }
 
 // search-books' response nests each result as a single-element array —
@@ -2892,23 +2932,29 @@ function normalizeBookTitle(title){
   return t;
 }
 
+// Searches Big Book API by user-rating band, same approach Movies/TV use
+// for Watchmode — starts at a narrow band just below your configured
+// Maximum Rating and widens the floor downward until either enough
+// books are found or the floor reaches your configured Minimum Rating.
+// "Any" for either bound (value 0) falls back to the practical 0–10
+// scale bounds, same as Movies/TV.
 async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonPrefix){
-  const ceiling = 1;
-  const floor = 0;
+  const ceiling = (maxRating || 10) / 10; // app's 0-10 display scale -> Big Book API's native 0-1 scale
+  const floor = (minRating || 0) / 10;
   const collected = [];
   const seenTitles = new Set(); // normalized-title dedup, on top of the exact-bigBookId dedup below — catches different editions of the same work within this batch
   let step = 0;
   while (true){
-    // Computed fresh from 0.8 each time (not by repeatedly subtracting
-    // from the previous value) — floating-point subtraction drifts over
-    // several iterations (0.8 - 0.2 - 0.2 - 0.2 - 0.2 lands on
-    // 5.55e-17, not exactly 0), and that stray value getting serialized
-    // in scientific notation is exactly what caused a real 400 from the
-    // API. toFixed(2) below is a second, independent safeguard against
-    // the same class of problem.
-    const low = Math.max(floor, 0.8 - step * 0.2);
+    // Computed fresh from ceiling each time (not by repeatedly
+    // subtracting from the previous value) — floating-point subtraction
+    // drifts over several iterations (0.8 - 0.2 - 0.2 - 0.2 - 0.2 lands
+    // on 5.55e-17, not exactly 0), and that stray value getting
+    // serialized in scientific notation is exactly what caused a real
+    // 400 from the API before. toFixed(2) below is a second,
+    // independent safeguard against the same class of problem.
+    const low = Math.max(floor, ceiling - 0.2 - step * 0.2);
     setSpinStatus(`${reasonPrefix} — searching rated ${(low * 10).toFixed(1)}–${(ceiling * 10).toFixed(1)}…`);
-    const batch = await fetchBigBookPage(decade, genre, targetCount, `${reasonPrefix}: rated ${low.toFixed(2)}-${ceiling}`, low, ceiling);
+    const batch = await fetchBigBookPage(decade, genre, targetCount, `${reasonPrefix}: rated ${low.toFixed(2)}-${ceiling.toFixed(2)}`, low, ceiling);
     batch.forEach(b => {
       const normalized = normalizeBookTitle(b.title);
       if (seenIds.has(b.bigBookId) || collected.some(c => c.bigBookId === b.bigBookId)) return;
@@ -2945,20 +2991,17 @@ function getCachedBooksForCombo(decade, genre){
     if (yearToDecadeKey(entry.year) !== decade) return;
     if (!entry.genres || !entry.genres.includes(genre)) return;
     const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
-    const languageFresh = isFresh(entry.languageAt, WM_ENRICHMENT_STALE_MS);
-    const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
     results.push({
       title: entry.title,
       year: entry.year,
       bigBookId: id,
-      imdbId: entry.imdbId || null,
-      tmdbId: entry.tmdbId || null,
       posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
-      userRating: ratingFresh ? entry.userRating : null,
-      criticScore: ratingFresh ? entry.criticScore : null,
-      usRating: enrichmentFresh ? entry.usRating : null,
+      userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
+      openLibraryId: enrichmentFresh ? (entry.openLibraryId || null) : null,
+      isbn: enrichmentFresh ? (entry.isbn || null) : null,
+      authors: enrichmentFresh ? (entry.authors || null) : null,
+      pageCount: enrichmentFresh ? (entry.pageCount ?? null) : null,
       genresOverride: entry.genres,
-      language: languageFresh ? (entry.language || null) : null,
       description: enrichmentFresh ? (entry.description || null) : null
     });
   });
@@ -3010,22 +3053,19 @@ async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
       if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return; // can't trust this record's decade/genre placement once stale
       const id = Number(doc.id) || doc.id;
       const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
-      const languageFresh = isFresh(entry.languageAt, WM_ENRICHMENT_STALE_MS);
-      const ratingFresh = isFresh(entry.ratedAt, WM_RATING_STALE_MS);
       candidates.push({
         record: entry, // kept alongside the pool-ready shape below so the caller can commit it locally, with its real timestamps intact, if it survives filtering
         pool: {
           title: entry.title,
           year: entry.year,
           bigBookId: id,
-          imdbId: entry.imdbId || null,
-          tmdbId: entry.tmdbId || null,
           posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
-          userRating: ratingFresh ? entry.userRating : null,
-          criticScore: ratingFresh ? entry.criticScore : null,
-          usRating: enrichmentFresh ? entry.usRating : null,
+          userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
+          openLibraryId: enrichmentFresh ? (entry.openLibraryId || null) : null,
+          isbn: enrichmentFresh ? (entry.isbn || null) : null,
+          authors: enrichmentFresh ? (entry.authors || null) : null,
+          pageCount: enrichmentFresh ? (entry.pageCount ?? null) : null,
           genresOverride: entry.genres,
-          language: languageFresh ? (entry.language || null) : null,
           description: enrichmentFresh ? (entry.description || null) : null
         }
       });
@@ -3107,11 +3147,12 @@ async function buildBigBookPool(decade, genre){
 
   // Now that filtering has actually run, commit to local storage only the
   // shared candidates that genuinely qualified — not everything that was
-  // merely downloaded. A title that failed content rating, language, or
-  // rating criteria for THIS spin isn't stored locally at all; if a later
-  // spin has looser filters, it'll simply be re-downloaded from the
-  // shared database then; that's a deliberate trade for not accumulating
-  // local storage for titles that didn't actually match what you wanted.
+  // merely downloaded. A title that failed the explicit content filter,
+  // block list, or rating criteria for THIS spin isn't stored locally at
+  // all; if a later spin has looser filters, it'll simply be
+  // re-downloaded from the shared database then; that's a deliberate
+  // trade for not accumulating local storage for titles that didn't
+  // actually match what you wanted.
   if (sharedRecordsById.size){
     const qualifiedIds = new Set(allQualified.map(m => m.bigBookId));
     let committedAny = false;
@@ -3225,8 +3266,6 @@ function metaLineHtml(book){
 function ratingChipsHtml(book){
   const chips = [];
   if (book.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${book.userRating.toFixed(1)}</span>`);
-  if (book.criticScore != null) chips.push(`<span class="rating-chip" title="Critic score">📊 Critic ${book.criticScore}%</span>`);
-  if (book.usRating) chips.push(`<span class="rating-chip" title="US content rating">🎟 ${escapeHtml(book.usRating)}</span>`);
   if (!chips.length) return '';
   return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
 }
