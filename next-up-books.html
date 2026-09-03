@@ -835,7 +835,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '3.3.0'; // removed the background cache warmup feature entirely — the function, its status hint, the Re-run Cache Warmup button, and all its persisted state
+const APP_VERSION = '3.3.2'; // fixed two real bugs surfaced by a live screenshot: (1) genres could show inconsistently for the same book because enrichOneBook's cache-hit fast-path overwrote genres instead of merging them, unlike the live-call path; (2) added title-normalization dedup so different editions of the same book (e.g. "Anne of Green Gables" appearing 15+ times with minor title variations) collapse to one entry per spin
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1475,6 +1475,17 @@ fbAuth.onAuthStateChanged(async (user) => {
   renderAuthUI();
   if (user){
     triggerSyncOnce(user);
+    // Page load always starts with currentUser still null, since
+    // Firebase resolving sign-in state is inherently async — anything
+    // rendered before this callback fires (the source box in
+    // particular) reflects that stale, signed-out-looking state.
+    // Re-rendering here once the real sign-in status is known keeps
+    // the Next Up page's source indicator and Admin's radio in sync
+    // with each other, rather than the radio (driven only by
+    // dataSourcePref, unaffected by this timing) correctly showing
+    // "auto" while the source box is stuck showing "Built-in List".
+    renderAdmin();
+    updateSourceNote();
   } else if (dataSourcePref === 'auto'){
     // Big Book API requires sign-in — this actively reverts the setting
     // itself when signed out, rather than leaving it showing "auto" while
@@ -2605,7 +2616,13 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
 
   if (discoveryFresh && enrichmentFresh && bookHasEnrichmentData(record)){
     // Every tier we might need is fresh, whether from local or the shared
-    // merge above — no live call needed at all.
+    // merge above — no live call needed at all. Genres are still merged
+    // with whatever this specific search just discovered, though — the
+    // cached record might only reflect an earlier, different genre
+    // search that happened to surface this same book, and applying it
+    // as-is would silently overwrite (not merge with) the genre this
+    // particular discovery found it under.
+    record = Object.assign({}, record, { genres: mergeGenreLists(book.genresOverride, record.genres) });
     wmRatingsCache.set(id, record);
     saveWmRatingsCache();
     applyRecordToBook(book, record);
@@ -2847,10 +2864,39 @@ async function fetchBigBookPage(decadeKey, genreName, limit, reason, minRatingPa
 // rating-band search Movies/TV uses is back: start at a narrow top band
 // and widen downward only if not enough results turn up there, so the
 // highest-rated titles for a combo get returned first.
+// Big Book API's underlying catalog often has many separate records for
+// the same underlying work — different printings, a translated
+// subtitle, "by [author]" appended to the title — which would otherwise
+// show up as many near-identical entries in one spin's results (e.g.
+// "Anne of Green Gables", "Anne of Green Gables By Lucy Maud
+// Montgomery", "Anne of the Green Gables" all showing up separately).
+// This is a pragmatic heuristic, not a perfect match: strips off
+// whatever comes after a colon/dash/slash/"by" (where alternate
+// subtitles and attribution usually live), removes "the"/"a"/"an"
+// throughout, and collapses punctuation/whitespace, so same-language
+// edition variants collapse to one entry. It can't catch genuinely
+// different-language editions of the same work (e.g. "Le Petit Prince"
+// vs "El Principito") — those simply don't share enough text to match
+// on title alone, and doing better would need a shared identifier
+// Big Book API's search response doesn't provide.
+function normalizeBookTitle(title){
+  if (!title) return '';
+  let t = title.toLowerCase();
+  const cutPatterns = [' -- ', ' — ', ': ', ' / ', ' by ', '('];
+  for (const p of cutPatterns){
+    const idx = t.indexOf(p);
+    if (idx > 0) t = t.slice(0, idx);
+  }
+  t = t.replace(/\b(the|a|an)\b/g, '');
+  t = t.replace(/[^a-z0-9]+/g, ' ').trim();
+  return t;
+}
+
 async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonPrefix){
   const ceiling = 1;
   const floor = 0;
   const collected = [];
+  const seenTitles = new Set(); // normalized-title dedup, on top of the exact-bigBookId dedup below — catches different editions of the same work within this batch
   let step = 0;
   while (true){
     // Computed fresh from 0.8 each time (not by repeatedly subtracting
@@ -2864,9 +2910,11 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
     setSpinStatus(`${reasonPrefix} — searching rated ${(low * 10).toFixed(1)}–${(ceiling * 10).toFixed(1)}…`);
     const batch = await fetchBigBookPage(decade, genre, targetCount, `${reasonPrefix}: rated ${low.toFixed(2)}-${ceiling}`, low, ceiling);
     batch.forEach(b => {
-      if (!seenIds.has(b.bigBookId) && !collected.some(c => c.bigBookId === b.bigBookId)){
-        collected.push(b);
-      }
+      const normalized = normalizeBookTitle(b.title);
+      if (seenIds.has(b.bigBookId) || collected.some(c => c.bigBookId === b.bigBookId)) return;
+      if (normalized && seenTitles.has(normalized)) return;
+      collected.push(b);
+      if (normalized) seenTitles.add(normalized);
     });
     if (collected.length >= targetCount) break;
     if (low <= floor) break;
