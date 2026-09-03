@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+// Applies the saved color theme before first paint, so switching themes
+// never shows a flash of the default one while the rest of the page loads.
+// Kept intentionally tiny and duplicated from the full theme list below —
+// this only needs the color values, not labels or app logic.
+(function(){
+  try{
+    var THEME_VARS = {
+      amber:    { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#f2a93b', amberRgb:'242,169,59', amberDim:'#a8752b', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      crimson:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#e2545f', amberRgb:'226,84,95', amberDim:'#9c3a42', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      emerald:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#4fbf8b', amberRgb:'79,191,139', amberDim:'#35805e', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      sapphire: { bg:'#12141a', surface:'#1c1f27', surface2:'#242833', amber:'#5b9fe3', amberRgb:'91,159,227', amberDim:'#3d6d9c', cream:'#e9edf5', muted:'#8b93a3', line:'#2e3340' },
+      violet:   { bg:'#16131a', surface:'#211d27', surface2:'#2a2433', amber:'#b98af0', amberRgb:'185,138,240', amberDim:'#7d5aa6', cream:'#efe7f5', muted:'#948b9e', line:'#38313f' },
+      popcorn:  { bg:'#f4ede0', surface:'#ffffff', surface2:'#f2e8d4', amber:'#d9822b', amberRgb:'217,130,43', amberDim:'#a85f18', cream:'#241a08', muted:'#7a6c54', line:'#ddd0b8' }
+    };
+    var saved = localStorage.getItem('nug_color_theme');
+    var name = saved ? JSON.parse(saved) : 'amber';
+    var t = THEME_VARS[name] || THEME_VARS.amber;
+    var s = document.documentElement.style;
+    s.setProperty('--bg', t.bg);
+    s.setProperty('--surface', t.surface);
+    s.setProperty('--surface-2', t.surface2);
+    s.setProperty('--amber', t.amber);
+    s.setProperty('--amber-rgb', t.amberRgb);
+    s.setProperty('--amber-dim', t.amberDim);
+    s.setProperty('--cream', t.cream);
+    s.setProperty('--muted', t.muted);
+    s.setProperty('--line', t.line);
+  } catch(e){ /* falls back to the default theme in the stylesheet below */ }
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14141a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Next Up">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Next Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<!-- Firebase (Auth + Firestore) — compat build, matching the rest of the suite. -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<!-- Full HTML shell/CSS/UI intentionally not built yet — this file is
+     the data-layer foundation only, for live verification before the
+     rest of the app gets built on top of it. -->
+<script>
+
+const APP_VERSION = '0.1.0';
+
+/* ==================================================================
+   IGDB integration — data layer only, at this stage.
+   ================================================================== */
+
+const IGDB_PROXY_BASE = 'https://igdb-proxy.nextupsuite.workers.dev';
+
+// All 23 genres IGDB actually returns (confirmed live against the real
+// /genres endpoint, not assumed from docs) — every one of them is a
+// reasonable "pick something to play" category, so unlike Big Book
+// API's 89-genre list, no real curation was needed here.
+const IGDB_GENRES = {
+  'Point-and-Click': 2,
+  'Fighting': 4,
+  'Shooter': 5,
+  'Music': 7,
+  'Platform': 8,
+  'Puzzle': 9,
+  'Racing': 10,
+  'Real Time Strategy': 11,
+  'Role-Playing': 12,
+  'Simulator': 13,
+  'Sport': 14,
+  'Strategy': 15,
+  'Turn-Based Strategy': 16,
+  'Tactical': 24,
+  'Hack and Slash': 25,
+  'Quiz/Trivia': 26,
+  'Pinball': 30,
+  'Adventure': 31,
+  'Indie': 32,
+  'Arcade': 33,
+  'Visual Novel': 34,
+  'Card & Board Game': 35,
+  'MOBA': 36
+};
+
+// Curated to current-generation platforms someone would actually spin
+// into today, rather than IGDB's full list (500+ entries mixing modern
+// consoles with 1980s hardware, unsorted). IDs confirmed live against
+// the real /platforms endpoint.
+// NOT YET VERIFIED: Switch 2's platform ID (released after this app's
+// last confirmed IGDB check) — needs a live lookup before it's added.
+const IGDB_PLATFORMS = {
+  'PC': 6,
+  'PlayStation 5': 167,
+  'PlayStation 4': 48,
+  'Xbox Series X|S': 169,
+  'Xbox One': 49,
+  'Nintendo Switch': 130,
+  'Android': 34
+};
+
+// ESRB is organization id 1 within IGDB's age_ratings system — confirmed
+// live via /age_rating_categories, not assumed. rating_category values
+// below are ESRB-specific; other organizations (PEGI, CERO, etc.) have
+// their own separate category IDs not listed here.
+const ESRB_RATINGS = {
+  1: 'RP',   // Rating Pending
+  2: 'EC',   // Early Childhood
+  3: 'E',    // Everyone
+  4: 'E10+', // Everyone 10+
+  5: 'T',    // Teen
+  6: 'M',    // Mature
+  7: 'AO'    // Adults Only
+};
+
+// Games as a medium really only starts in the early 1970s (Pong, 1972),
+// and the earliest ~15-20 years have far fewer well-known, still-played
+// titles than any decade from the 1990s on — so, same reasoning as
+// Books' pre-1980 buckets, the earliest era is one wide bucket rather
+// than being split into individual sparse decades.
+const DECADE_DEFS = [
+  { key: '1970_1980s', label: '1970s-1980s', startYear: 1970, endYear: 1989 },
+  { key: '1990', label: '1990s', startYear: 1990, endYear: 1999 },
+  { key: '2000', label: '2000s', startYear: 2000, endYear: 2009 },
+  { key: '2010', label: '2010s', startYear: 2010, endYear: 2019 },
+  { key: '2020', label: '2020s', startYear: 2020, endYear: 2029 }
+];
+const DECADE_DEF_BY_KEY = Object.fromEntries(DECADE_DEFS.map(d => [d.key, d]));
+const DECADES = DECADE_DEFS.map(d => d.key);
+function decadeLabel(key){
+  const def = DECADE_DEF_BY_KEY[key];
+  return def ? def.label : String(key);
+}
+// IGDB's first_release_date is a Unix timestamp in SECONDS, not a plain
+// year — confirmed from a live response (509328000 for a 1986 release).
+// These convert a decade bucket's year bounds into the timestamp range
+// an Apicalypse `where` clause needs.
+function decadeStartTimestamp(key){
+  const def = DECADE_DEF_BY_KEY[key];
+  return Math.floor(Date.UTC(def ? def.startYear : Number(key), 0, 1) / 1000);
+}
+function decadeEndTimestamp(key){
+  const def = DECADE_DEF_BY_KEY[key];
+  const endYear = def ? def.endYear : Number(key);
+  return Math.floor(Date.UTC(endYear, 11, 31, 23, 59, 59) / 1000);
+}
+
+async function igdbFetch(endpoint, apicalypseBody){
+  const res = await fetch(`${IGDB_PROXY_BASE}/${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: apicalypseBody
+  });
+  if (!res.ok){
+    const text = await res.text();
+    throw new Error(`IGDB request failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+// Core discovery query — decade + genre, sorted by rating, matching the
+// same shape as Movies/TV/Books' own discovery calls. Confirmed live:
+// a genre-12 (RPG), 2020-only query correctly returned results sorted
+// highest-rated first, with the date range correctly restricting to
+// that year — not assumed from Apicalypse syntax examples.
+async function discoverGames(decadeKey, genreName, limit){
+  const genreId = IGDB_GENRES[genreName];
+  if (genreId == null) return [];
+  const startTs = decadeStartTimestamp(decadeKey);
+  const endTs = decadeEndTimestamp(decadeKey);
+  const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary; where genres = (${genreId}) & first_release_date >= ${startTs} & first_release_date <= ${endTs} & rating != null; sort rating desc; limit ${limit};`;
+  const data = await igdbFetch('games', query);
+  return data.map(g => ({
+    id: g.id,
+    title: g.name,
+    year: g.first_release_date ? new Date(g.first_release_date * 1000).getUTCFullYear() : null,
+    posterUrl: g.cover ? `https:${g.cover.url.replace('t_thumb', 't_cover_big')}` : null,
+    userRating: g.rating != null ? Math.round(g.rating * 10) / 10 : null, // IGDB's 0-100 scale -> this app's 0-10 scale, matching Movies/TV/Books
+    genresOverride: (g.genres || []).map(x => x.name),
+    platforms: (g.platforms || []).map(x => x.name),
+    description: g.summary || null
+  }));
+}
+
+</script>
+</body>
+</html>
