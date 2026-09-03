@@ -2938,7 +2938,7 @@ function buildBookCard(book, index, onClick){
   card.className = 'poster-card' + (picked ? ' disabled' : '');
   card.dataset.idx = index;
   const picker = picked ? getPickerFor(book.title, book.year) : null;
-  const watchedTagHtml = picked ? `<div class="watched-tag">WATCHED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
+  const watchedTagHtml = picked ? `<div class="watched-tag">PLAYED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
   card.innerHTML = `
     ${watchedTagHtml}
     <div class="poster-meta">
@@ -3000,7 +3000,7 @@ function openConfirm(book){
   const posterUrl = bookCoverUrl(book);
   const posterHtml = posterUrl
     ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(book.title)} cover">`
-    : `<div class="m-icon" id="modalPoster">📚</div>`;
+    : `<div class="m-icon" id="modalPoster">🎮</div>`;
   const showDetailsLookup = currentSource === 'bigbook' && book.bigBookId;
   const canForceRefresh = !!book.bigBookId;
   const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(book.bigBookId);
@@ -3206,7 +3206,7 @@ function appendTonightExtras(extras, book){
 
 function showTonightBanner(book, picker){
   const posterUrl = bookCoverUrl(book);
-  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">☕</div>';
+  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🎮</div>';
   const byline = bylineHtml(book);
   $('tonightBanner').innerHTML = `
     <div class="tonight">
@@ -3216,7 +3216,7 @@ function showTonightBanner(book, picker){
         <h3>${escapeHtml(book.title)}</h3>
         ${byline ? `<p class="hint" id="tonightByline">${byline}</p>` : '<p class="hint" id="tonightByline" style="display:none;"></p>'}
         <div id="tonightRatings">${ratingChipsHtml(book)}</div>
-        <p id="tonightMeta">${metaLineHtml(book)} · Happy reading</p>
+        <p id="tonightMeta">${metaLineHtml(book)} · Happy gaming</p>
       </div>
     </div>
   `;
