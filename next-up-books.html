@@ -428,11 +428,11 @@
     background: rgba(var(--amber-rgb),0.14); color: var(--amber); border: 1px solid var(--amber-dim);
     padding: 2px 6px; border-radius: 4px;
   }
-  .tmdb-link{
+  .detail-link{
     display:inline-block; font-family: var(--font-mono); font-size: 11px;
     color: var(--amber); text-decoration:none; border-bottom: 1px dotted var(--amber-dim);
   }
-  .tmdb-link:hover{ color: var(--cream); border-bottom-color: var(--cream); }
+  .detail-link:hover{ color: var(--cream); border-bottom-color: var(--cream); }
   .meta-footer{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:10px; }
   .watched-tag{
     position:absolute; top:8px; right:8px; z-index:2;
@@ -863,7 +863,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.4.0'; // MAJOR.MINOR.PATCH — expanded BOOK_DB, adding a confident second entry to many single-entry cells across all 8 decades. Deliberately left the 2020s Humor/Adventure/Graphic Novel/True Crime gaps empty rather than force weak picks — genuinely didn't have confident, well-known titles for those specific combinations, same discipline as everywhere else in this list.
+const APP_VERSION = '0.5.1'; // MAJOR.MINOR.PATCH — cross-app naming audit (prompted by leftover "book" references found in Games, which was copied from this file): fixed a stale currentSource comment claiming values 'omdb'/'tmdb' when the real values are 'builtin'/'bigbook' (both this file and TV had the identical stale comment, tracing back to a shared ancestor version), and renamed the misleading '.tmdb-link' CSS class (used for the book detail link, which has nothing to do with TMDB) to '.detail-link'.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -885,138 +885,138 @@ const SYNCED_KEYS = new Set([
    ================================================================== */
 const BOOK_DB = {
 pre1900:{
-Biography:[{title:"Narrative of the Life of Frederick Douglass",year:1845},{title:"The Autobiography of Benjamin Franklin",year:1791}],
-"Classic Literature":[{title:"Pride and Prejudice",year:1813},{title:"Great Expectations",year:1861}],
-Fantasy:[{title:"Alice's Adventures in Wonderland",year:1865},{title:"The Princess and the Goblin",year:1872}],
-"Historical Fiction":[{title:"A Tale of Two Cities",year:1859},{title:"Ivanhoe",year:1819}],
-Horror:[{title:"Frankenstein",year:1818},{title:"Dracula",year:1897}],
+Biography:[{title:"Narrative of the Life of Frederick Douglass",year:1845},{title:"The Autobiography of Benjamin Franklin",year:1791},{title:"Confessions",year:1782}],
+"Classic Literature":[{title:"Pride and Prejudice",year:1813},{title:"Great Expectations",year:1861},{title:"Moby-Dick",year:1851},{title:"Crime and Punishment",year:1866},{title:"Anna Karenina",year:1877},{title:"War and Peace",year:1869},{title:"Middlemarch",year:1871}],
+Fantasy:[{title:"Alice's Adventures in Wonderland",year:1865},{title:"The Princess and the Goblin",year:1872},{title:"She",year:1887}],
+"Historical Fiction":[{title:"A Tale of Two Cities",year:1859},{title:"Ivanhoe",year:1819},{title:"The Three Musketeers",year:1844}],
+Horror:[{title:"Frankenstein",year:1818},{title:"Dracula",year:1897},{title:"The Turn of the Screw",year:1898},{title:"The Picture of Dorian Gray",year:1890}],
 Mystery:[{title:"The Adventures of Sherlock Holmes",year:1892},{title:"The Moonstone",year:1868}],
-Romance:[{title:"Jane Eyre",year:1847},{title:"Wuthering Heights",year:1847}],
-"Science Fiction":[{title:"Twenty Thousand Leagues Under the Sea",year:1870},{title:"The War of the Worlds",year:1898}],
+Romance:[{title:"Jane Eyre",year:1847},{title:"Wuthering Heights",year:1847},{title:"Sense and Sensibility",year:1811}],
+"Science Fiction":[{title:"Twenty Thousand Leagues Under the Sea",year:1870},{title:"The War of the Worlds",year:1898},{title:"The Time Machine",year:1895}],
 Thriller:[{title:"The Strange Case of Dr Jekyll and Mr Hyde",year:1886}],
 "Young Adult":[],
-Humor:[{title:"The Adventures of Huckleberry Finn",year:1884},{title:"Three Men in a Boat",year:1889}],
-Adventure:[{title:"Treasure Island",year:1883},{title:"Around the World in Eighty Days",year:1873}],
+Humor:[{title:"The Adventures of Huckleberry Finn",year:1884},{title:"Three Men in a Boat",year:1889},{title:"The Diary of a Nobody",year:1892}],
+Adventure:[{title:"Treasure Island",year:1883},{title:"Around the World in Eighty Days",year:1873},{title:"The Count of Monte Cristo",year:1844},{title:"Robinson Crusoe",year:1719}],
 Memoir:[{title:"Walden",year:1854}],
 "Graphic Novel":[],
 "True Crime":[]
 },
 "1900_1940s":{
 Biography:[{title:"The Story of My Life",year:1903},{title:"The Education of Henry Adams",year:1918}],
-"Classic Literature":[{title:"The Great Gatsby",year:1925},{title:"To the Lighthouse",year:1927}],
-Fantasy:[{title:"The Hobbit",year:1937}],
+"Classic Literature":[{title:"The Great Gatsby",year:1925},{title:"To the Lighthouse",year:1927},{title:"Ulysses",year:1922},{title:"As I Lay Dying",year:1930},{title:"The Sound and the Fury",year:1929}],
+Fantasy:[{title:"The Hobbit",year:1937},{title:"A Princess of Mars",year:1912}],
 "Historical Fiction":[{title:"Gone with the Wind",year:1936},{title:"All Quiet on the Western Front",year:1929}],
 Horror:[{title:"Rebecca",year:1938}],
-Mystery:[{title:"The Murder of Roger Ackroyd",year:1926},{title:"The Maltese Falcon",year:1930}],
+Mystery:[{title:"The Murder of Roger Ackroyd",year:1926},{title:"The Maltese Falcon",year:1930},{title:"The Big Sleep",year:1939},{title:"Murder on the Orient Express",year:1934}],
 Romance:[{title:"Gone with the Wind",year:1936}],
-"Science Fiction":[{title:"Brave New World",year:1932}],
+"Science Fiction":[{title:"Brave New World",year:1932},{title:"We",year:1924}],
 Thriller:[{title:"The 39 Steps",year:1915}],
 "Young Adult":[{title:"Anne of Green Gables",year:1908}],
 Humor:[{title:"Right Ho, Jeeves",year:1934},{title:"Cold Comfort Farm",year:1932}],
-Adventure:[{title:"The Lost World",year:1912}],
+Adventure:[{title:"The Lost World",year:1912},{title:"Tarzan of the Apes",year:1912}],
 Memoir:[{title:"Down and Out in Paris and London",year:1933}],
 "Graphic Novel":[],
 "True Crime":[]
 },
 "1950_1970s":{
-Biography:[{title:"The Diary of a Young Girl",year:1952}],
-"Classic Literature":[{title:"To Kill a Mockingbird",year:1960},{title:"One Hundred Years of Solitude",year:1967}],
-Fantasy:[{title:"The Lord of the Rings",year:1954}],
+Biography:[{title:"The Diary of a Young Girl",year:1952},{title:"The Autobiography of Malcolm X",year:1965}],
+"Classic Literature":[{title:"To Kill a Mockingbird",year:1960},{title:"One Hundred Years of Solitude",year:1967},{title:"Lolita",year:1955},{title:"The Bell Jar",year:1963},{title:"Invisible Man",year:1952}],
+Fantasy:[{title:"The Lord of the Rings",year:1954},{title:"A Wizard of Earthsea",year:1968}],
 "Historical Fiction":[{title:"Roots",year:1976}],
-Horror:[{title:"The Haunting of Hill House",year:1959},{title:"Rosemary's Baby",year:1967}],
-Mystery:[{title:"The Talented Mr. Ripley",year:1955}],
+Horror:[{title:"The Haunting of Hill House",year:1959},{title:"Rosemary's Baby",year:1967},{title:"Interview with the Vampire",year:1976},{title:"The Exorcist",year:1971}],
+Mystery:[{title:"The Talented Mr. Ripley",year:1955},{title:"The Godfather",year:1969}],
 Romance:[{title:"Love Story",year:1970}],
-"Science Fiction":[{title:"Fahrenheit 451",year:1953},{title:"Dune",year:1965},{title:"Slaughterhouse-Five",year:1969}],
+"Science Fiction":[{title:"Fahrenheit 451",year:1953},{title:"Dune",year:1965},{title:"Slaughterhouse-Five",year:1969},{title:"Stranger in a Strange Land",year:1961},{title:"The Left Hand of Darkness",year:1969},{title:"2001: A Space Odyssey",year:1968}],
 Thriller:[{title:"The Day of the Jackal",year:1971}],
-"Young Adult":[{title:"The Outsiders",year:1967}],
+"Young Adult":[{title:"The Outsiders",year:1967},{title:"A Wrinkle in Time",year:1962}],
 Humor:[{title:"Catch-22",year:1961}],
-Adventure:[{title:"Watership Down",year:1972}],
+Adventure:[{title:"Watership Down",year:1972},{title:"Jaws",year:1974}],
 Memoir:[{title:"Night",year:1960}],
-"Graphic Novel":[],
-"True Crime":[{title:"In Cold Blood",year:1966}]
+"Graphic Novel":[{title:"A Contract with God",year:1978}],
+"True Crime":[{title:"In Cold Blood",year:1966},{title:"Helter Skelter",year:1974}]
 },
 1980:{
-Biography:[{title:"Iacocca: An Autobiography",year:1984}],
-"Classic Literature":[{title:"Beloved",year:1987},{title:"The Color Purple",year:1982}],
-Fantasy:[{title:"The Belgariad: Pawn of Prophecy",year:1982},{title:"The Dark Tower: The Gunslinger",year:1982},{title:"The Elfstones of Shannara",year:1982}],
+Biography:[{title:"Iacocca: An Autobiography",year:1984},{title:"Surely You're Joking, Mr. Feynman!",year:1985}],
+"Classic Literature":[{title:"Beloved",year:1987},{title:"The Color Purple",year:1982},{title:"Midnight's Children",year:1981},{title:"The Unbearable Lightness of Being",year:1984},{title:"A Prayer for Owen Meany",year:1989}],
+Fantasy:[{title:"The Belgariad: Pawn of Prophecy",year:1982},{title:"The Dark Tower: The Gunslinger",year:1982},{title:"The Elfstones of Shannara",year:1982},{title:"Weaveworld",year:1987}],
 "Historical Fiction":[{title:"The Mists of Avalon",year:1983},{title:"The Clan of the Cave Bear",year:1980}],
-Horror:[{title:"It",year:1986},{title:"Misery",year:1987},{title:"Pet Sematary",year:1983}],
-Mystery:[{title:"The Name of the Rose",year:1980},{title:"Gorky Park",year:1981}],
+Horror:[{title:"It",year:1986},{title:"Misery",year:1987},{title:"Pet Sematary",year:1983},{title:"Christine",year:1983},{title:"The Vampire Lestat",year:1985}],
+Mystery:[{title:"The Name of the Rose",year:1980},{title:"Gorky Park",year:1981},{title:"A Is for Alibi",year:1982}],
 Romance:[{title:"Lace",year:1982}],
-"Science Fiction":[{title:"Ender's Game",year:1985},{title:"Neuromancer",year:1984},{title:"Contact",year:1985},{title:"The Handmaid's Tale",year:1985}],
-Thriller:[{title:"The Hunt for Red October",year:1984},{title:"The Bourne Identity",year:1980}],
-"Young Adult":[{title:"Hatchet",year:1987}],
+"Science Fiction":[{title:"Ender's Game",year:1985},{title:"Neuromancer",year:1984},{title:"Contact",year:1985},{title:"The Handmaid's Tale",year:1985},{title:"The Postman",year:1985},{title:"Speaker for the Dead",year:1986}],
+Thriller:[{title:"The Hunt for Red October",year:1984},{title:"The Bourne Identity",year:1980},{title:"Red Dragon",year:1981}],
+"Young Adult":[{title:"Hatchet",year:1987},{title:"Weetzie Bat",year:1989}],
 Humor:[{title:"A Confederacy of Dunces",year:1980}],
 Adventure:[{title:"Congo",year:1980}],
 Memoir:[{title:"This Boy's Life",year:1989}],
-"Graphic Novel":[{title:"Watchmen",year:1986},{title:"Maus",year:1986},{title:"The Dark Knight Returns",year:1986}],
-"True Crime":[{title:"The Stranger Beside Me",year:1980}]
+"Graphic Novel":[{title:"Watchmen",year:1986},{title:"Maus",year:1986},{title:"The Dark Knight Returns",year:1986},{title:"Love and Rockets",year:1982}],
+"True Crime":[{title:"The Stranger Beside Me",year:1980},{title:"Fatal Vision",year:1983}]
 },
 1990:{
-Biography:[{title:"Angela's Ashes",year:1996}],
-"Classic Literature":[{title:"The Secret History",year:1992}],
-Fantasy:[{title:"A Game of Thrones",year:1996},{title:"Harry Potter and the Sorcerer's Stone",year:1997},{title:"Wizard's First Rule",year:1994}],
-"Historical Fiction":[{title:"Cold Mountain",year:1997}],
-Horror:[{title:"The Green Mile",year:1996}],
-Mystery:[{title:"The Alienist",year:1994}],
+Biography:[{title:"Angela's Ashes",year:1996},{title:"A Beautiful Mind",year:1998}],
+"Classic Literature":[{title:"The Secret History",year:1992},{title:"Disgrace",year:1999},{title:"Infinite Jest",year:1996}],
+Fantasy:[{title:"A Game of Thrones",year:1996},{title:"Harry Potter and the Sorcerer's Stone",year:1997},{title:"Wizard's First Rule",year:1994},{title:"Harry Potter and the Chamber of Secrets",year:1998},{title:"Harry Potter and the Prisoner of Azkaban",year:1999}],
+"Historical Fiction":[{title:"Cold Mountain",year:1997},{title:"The Poisonwood Bible",year:1998}],
+Horror:[{title:"The Green Mile",year:1996},{title:"Gerald's Game",year:1992}],
+Mystery:[{title:"The Alienist",year:1994},{title:"Along Came a Spider",year:1993}],
 Romance:[{title:"The Bridges of Madison County",year:1992}],
-"Science Fiction":[{title:"Snow Crash",year:1992},{title:"Jurassic Park",year:1990}],
-Thriller:[{title:"The Pelican Brief",year:1992},{title:"The Firm",year:1991}],
-"Young Adult":[{title:"Speak",year:1999}],
+"Science Fiction":[{title:"Snow Crash",year:1992},{title:"Jurassic Park",year:1990},{title:"The Diamond Age",year:1995}],
+Thriller:[{title:"The Pelican Brief",year:1992},{title:"The Firm",year:1991},{title:"Primal Fear",year:1993}],
+"Young Adult":[{title:"Speak",year:1999},{title:"Holes",year:1998}],
 Humor:[{title:"Bridget Jones's Diary",year:1996}],
 Adventure:[{title:"The Perfect Storm",year:1997}],
-Memoir:[{title:"The Liars' Club",year:1995}],
-"Graphic Novel":[{title:"Ghost World",year:1997}],
+Memoir:[{title:"The Liars' Club",year:1995},{title:"A Child Called It",year:1995}],
+"Graphic Novel":[{title:"Ghost World",year:1997},{title:"From Hell",year:1999}],
 "True Crime":[{title:"A Civil Action",year:1995}]
 },
 2000:{
-Biography:[{title:"Eat, Pray, Love",year:2006}],
-"Classic Literature":[{title:"Life of Pi",year:2001},{title:"The Kite Runner",year:2003}],
-Fantasy:[{title:"Harry Potter and the Goblet of Fire",year:2000},{title:"Eragon",year:2002},{title:"The Name of the Wind",year:2007}],
-"Historical Fiction":[{title:"The Book Thief",year:2005}],
-Horror:[{title:"The Road",year:2006}],
-Mystery:[{title:"The Da Vinci Code",year:2003},{title:"The Girl with the Dragon Tattoo",year:2005}],
-Romance:[{title:"Twilight",year:2005}],
+Biography:[{title:"Eat, Pray, Love",year:2006},{title:"Team of Rivals",year:2005}],
+"Classic Literature":[{title:"Life of Pi",year:2001},{title:"The Kite Runner",year:2003},{title:"The Corrections",year:2001},{title:"Never Let Me Go",year:2005}],
+Fantasy:[{title:"Harry Potter and the Goblet of Fire",year:2000},{title:"Eragon",year:2002},{title:"The Name of the Wind",year:2007},{title:"Harry Potter and the Order of the Phoenix",year:2003},{title:"Harry Potter and the Half-Blood Prince",year:2005},{title:"Harry Potter and the Deathly Hallows",year:2007}],
+"Historical Fiction":[{title:"The Book Thief",year:2005},{title:"Cloud Atlas",year:2004}],
+Horror:[{title:"The Road",year:2006},{title:"The Historian",year:2005}],
+Mystery:[{title:"The Da Vinci Code",year:2003},{title:"The Girl with the Dragon Tattoo",year:2005},{title:"In the Woods",year:2007}],
+Romance:[{title:"Twilight",year:2005},{title:"New Moon",year:2006},{title:"Eclipse",year:2007}],
 "Science Fiction":[{title:"World War Z",year:2006},{title:"Old Man's War",year:2005}],
 Thriller:[{title:"Angels & Demons",year:2000}],
-"Young Adult":[{title:"The Hunger Games",year:2008}],
+"Young Adult":[{title:"The Hunger Games",year:2008},{title:"Percy Jackson & the Olympians: The Lightning Thief",year:2005}],
 Humor:[{title:"Confessions of a Shopaholic",year:2000}],
 Adventure:[{title:"Life of Pi",year:2001}],
-Memoir:[{title:"A Long Way Gone",year:2007}],
-"Graphic Novel":[{title:"Persepolis",year:2000}],
+Memoir:[{title:"A Long Way Gone",year:2007},{title:"Julie & Julia",year:2005}],
+"Graphic Novel":[{title:"Persepolis",year:2000},{title:"American Born Chinese",year:2006},{title:"Fun Home",year:2006}],
 "True Crime":[{title:"Devil in the White City",year:2003}]
 },
 2010:{
-Biography:[{title:"Becoming",year:2018}],
-"Classic Literature":[{title:"Where the Crawdads Sing",year:2018}],
-Fantasy:[{title:"Six of Crows",year:2015},{title:"A Court of Thorns and Roses",year:2015},{title:"The Priory of the Orange Tree",year:2019}],
-"Historical Fiction":[{title:"All the Light We Cannot See",year:2014}],
-Horror:[{title:"Bird Box",year:2014}],
-Mystery:[{title:"Gone Girl",year:2012},{title:"Big Little Lies",year:2014}],
-Romance:[{title:"The Fault in Our Stars",year:2012},{title:"Me Before You",year:2012}],
-"Science Fiction":[{title:"The Martian",year:2011},{title:"Ready Player One",year:2011}],
+Biography:[{title:"Becoming",year:2018},{title:"Steve Jobs",year:2011}],
+"Classic Literature":[{title:"Where the Crawdads Sing",year:2018},{title:"A Little Life",year:2015},{title:"The Goldfinch",year:2013}],
+Fantasy:[{title:"Six of Crows",year:2015},{title:"A Court of Thorns and Roses",year:2015},{title:"The Priory of the Orange Tree",year:2019},{title:"Circe",year:2018},{title:"The Fifth Season",year:2015}],
+"Historical Fiction":[{title:"All the Light We Cannot See",year:2014},{title:"The Nightingale",year:2015}],
+Horror:[{title:"Bird Box",year:2014},{title:"NOS4A2",year:2013}],
+Mystery:[{title:"Gone Girl",year:2012},{title:"Big Little Lies",year:2014},{title:"The Silent Patient",year:2019}],
+Romance:[{title:"The Fault in Our Stars",year:2012},{title:"Me Before You",year:2012},{title:"The Hating Game",year:2016}],
+"Science Fiction":[{title:"The Martian",year:2011},{title:"Ready Player One",year:2011},{title:"Station Eleven",year:2014}],
 Thriller:[{title:"The Girl on the Train",year:2015}],
-"Young Adult":[{title:"Divergent",year:2011},{title:"Eleanor & Park",year:2013}],
+"Young Adult":[{title:"Divergent",year:2011},{title:"Eleanor & Park",year:2013},{title:"Turtles All the Way Down",year:2017}],
 Humor:[{title:"Bossypants",year:2011}],
 Adventure:[{title:"Wild",year:2012}],
-Memoir:[{title:"Educated",year:2018}],
-"Graphic Novel":[{title:"March: Book One",year:2013}],
+Memoir:[{title:"Educated",year:2018},{title:"Hillbilly Elegy",year:2016}],
+"Graphic Novel":[{title:"March: Book One",year:2013},{title:"Nimona",year:2015}],
 "True Crime":[{title:"I'll Be Gone in the Dark",year:2018}]
 },
 2020:{
-Biography:[{title:"Spare",year:2023}],
-"Classic Literature":[{title:"Demon Copperhead",year:2022}],
-Fantasy:[{title:"House of Earth and Blood",year:2020}],
+Biography:[{title:"Spare",year:2023},{title:"Friends, Lovers, and the Big Terrible Thing",year:2022}],
+"Classic Literature":[{title:"Demon Copperhead",year:2022},{title:"Tomorrow, and Tomorrow, and Tomorrow",year:2022}],
+Fantasy:[{title:"House of Earth and Blood",year:2020},{title:"Legends & Lattes",year:2022}],
 "Historical Fiction":[{title:"The Lincoln Highway",year:2021}],
 Horror:[{title:"The Only Good Indians",year:2020}],
-Mystery:[{title:"The Thursday Murder Club",year:2020}],
-Romance:[{title:"Book Lovers",year:2022}],
+Mystery:[{title:"The Thursday Murder Club",year:2020},{title:"The Maid",year:2022}],
+Romance:[{title:"Book Lovers",year:2022},{title:"Beach Read",year:2020}],
 "Science Fiction":[{title:"Project Hail Mary",year:2021}],
 Thriller:[{title:"The Guest List",year:2020}],
 "Young Adult":[{title:"Legendborn",year:2020}],
 Humor:[],
 Adventure:[],
-Memoir:[{title:"Spare",year:2023}],
+Memoir:[{title:"Spare",year:2023},{title:"I'm Glad My Mom Died",year:2022}],
 "Graphic Novel":[],
 "True Crime":[]
 }
@@ -1167,7 +1167,7 @@ const forceRefreshedThisSpin = new Set(); // big book ids already force-refreshe
 let lastFilteredOut = []; // [{book, reason}] — cleared/rebuilt each spin
 let lastFullPool = []; // every book fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
 let currentChoice = null;
-let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
+let currentSource = 'builtin'; // 'builtin' | 'bigbook'
 
 let dataSourcePref = 'auto'; // 'auto' | 'builtin'
 let minRating = 0;
@@ -3446,12 +3446,12 @@ function buildBookCard(book, index, onClick){
       <div class="rating-row">${ratingChipsHtml(book)}</div>
       <div class="genre-row">${genreChipsHtml(book)}</div>
       <div class="meta-footer">
-        <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" title="View on ${bookLinkLabel(book)}">🔗 ${bookLinkLabel(book)}</a>
+        <a class="detail-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" title="View on ${bookLinkLabel(book)}">🔗 ${bookLinkLabel(book)}</a>
         <button class="block-card-btn" title="Block this book">⛔</button>
       </div>
     </div>
   `;
-  card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
+  card.querySelector('.detail-link').addEventListener('click', (e) => e.stopPropagation());
   card.querySelector('.block-card-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     blockBookFromGrid(book);
@@ -3627,7 +3627,7 @@ function appendModalExtras(extras, book){
 // bookDetailLink/bookLinkLabel, which decide the same thing for the
 // "Search" link shown before extras load.
 function detailLinkHtml(book){
-  return `<a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
+  return `<a class="detail-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
 }
 
 // Core flow for the Discover Books tab — given a book (from search results,

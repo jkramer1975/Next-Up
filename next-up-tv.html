@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: streaming availability (and the tonight-banner follow-up lookup) only ever triggered when currentSource === 'watchmode', meaning a picked show that came from the built-in list never showed streaming info even when fully enriched with a valid watchmodeId and a working key. Now gated on whether the show actually has a resolved watchmodeId (matching how canForceRefresh was already correctly gated), not on which source the current spin happened to come from.
+const APP_VERSION = '0.2.1'; // MAJOR.MINOR.PATCH — cross-app naming audit (prompted by leftover "book" references found in Games, which was copied from Books): fixed a stale currentSource comment claiming values 'omdb'/'tmdb' when the real values are 'builtin'/'watchmode' (both this file and Books had the identical stale comment, tracing back to a shared ancestor version), and a comment/prose mismatch where blockShowFromGrid's own doc comment said "{movie, reason}" and "the actual film" when the real shape and content are show-based. Movies was also audited and came back clean.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1132,7 +1132,7 @@ const forceRefreshedThisSpin = new Set(); // watchmodeIds already force-refreshe
 let lastFilteredOut = []; // [{show, reason}] — cleared/rebuilt each spin
 let lastFullPool = []; // every show fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
 let currentChoice = null;
-let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
+let currentSource = 'builtin'; // 'builtin' | 'watchmode'
 
 let wmKey = null;        // Watchmode
 let dataSourcePref = 'auto'; // 'auto' | 'builtin'
@@ -3218,7 +3218,7 @@ function matchesCriticScoreRequirement(show){
 }
 
 // Best-effort only — a text match on title/description, not a content
-// analysis of the actual film. Won't catch everything, and can very
+// analysis of the actual show. Won't catch everything, and can very
 // occasionally flag something legitimate (a serious documentary that uses
 // one of these words clinically, for instance). No source-scoping needed
 // here, unlike the filters above — a title with no description simply
@@ -3708,7 +3708,7 @@ async function blockShowFromGrid(show){
   blockedShows.push({ title: show.title, year: show.year || null });
   await saveBlockedShows();
   currentBatch = currentBatch.filter(m => !(m.title === show.title && m.year === show.year));
-  // Shows up immediately in the Filtered Out list, same {movie, reason}
+  // Shows up immediately in the Filtered Out list, same {show, reason}
   // shape every other exclusion reason already uses — rather than the
   // show just silently vanishing from the grid with no trace of what
   // happened to it.
