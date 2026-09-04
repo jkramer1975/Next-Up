@@ -833,7 +833,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.9.2'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: some cached ratings were still showing up unconverted (e.g. "89.9" instead of "8.9"). The conversion formula itself was already correct (fixed in 0.4.1), but previously-cached entries — written before that fix, including in the shared, cross-user Firestore cache — were being read back and trusted at face value forever, with no mechanism to catch or correct them. Added sanitizeUserRating(), applied at every point a rating gets read from cache (local combo lookups, shared Firestore batches, tier merging, and record application): any value above 10 is now treated as corrupted and nulled out rather than displayed or filtered on, since this app's display scale can never legitimately exceed 10. A game affected this way shows no rating chip until it naturally re-enriches with the correct value, rather than showing a wrong one indefinitely.
+const APP_VERSION = '0.10.0'; // MAJOR.MINOR.PATCH — added a Themes filter (IGDB_THEMES, 22 confirmed live values including Open World and Survival — "Crafting" doesn't exist as a theme and wasn't added), genuinely separate from Genres, not blended into it. Reordered the Game Filters tab: Platforms now first, then Genres, then the new Themes card. Also found and fixed a real, user-reported bug while investigating a rating/sort-order question: buildGamePool's live-discovery fallback only ever requested the shortfall (maxResults minus however many were already cached), not the full maxResults — meaning a genuinely top-rated title that simply hadn't been cached yet could be missed entirely at a small Max Results, while the same combo at a larger Max Results (which asks for more live results either way) would correctly surface it. This was never an IGDB sort/limit problem; IGDB's own sort-then-limit behavior was working as expected the whole time. Fixed by always requesting the full maxResults from the live query when one triggers at all, so IGDB's true rating-sorted top results are always fully represented in the merge. Verified directly: pre-seeded 8 lower-rated cached entries, confirmed a higher-rated live result now correctly surfaces at #1 regardless of Max Results, and confirmed the live query itself requests the full target count, not just the shortfall.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -3034,15 +3034,20 @@ async function buildGamePool(platform, genre){
   let didLiveFetch = false;
 
   // Only reach for live discovery if the cache alone doesn't cover Max
-  // Results after filtering — searched by rating band (see
-  // fetchGamesByRating above), so this already keeps widening on
-  // its own until either enough titles are found or your configured
-  // Minimum Rating is reached, replacing the old separate shortfall-retry
-  // loop that used to sit here.
+  // Results after filtering. When it does trigger, this asks IGDB for
+  // the full Max Results — not just the shortfall — so IGDB's own
+  // rating-sorted top results are always fully represented once merged
+  // with whatever was cached, rather than only "topping up" the count
+  // with a few extra titles that were never actually compared against
+  // the true best-rated matches. Getting this wrong was a real bug: a
+  // combo with some cached results but not enough would ask for only
+  // the difference, meaning a genuinely top-rated title that simply
+  // hadn't been cached yet could be missed entirely at a small Max
+  // Results, while the same combo at a larger Max Results — asking for
+  // more live results either way — would correctly surface it.
   if (survivors.length < maxResults){
-    const needed = maxResults - survivors.length;
     didLiveFetch = true;
-    const fresh = await fetchGamesByRating(platform, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
+    const fresh = await fetchGamesByRating(platform, genre, maxResults, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
     fresh.forEach(m => seenIds.add(m.gameId));
     pool = pool.concat(fresh);
     await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)));
