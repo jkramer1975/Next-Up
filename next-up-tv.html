@@ -895,7 +895,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.1.1'; // MAJOR.MINOR.PATCH — MAJOR stays 0 until told otherwise (reserved for changes that would touch the index page or multiple connected apps, e.g. a new app added to the suite); MINOR is a larger change scoped to this app alone; PATCH is a minor tweak, small content change, or usability fix. Cross-app audit (prompted by a real bug found in Games): window.storage calls were unprefixed, unlike the properly-prefixed localStorage fallback — harmless in practice since window.storage never actually activates in either real deployment (confirmed via MainActivity.kt, which only enables localStorage), but fixed for consistency. watchmode_api_key intentionally left unprefixed — that's a deliberate, documented shared credential between Movies and TV.
+const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: streaming availability (and the tonight-banner follow-up lookup) only ever triggered when currentSource === 'watchmode', meaning a picked show that came from the built-in list never showed streaming info even when fully enriched with a valid watchmodeId and a working key. Now gated on whether the show actually has a resolved watchmodeId (matching how canForceRefresh was already correctly gated), not on which source the current spin happened to come from.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -3727,7 +3727,7 @@ function openConfirm(show){
   const posterHtml = posterUrl
     ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(show.title)} poster">`
     : `<div class="m-icon" id="modalPoster">📺</div>`;
-  const showStreamingLookup = currentSource === 'watchmode' && show.watchmodeId;
+  const showStreamingLookup = !!wmKey && !!show.watchmodeId;
   const canForceRefresh = !!wmKey && !!show.watchmodeId;
   const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(show.watchmodeId);
   const showExtrasContainer = showStreamingLookup || canForceRefresh;
@@ -3887,7 +3887,7 @@ async function confirmPick(show, picker){
   await savePicks();
   await recordPick(picker);
 
-  if (currentSource === 'watchmode' && show.watchmodeId){
+  if (wmKey && show.watchmodeId){
     fetchWatchmodeExtras(show).then(extras => appendTonightExtras(extras, show));
   }
 }
