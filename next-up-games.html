@@ -832,7 +832,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.4.0'; // MAJOR.MINOR.PATCH — game detail links now use IGDB's own confirmed url field (a real, curated page) instead of falling back to a Google search every time; falls back to search only for titles that haven't been enriched yet. Also fixed a significant, previously-undiscovered bug: sharedGameRatings was never added to firestore.rules at all, meaning every Firestore read/write for Games' shared cache has been silently rejected since this app was first built — the shared-cache architecture has never actually been able to work.
+const APP_VERSION = '0.4.1'; // MAJOR.MINOR.PATCH — fixed a significant bug affecting every game's rating: the IGDB 0-100 -> app 0-10 scale conversion used Math.round(X*10)/10, which is just "round to 1 decimal place," not an actual rescale (94.4 stayed 94.4 instead of becoming 9.4). This corrupted every displayed rating and effectively broke the rating filter for nearly everyone, since any real IGDB score would appear to exceed the default 10.0 maximum and get filtered out. Correct formula is Math.round(X)/10.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2512,7 +2512,7 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
       discoveredAt: now,
       posterUrl: details.cover ? `https:${details.cover.url.replace('t_thumb', 't_cover_big')}` : (book.posterUrl || null),
       description: description,
-      userRating: details.rating != null ? Math.round(details.rating * 10) / 10 : (book.userRating ?? null), // IGDB's 0-100 scale -> this app's 0-10 scale
+      userRating: details.rating != null ? Math.round(details.rating) / 10 : (book.userRating ?? null), // IGDB's 0-100 scale -> this app's 0-10 scale
       platforms: (details.platforms || []).map(p => p.name),
       igdbUrl: details.url || (book.igdbUrl || null),
       esrbRating: esrb ? (ESRB_RATINGS[esrb.rating_category] || null) : (book.esrbRating || null),
@@ -2714,7 +2714,7 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
       bigBookId: g.id,
       posterUrl: g.cover ? `https:${g.cover.url.replace('t_thumb', 't_cover_big')}` : null,
       authors: null, // games don't have an "author" concept the same way — left null, not shown
-      userRating: g.rating != null ? Math.round(g.rating * 10) / 10 : null, // IGDB's 0-100 scale -> this app's 0-10 scale
+      userRating: g.rating != null ? Math.round(g.rating) / 10 : null, // IGDB's 0-100 scale -> this app's 0-10 scale
       genresOverride: (g.genres || []).map(x => x.name),
       platforms: (g.platforms || []).map(x => x.name),
       description: g.summary || null,
