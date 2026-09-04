@@ -622,7 +622,7 @@
         <div id="themeSwatchGrid" class="theme-swatch-grid"></div>
       </div>
 
-      <div class="card" id="bbConnectionCard">
+      <div class="card" id="igdbConnectionCard">
         <h2>IGDB <span class="status-pill status-connected">ALWAYS CONNECTED</span></h2>
         <p class="desc">Games uses IGDB, routed through a small proxy — no account or API key needed on this device, but you do need to be <strong style="color:var(--cream);">signed in with Google</strong> to actually use it. Spins pull live game lists by platform + genre, with covers, ratings, and (when a title is picked) a search link to look it up further. If not signed in, "Always use built-in list" is selected below, or the service can't be reached, the app falls back to its built-in curated list.</p>
         <div class="row" style="margin-top:8px;">
@@ -676,7 +676,7 @@
 
     </div>
 
-    <!-- ===================== BOOK FILTERS TAB ===================== -->
+    <!-- ===================== GAME FILTERS TAB ===================== -->
     <div id="filtersTab" style="display:none;">
 
       <div class="card" id="rerunFiltersCard" style="display:none;">
@@ -771,7 +771,7 @@
 
     </div>
 
-    <!-- ===================== BUILT-IN BOOK LIST TAB ===================== -->
+    <!-- ===================== BUILT-IN GAME LIST TAB ===================== -->
     <div id="builtinTab" style="display:none;">
 
       <div class="card">
@@ -781,7 +781,7 @@
           <select id="editListDecade"></select>
           <select id="editListGenre"></select>
         </div>
-        <div id="editListBooks" class="crew-list" style="margin-top:14px;"></div>
+        <div id="editListGames" class="crew-list" style="margin-top:14px;"></div>
         <div class="row" style="margin-top:12px;">
           <input type="text" id="editListTitleInput" placeholder="Game title">
           <input type="text" id="editListYearInput" placeholder="Year" style="flex: 0 1 100px;">
@@ -833,12 +833,12 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.9.0'; // MAJOR.MINOR.PATCH — major architecture change: decade removed entirely as a spin dimension and filter, replaced with platform (23 verified IGDB platforms, current + historical). Year is now pure display info on each game, not something you spin on or narrow by — this fixes the "decade + platform that didn't exist yet" impossible-combination problem the old design had. GAME_DB completely rebuilt: all 267 prior entries remapped from decade/genre to platform/genre, each title assigned to its single most-associated platform (built-in list only — live IGDB discovery still matches a game to any platform it's genuinely tagged with). "Arcade" was considered as a 24th platform but removed after revalidation; those titles were remapped to genuine home console ports where one exists. One title (1981's Video Pinball, an Atari 2600 exclusive) had no honest fit in the 23 platforms and was dropped rather than force-placed. Found and fixed a real bug during this build: IGDB_PLATFORMS still only had the original 7 platforms — the 16 historical ones were drafted in an earlier session but never actually applied before the architecture pivot, silently orphaning most of the new GAME_DB until caught by a live test.
+const APP_VERSION = '0.9.2'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: some cached ratings were still showing up unconverted (e.g. "89.9" instead of "8.9"). The conversion formula itself was already correct (fixed in 0.4.1), but previously-cached entries — written before that fix, including in the shared, cross-user Firestore cache — were being read back and trusted at face value forever, with no mechanism to catch or correct them. Added sanitizeUserRating(), applied at every point a rating gets read from cache (local combo lookups, shared Firestore batches, tier merging, and record application): any value above 10 is now treated as corrupted and nulled out rather than displayed or filtered on, since this app's display scale can never legitimately exceed 10. A game affected this way shows no rating chip until it naturally re-enriches with the correct value, rather than showing a wrong one indefinitely.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
-  'book_picks', 'blocked_books',
-  'custom_book_additions', 'custom_book_removals',
+  'game_picks', 'blocked_games',
+  'custom_game_additions', 'custom_game_removals',
   'enabled_genres', 'enabled_platforms',
   'min_rating', 'max_rating_ceiling',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
@@ -1120,7 +1120,7 @@ function comboKey(platform, genre){ return `${platform}|${genre}`; }
 // applied — anything they've removed hidden, anything they've added
 // appended. GAME_DB itself is never modified; this is the only place that
 // should be read from when the built-in list is actually used for a spin.
-function getEffectiveBookList(platform, genre){
+function getEffectiveGameList(platform, genre){
   const base = (GAME_DB[platform] && GAME_DB[platform][genre]) || [];
   const key = comboKey(platform, genre);
   const removed = new Set(customRemovals[key] || []);
@@ -1188,11 +1188,11 @@ const IGDB_PROXY_BASE = 'https://igdb-proxy.nextupsuite.workers.dev';
 let picks = [];
 let crew = []; // populated from the shared, cross-app local storage key — see loadSharedCrew()
 let currentBatch = [];
-const forceRefreshedThisSpin = new Set(); // big book ids already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
-let lastFilteredOut = []; // [{book, reason}] — cleared/rebuilt each spin
-let lastFullPool = []; // every book fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
+const forceRefreshedThisSpin = new Set(); // big game ids already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
+let lastFilteredOut = []; // [{game, reason}] — cleared/rebuilt each spin
+let lastFullPool = []; // every game fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
 let currentChoice = null;
-let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
+let currentSource = 'builtin'; // 'builtin' | 'igdb'
 
 let dataSourcePref = 'auto'; // 'auto' | 'builtin'
 let minRating = 0;
@@ -1207,10 +1207,10 @@ function isFresh(timestamp, windowMs){
 }
 
 // IGDB never returns genre tags directly — the only genre
-// knowledge this app ever has for a book comes from which genre filter
-// it happened to be discovered under during a spin. A book can
+// knowledge this app ever has for a game comes from which genre filter
+// it happened to be discovered under during a spin. A game can
 // genuinely belong to more than one of the app's genres, and different
-// spins over time can surface the same book under different ones — so
+// spins over time can surface the same game under different ones — so
 // this always unions rather than replaces, or a later discovery under
 // one genre would silently erase an earlier one. Returns null (not [])
 // when there's nothing at all, consistent with how "no genre known yet"
@@ -1231,7 +1231,7 @@ function mergeFreshestTiers(local, shared){
     merged.year = shared.year;
     merged.posterUrl = shared.posterUrl;
     merged.description = shared.description;
-    merged.userRating = shared.userRating;
+    merged.userRating = sanitizeUserRating(shared.userRating);
     merged.platforms = shared.platforms;
     merged.igdbUrl = shared.igdbUrl;
     merged.esrbRating = shared.esrbRating;
@@ -1240,23 +1240,38 @@ function mergeFreshestTiers(local, shared){
   return merged;
 }
 
-function applyRecordToBook(book, record, tierFlags){
+// Ratings are stored on this app's 0-10 display scale, never IGDB's raw
+// 0-100 — a cached value above 10 could only mean it was written before
+// a real conversion bug was fixed (Math.round(X*10)/10 instead of
+// Math.round(X)/10, shipped in 0.4.1), never a legitimate rating.
+// Treated as corrupted data rather than trusted at face value, so a
+// stale entry heals itself back to "no rating known" instead of
+// perpetuating the bug indefinitely for anyone who cached a bad value
+// before the fix — including via the shared, cross-user Firestore
+// cache, which could otherwise keep serving a wrong number to everyone
+// long after the code itself was corrected.
+function sanitizeUserRating(value){
+  return (value != null && value <= 10) ? value : null;
+}
+
+function applyRecordToGame(game, record, tierFlags){
   const flags = tierFlags || { discoveryFresh: true, enrichmentFresh: true };
-  if (flags.discoveryFresh && record.genres && record.genres.length) book.genresOverride = record.genres;
+  if (flags.discoveryFresh && record.genres && record.genres.length) game.genresOverride = record.genres;
   if (flags.enrichmentFresh){
-    if (record.year != null && book.year == null) book.year = record.year;
-    if (record.posterUrl && !book.posterUrl) book.posterUrl = record.posterUrl;
-    if (record.description && !book.description) book.description = record.description;
-    if (record.userRating != null && book.userRating == null) book.userRating = record.userRating;
-    if (record.platforms && record.platforms.length) book.platforms = record.platforms;
-    if (record.igdbUrl) book.igdbUrl = record.igdbUrl;
-    if (record.esrbRating) book.esrbRating = record.esrbRating;
+    if (record.year != null && game.year == null) game.year = record.year;
+    if (record.posterUrl && !game.posterUrl) game.posterUrl = record.posterUrl;
+    if (record.description && !game.description) game.description = record.description;
+    const safeRating = sanitizeUserRating(record.userRating);
+    if (safeRating != null && game.userRating == null) game.userRating = safeRating;
+    if (record.platforms && record.platforms.length) game.platforms = record.platforms;
+    if (record.igdbUrl) game.igdbUrl = record.igdbUrl;
+    if (record.esrbRating) game.esrbRating = record.esrbRating;
   }
 }
-const wmDetailsCache = new Map(); // bigBookId -> {posterUrl, genres, description, userRating, platforms, esrbRating, enrichedAt} — persisted locally, mirroring wmRatingsCache's shape
+const wmDetailsCache = new Map(); // gameId -> {posterUrl, genres, description, userRating, platforms, esrbRating, enrichedAt} — persisted locally, mirroring wmRatingsCache's shape
 const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
-const wmRatingsCache = new Map(); // bigBookId -> {title, year, genres, posterUrl, description, userRating, platforms, esrbRating, discoveredAt, enrichedAt} — used for the whole grid (session only)
-const wmSearchCache = new Map(); // "title|year" -> bigBookId (or null for a confirmed no-match), used to enrich the built-in list
+const wmRatingsCache = new Map(); // gameId -> {title, year, genres, posterUrl, description, userRating, platforms, esrbRating, discoveredAt, enrichedAt} — used for the whole grid (session only)
+const wmSearchCache = new Map(); // "title|year" -> gameId (or null for a confirmed no-match), used to enrich the built-in list
 let enabledGenres = GENRES.slice();
 let enabledPlatforms = Object.keys(IGDB_PLATFORMS);
 
@@ -1303,7 +1318,7 @@ const DEFAULT_EXPLICIT_KEYWORDS = [
   'adult film', 'adult entertainment', 'sex industry', 'hentai', 'nsfw'
 ];
 let customExplicitKeywords = []; // user-added, on top of the built-in list above
-let blockedBooks = []; // {title, year|null}
+let blockedGames = []; // {title, year|null}
 let customAdditions = {}; // "platform|genre" -> [{title, year}] — user-added built-in-list entries
 let customRemovals = {}; // "platform|genre" -> ["title|year", ...] — built-in entries the user has hidden
 let maxResults = MAX_RESULTS_DEFAULT;
@@ -1381,8 +1396,8 @@ async function syncKeyToCloud(key, value){
 // path) so an explicit sign-in and the auth-state listener firing for
 // that same event can't both trigger a sync.
 function triggerSyncOnce(user){
-  if (sessionStorage.getItem('nextup_resynced_this_session_books')) return;
-  sessionStorage.setItem('nextup_resynced_this_session_books', '1');
+  if (sessionStorage.getItem('nextup_resynced_this_session_games')) return;
+  sessionStorage.setItem('nextup_resynced_this_session_games', '1');
   syncOnSignIn(user);
 }
 
@@ -1439,10 +1454,10 @@ window.onNativeGoogleSignIn = function(payloadStr){
 // signing out genuinely looks like a first-ever run, not an arbitrary
 // blank state.
 const SYNCED_KEY_DEFAULTS = {
-  book_picks: () => [],
-  blocked_books: () => [],
-  custom_book_additions: () => ({}),
-  custom_book_removals: () => ({}),
+  game_picks: () => [],
+  blocked_games: () => [],
+  custom_game_additions: () => ({}),
+  custom_game_removals: () => ({}),
   enabled_genres: () => GENRES.slice(),
   enabled_platforms: () => Object.keys(IGDB_PLATFORMS),
   min_rating: () => 0,
@@ -1458,7 +1473,7 @@ const SYNCED_KEY_DEFAULTS = {
 // signing out actually behave like signing out, rather than leaving
 // whatever was last synced sitting in local storage for the next person
 // to use this device/browser. Deliberately leaves the ratings/search
-// cache alone — that's not personal data, just cached book metadata, and
+// cache alone — that's not personal data, just cached game metadata, and
 // clearing it would only cost the next connection extra API calls to
 // rebuild for no real benefit.
 async function resetLocalStateToDefaults(){
@@ -1479,7 +1494,7 @@ async function signOutOfGoogle(){
   if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
     Android.signOutNative();
   }
-  sessionStorage.removeItem('nextup_resynced_this_session_books'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
+  sessionStorage.removeItem('nextup_resynced_this_session_games'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
   showAuthStatus('Signed out — resetting to defaults…');
   await resetLocalStateToDefaults();
   location.reload(); // same pattern as sign-in — the reliable way to get every part of the app to re-read the reset state
@@ -1585,7 +1600,7 @@ function renderAuthUI(){
   }
 }
 
-async function savePicks(){ await saveJSON('book_picks', picks); }
+async function savePicks(){ await saveJSON('game_picks', picks); }
 async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
 async function saveMinRating(){ await saveJSON('min_rating', minRating); }
 async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
@@ -1629,9 +1644,9 @@ function renderThemeSwatches(){
 }
 async function saveFilterExplicitContent(){ await saveJSON('filter_explicit_content', filterExplicitContent); }
 async function saveCustomExplicitKeywords(){ await saveJSON('custom_explicit_keywords', customExplicitKeywords); }
-async function saveBlockedBooks(){ await saveJSON('blocked_books', blockedBooks); }
-async function saveCustomAdditions(){ await saveJSON('custom_book_additions', customAdditions); }
-async function saveCustomRemovals(){ await saveJSON('custom_book_removals', customRemovals); }
+async function saveBlockedGames(){ await saveJSON('blocked_games', blockedGames); }
+async function saveCustomAdditions(){ await saveJSON('custom_game_additions', customAdditions); }
+async function saveCustomRemovals(){ await saveJSON('custom_game_removals', customRemovals); }
 async function saveMaxResults(){ await saveJSON('max_results', maxResults); }
 async function saveWmRatingsCache(){
   const obj = {};
@@ -1656,7 +1671,7 @@ async function saveWmDetailsCache(){
    Init
    ================================================================== */
 async function init(){
-  picks = await loadJSON('book_picks', []);
+  picks = await loadJSON('game_picks', []);
   loadSharedCrew();
   dataSourcePref = await loadJSON('data_source_pref', 'auto');
   minRating = await loadJSON('min_rating', 0);
@@ -1692,16 +1707,16 @@ async function init(){
     customExplicitKeywords = oldCombined.filter(k => !defaultsLower.has(k.toLowerCase()));
     await saveCustomExplicitKeywords();
   }
-  blockedBooks = await loadJSON('blocked_books', []);
-  customAdditions = await loadJSON('custom_book_additions', {});
-  customRemovals = await loadJSON('custom_book_removals', {});
+  blockedGames = await loadJSON('blocked_games', []);
+  customAdditions = await loadJSON('custom_game_additions', {});
+  customRemovals = await loadJSON('custom_game_removals', {});
   maxResults = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, await loadJSON('max_results', MAX_RESULTS_DEFAULT)));
   const savedRatingsCache = await loadJSON('openlibrary_ratings_cache', {});
   Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
   const savedSearchCache = await loadJSON('openlibrary_search_cache', {});
   Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
   const savedDetailsCache = await loadJSON('openlibrary_details_cache', {});
-  Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchBigBookExtras, not at load time
+  Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchGameExtras, not at load time
 
   renderHistory();
   renderAdmin();
@@ -1790,11 +1805,11 @@ async function recordPick(name){
    switching screens. Reuses the same modal-root/backdrop pattern as
    the main confirm modal.
    ================================================================== */
-function openPickerPrompt(book){
+function openPickerPrompt(game){
   loadSharedCrew();
   loadSharedPickStats();
   if (!crew.length){
-    confirmPick(book, 'Unknown');
+    confirmPick(game, 'Unknown');
     return;
   }
   const root = $('modalRoot');
@@ -1817,9 +1832,9 @@ function openPickerPrompt(book){
   `;
   $('pickerBackdrop').addEventListener('click', (e) => { if (e.target.id === 'pickerBackdrop') closeModal(); });
   root.querySelectorAll('.picker-choice').forEach(btn => {
-    btn.addEventListener('click', () => confirmPick(book, btn.dataset.name));
+    btn.addEventListener('click', () => confirmPick(game, btn.dataset.name));
   });
-  $('pickerSkip').addEventListener('click', () => confirmPick(book, 'Unknown'));
+  $('pickerSkip').addEventListener('click', () => confirmPick(game, 'Unknown'));
   $('pickerCancel').addEventListener('click', closeModal);
 }
 
@@ -1830,12 +1845,12 @@ function openPickerPrompt(book){
 // life of the session. IGDB's free tier is documented at 4 requests/sec
 // (vs IGDB's 1/sec) — starting near that limit and backing off
 // on failure, same adaptive approach as the rest of this app suite.
-let bbLastRequestAt = 0;
-let bbMinIntervalMs = 260;
-async function bbThrottleGate(){
+let igdbLastRequestAt = 0;
+let igdbMinIntervalMs = 260;
+async function igdbThrottleGate(){
   const now = Date.now();
-  const slot = Math.max(now, bbLastRequestAt + bbMinIntervalMs);
-  bbLastRequestAt = slot;
+  const slot = Math.max(now, igdbLastRequestAt + igdbMinIntervalMs);
+  igdbLastRequestAt = slot;
   const wait = slot - now;
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
 }
@@ -1872,24 +1887,24 @@ function renderApiCallLog(){
 }
 
 // Session-only circuit breaker for genuine outages/rate-limiting.
-let bbUnavailable = false;
-let bbConsecutiveFailedCalls = 0;
+let igdbUnavailable = false;
+let igdbConsecutiveFailedCalls = 0;
 
-const BB_PER_CALL_TIMEOUT_MS = 10000;
+const IGDB_PER_CALL_TIMEOUT_MS = 10000;
 
 // path: IGDB endpoint (e.g. '/games'). queryBody: raw Apicalypse query
 // text — IGDB takes this as a POST body, not GET query params, unlike
 // IGDB. Signature otherwise unchanged from the Books version.
-async function bbFetch(path, queryBody, attempt, maxAttempts, reason){
+async function igdbFetch(path, queryBody, attempt, maxAttempts, reason){
   if (!currentUser){
     throw new Error('Sign in to use IGDB — this keeps everyone reading from the same shared cache instead of each device repeating the same lookups.');
   }
-  if (bbUnavailable){
+  if (igdbUnavailable){
     throw new Error('IGDB isn\'t responding right now — using the built-in list instead.');
   }
   attempt = attempt || 0;
   const limit = (maxAttempts == null) ? 6 : maxAttempts;
-  await bbThrottleGate();
+  await igdbThrottleGate();
   logApiCall(reason, path, queryBody, attempt);
   const res = await withTimeout(
     fetch(`${IGDB_PROXY_BASE}${path}`, {
@@ -1897,20 +1912,20 @@ async function bbFetch(path, queryBody, attempt, maxAttempts, reason){
       headers: { 'Content-Type': 'text/plain' },
       body: queryBody
     }),
-    BB_PER_CALL_TIMEOUT_MS,
+    IGDB_PER_CALL_TIMEOUT_MS,
     'IGDB request timed out'
   );
 
   if (res.status === 429 || res.status >= 500){
     if (attempt < limit){
-      bbMinIntervalMs = Math.min(8000, bbMinIntervalMs * 1.6);
+      igdbMinIntervalMs = Math.min(8000, igdbMinIntervalMs * 1.6);
       const delay = 500 * Math.pow(2, attempt) + Math.random() * 300;
       await new Promise(r => setTimeout(r, delay));
-      return bbFetch(path, queryBody, attempt + 1, maxAttempts, reason);
+      return igdbFetch(path, queryBody, attempt + 1, maxAttempts, reason);
     }
-    bbConsecutiveFailedCalls++;
-    if (bbConsecutiveFailedCalls >= 2){
-      bbUnavailable = true;
+    igdbConsecutiveFailedCalls++;
+    if (igdbConsecutiveFailedCalls >= 2){
+      igdbUnavailable = true;
       throw new Error('IGDB is persistently unavailable — using the built-in list instead for the rest of this session.');
     }
     throw new Error(`IGDB request failed (${res.status})`);
@@ -1919,14 +1934,14 @@ async function bbFetch(path, queryBody, attempt, maxAttempts, reason){
     const text = await res.text();
     throw new Error(`IGDB request failed (${res.status}): ${text}`);
   }
-  bbConsecutiveFailedCalls = 0;
-  bbMinIntervalMs = Math.max(260, bbMinIntervalMs * 0.97);
+  igdbConsecutiveFailedCalls = 0;
+  igdbMinIntervalMs = Math.max(260, igdbMinIntervalMs * 0.97);
   return res.json();
 }
 
 
 $('clearCacheBtn').addEventListener('click', async () => {
-  if (!confirm(`Clear all ${wmRatingsCache.size} cached book details? Spins will need to re-fetch from IGDB until the cache rebuilds.`)) return;
+  if (!confirm(`Clear all ${wmRatingsCache.size} cached game details? Spins will need to re-fetch from IGDB until the cache rebuilds.`)) return;
   wmRatingsCache.clear();
   await saveWmRatingsCache();
   updateCacheStats();
@@ -1997,8 +2012,8 @@ function renderAdmin(){
 }
 
 function renderBlockList(){
-  $('blockEmptyHint').style.display = blockedBooks.length ? 'none' : 'block';
-  $('blockList').innerHTML = blockedBooks.map((b, i) => `
+  $('blockEmptyHint').style.display = blockedGames.length ? 'none' : 'block';
+  $('blockList').innerHTML = blockedGames.map((b, i) => `
     <div class="crew-item">
       <span class="crew-name">${escapeHtml(b.title)} <span class="hint" style="margin:0;">${b.year ? '(' + b.year + ')' : '(any year)'}</span></span>
       <div class="crew-actions">
@@ -2007,30 +2022,30 @@ function renderBlockList(){
     </div>
   `).join('');
   $('blockList').querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => removeBlockedBook(Number(btn.dataset.idx)));
+    btn.addEventListener('click', () => removeBlockedGame(Number(btn.dataset.idx)));
   });
 }
 
-async function addBlockedBook(){
+async function addBlockedGame(){
   const title = $('blockTitleInput').value.trim();
   const yearRaw = $('blockYearInput').value.trim();
   if (!title) return;
   const year = yearRaw ? Number(yearRaw) : null;
-  blockedBooks.push({ title, year: (year && !isNaN(year)) ? year : null });
+  blockedGames.push({ title, year: (year && !isNaN(year)) ? year : null });
   $('blockTitleInput').value = '';
   $('blockYearInput').value = '';
   renderBlockList();
-  await saveBlockedBooks();
+  await saveBlockedGames();
 }
 
-async function removeBlockedBook(idx){
-  blockedBooks.splice(idx, 1);
+async function removeBlockedGame(idx){
+  blockedGames.splice(idx, 1);
   renderBlockList();
-  await saveBlockedBooks();
+  await saveBlockedGames();
 }
 
 function isBlocked(title, year){
-  return blockedBooks.some(b =>
+  return blockedGames.some(b =>
     b.title.toLowerCase() === (title || '').toLowerCase() && (b.year == null || b.year === year)
   );
 }
@@ -2071,7 +2086,7 @@ function renderEditList(){
   });
   additions.forEach(m => rows.push({ title: m.title, year: m.year, source: 'custom' }));
 
-  $('editListBooks').innerHTML = rows.map((m, i) => `
+  $('editListGames').innerHTML = rows.map((m, i) => `
     <div class="crew-item">
       <span class="crew-name">${escapeHtml(m.title)} <span class="hint" style="margin:0;">(${m.year})${m.source === 'custom' ? ' · added by you' : ''}</span></span>
       <div class="crew-actions">
@@ -2079,7 +2094,7 @@ function renderEditList(){
       </div>
     </div>
   `).join('');
-  $('editListBooks').querySelectorAll('button[data-idx]').forEach(btn => {
+  $('editListGames').querySelectorAll('button[data-idx]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const row = rows[Number(btn.dataset.idx)];
       if (row.source === 'builtin'){
@@ -2095,7 +2110,7 @@ function renderEditList(){
   });
 }
 
-async function addEditListBook(){
+async function addEditListGame(){
   const title = $('editListTitleInput').value.trim();
   const yearRaw = $('editListYearInput').value.trim();
   const year = Number(yearRaw);
@@ -2118,8 +2133,8 @@ async function addEditListBook(){
 
 $('editListDecade').addEventListener('change', renderEditList);
 $('editListGenre').addEventListener('change', renderEditList);
-$('editListAddBtn').addEventListener('click', addEditListBook);
-$('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListBook(); });
+$('editListAddBtn').addEventListener('click', addEditListGame);
+$('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListGame(); });
 $('editListResetBtn').addEventListener('click', async () => {
   const platform = $('editListDecade').value;
   const genre = $('editListGenre').value;
@@ -2132,8 +2147,8 @@ $('editListResetBtn').addEventListener('click', async () => {
   renderEditList();
 });
 
-$('blockAddBtn').addEventListener('click', addBlockedBook);
-$('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedBook(); });
+$('blockAddBtn').addEventListener('click', addBlockedGame);
+$('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedGame(); });
 
 $('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES.slice(); renderAdmin(); await saveEnabledGenres(); });
 $('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
@@ -2339,8 +2354,8 @@ async function spin(){
   // can clear up, so a deliberate new attempt deserves a real chance
   // rather than being permanently blocked for the rest of the browser
   // session by whatever happened on a previous search.
-  bbUnavailable = false;
-  bbConsecutiveFailedCalls = 0;
+  igdbUnavailable = false;
+  igdbConsecutiveFailedCalls = 0;
 
   const platformPool = PLATFORM_KEYS.filter(p => enabledPlatforms.includes(p));
   const genrePool = GENRES.filter(g => enabledGenres.includes(g));
@@ -2393,21 +2408,21 @@ async function spin(){
 
   if (useWm){
     try{
-      lastFullPool = await buildBigBookPool(finalPlatform, finalGenre);
-      currentSource = 'bigbook';
+      lastFullPool = await buildGamePool(finalPlatform, finalGenre);
+      currentSource = 'igdb';
       setSpinStatus('');
     } catch(e){
-      lastFullPool = getEffectiveBookList(finalPlatform, finalGenre);
+      lastFullPool = getEffectiveGameList(finalPlatform, finalGenre);
       currentSource = 'builtin';
       setSpinStatus('');
       $('spinError').textContent = 'IGDB request failed (' + e.message + ') — showing the built-in list instead.';
       $('spinError').style.display = 'block';
     }
   } else {
-    lastFullPool = getEffectiveBookList(finalPlatform, finalGenre);
+    lastFullPool = getEffectiveGameList(finalPlatform, finalGenre);
     currentSource = 'builtin';
     try{
-      await enrichBuiltinListWithBigBook(lastFullPool);
+      await enrichBuiltinListWithIGDB(lastFullPool);
     } catch(e){
       console.warn('Built-in list IGDB enrichment failed', e.message);
     }
@@ -2431,19 +2446,19 @@ function computeFilteredSurvivors(pool){
   const filteredOut = [];
   pool.forEach(m => {
     if (isBlocked(m.title, m.year)){
-      filteredOut.push({ book: m, reason: 'Blocked' });
+      filteredOut.push({ game: m, reason: 'Blocked' });
       return;
     }
     if (!matchesExplicitContentFilter(m)){
-      filteredOut.push({ book: m, reason: 'Excluded by explicit content filter' });
+      filteredOut.push({ game: m, reason: 'Excluded by explicit content filter' });
       return;
     }
     if (!matchesMinRating(m)){
-      filteredOut.push({ book: m, reason: `Rating ${m.userRating.toFixed(1)} below your ${minRating.toFixed(1)}+ minimum` });
+      filteredOut.push({ game: m, reason: `Rating ${m.userRating.toFixed(1)} below your ${minRating.toFixed(1)}+ minimum` });
       return;
     }
     if (!matchesMaxRating(m)){
-      filteredOut.push({ book: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
+      filteredOut.push({ game: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
       return;
     }
     survivors.push(m);
@@ -2460,7 +2475,7 @@ function computeFilteredSurvivors(pool){
 
   if (survivors.length > maxResults){
     const overflow = survivors.slice(maxResults);
-    overflow.forEach(m => filteredOut.push({ book: m, reason: `Exceeded Max Results (${maxResults}) — kept the higher-rated titles instead` }));
+    overflow.forEach(m => filteredOut.push({ game: m, reason: `Exceeded Max Results (${maxResults}) — kept the higher-rated titles instead` }));
     return { survivors: survivors.slice(0, maxResults), filteredOut, allQualified };
   }
   return { survivors, filteredOut, allQualified };
@@ -2507,7 +2522,7 @@ function normalizeGenreList(arr){
 }
 
 // Runs `worker` over `items` with at most `limit` in flight at once, and a
-// small pause between each item in a lane, so a 50-book batch spreads its
+// small pause between each item in a lane, so a 50-game batch spreads its
 // requests out over several seconds instead of bursting all at once.
 async function mapWithConcurrency(items, limit, worker, paceMs){
   let cursor = 0;
@@ -2530,26 +2545,26 @@ async function mapWithConcurrency(items, limit, worker, paceMs){
   await Promise.all(runners);
 }
 
-function bookHasEnrichmentData(cached){
+function gameHasEnrichmentData(cached){
   return !!cached && (cached.description || cached.posterUrl || (cached.genres && cached.genres.length));
 }
 
-function bookNeedsEnrichment(book){
-  return !book.description && !book.posterUrl;
+function gameNeedsEnrichment(game){
+  return !game.description && !game.posterUrl;
 }
 
 // IGDB has no "get by ID via URL path" endpoint the way IGDB
 // did — everything goes through /games with a where-id clause. Reused
 // here for the discovery-time enrichment path, same role
-// fetchBigBookDetails played for Books.
-async function fetchBigBookDetails(id, maxAttempts, reason){
+// fetchGameDetails played for Books.
+async function fetchGameDetails(id, maxAttempts, reason){
   const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization,url; where id = ${id};`;
-  const data = await bbFetch('/games', query, 0, maxAttempts, reason);
+  const data = await igdbFetch('/games', query, 0, maxAttempts, reason);
   return (data && data[0]) || null;
 }
 
-async function enrichOneBook(book, maxAttempts, forceRefresh){
-  const id = book.bigBookId;
+async function enrichOneGame(game, maxAttempts, forceRefresh){
+  const id = game.gameId;
   let record = forceRefresh ? {} : (wmRatingsCache.get(id) || {});
 
   // Shared, cross-user cache — checked whenever any tier this device
@@ -2571,18 +2586,18 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
   const discoveryFresh = isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS);
   const enrichmentFresh = isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
 
-  if (discoveryFresh && enrichmentFresh && bookHasEnrichmentData(record)){
+  if (discoveryFresh && enrichmentFresh && gameHasEnrichmentData(record)){
     // Every tier we might need is fresh, whether from local or the shared
     // merge above — no live call needed at all. Genres are still merged
     // with whatever this specific search just discovered, though — the
     // cached record might only reflect an earlier, different genre
-    // search that happened to surface this same book, and applying it
+    // search that happened to surface this same game, and applying it
     // as-is would silently overwrite (not merge with) the genre this
     // particular discovery found it under.
-    record = Object.assign({}, record, { genres: mergeGenreLists(book.genresOverride, record.genres) });
+    record = Object.assign({}, record, { genres: mergeGenreLists(game.genresOverride, record.genres) });
     wmRatingsCache.set(id, record);
     saveWmRatingsCache();
-    applyRecordToBook(book, record);
+    applyRecordToGame(game, record);
     return { ok: true, hasData: true };
   }
 
@@ -2590,7 +2605,7 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
   // comes from the same IGDB /games lookup, a single live call refreshes
   // it all at once.
   try{
-    const details = await fetchBigBookDetails(id, maxAttempts, `Details lookup: "${book.title}"`);
+    const details = await fetchGameDetails(id, maxAttempts, `Details lookup: "${game.title}"`);
     // A response with neither a name nor an id at all is treated as a
     // failure rather than a legitimate "nothing here" result — this is
     // what a degraded/throttled response would look like.
@@ -2601,19 +2616,19 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
     const description = details.summary || null;
     const esrb = (details.age_ratings || []).find(r => r.organization === 1);
     const fresh = {
-      title: book.title,
-      year: details.first_release_date ? new Date(details.first_release_date * 1000).getUTCFullYear() : (book.year || null),
-      genres: mergeGenreLists(book.genresOverride, record.genres), // merged, not overwritten — see mergeGenreLists
+      title: game.title,
+      year: details.first_release_date ? new Date(details.first_release_date * 1000).getUTCFullYear() : (game.year || null),
+      genres: mergeGenreLists(game.genresOverride, record.genres), // merged, not overwritten — see mergeGenreLists
       discoveredAt: now,
-      posterUrl: details.cover ? `https:${details.cover.url.replace('t_thumb', 't_cover_big')}` : (book.posterUrl || null),
+      posterUrl: details.cover ? `https:${details.cover.url.replace('t_thumb', 't_cover_big')}` : (game.posterUrl || null),
       description: description,
-      userRating: details.rating != null ? Math.round(details.rating) / 10 : (book.userRating ?? null), // IGDB's 0-100 scale -> this app's 0-10 scale
+      userRating: details.rating != null ? Math.round(details.rating) / 10 : (game.userRating ?? null), // IGDB's 0-100 scale -> this app's 0-10 scale
       platforms: (details.platforms || []).map(p => p.name),
-      igdbUrl: details.url || (book.igdbUrl || null),
-      esrbRating: esrb ? (ESRB_RATINGS[esrb.rating_category] || null) : (book.esrbRating || null),
+      igdbUrl: details.url || (game.igdbUrl || null),
+      esrbRating: esrb ? (ESRB_RATINGS[esrb.rating_category] || null) : (game.esrbRating || null),
       enrichedAt: now
     };
-    const hasData = bookHasEnrichmentData(fresh);
+    const hasData = gameHasEnrichmentData(fresh);
     // Only cache when there's actually something here — a degraded
     // response must NOT get cached, or every future attempt — including
     // our own retry pass below — will just read back the same empty
@@ -2625,30 +2640,30 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
         fbDb.collection('sharedGameRatings').doc(String(id)).set(fresh, { merge: true })
           .catch(e => console.warn('Could not write shared enrichment cache entry', e.message)); // fire-and-forget — never blocks the enrichment result
       }
-      applyRecordToBook(book, fresh);
+      applyRecordToGame(game, fresh);
       return { ok: true, hasData: true };
     }
     // Live call succeeded but came back empty — fall back to whichever
     // tiers were actually fresh before we tried, rather than nothing.
     if (discoveryFresh || enrichmentFresh){
-      applyRecordToBook(book, record, { discoveryFresh, enrichmentFresh });
-      return { ok: true, hasData: bookHasEnrichmentData(record) };
+      applyRecordToGame(game, record, { discoveryFresh, enrichmentFresh });
+      return { ok: true, hasData: gameHasEnrichmentData(record) };
     }
     return { ok: true, hasData: false };
   } catch(e){
-    console.warn('IGDB detail lookup failed for', book.title, e.message);
+    console.warn('IGDB detail lookup failed for', game.title, e.message);
     // Live call failed entirely — still use whatever tiers were fresh
     // going in, rather than surfacing a total failure when we actually
     // had usable (if partial) data on hand.
     if (discoveryFresh || enrichmentFresh){
-      applyRecordToBook(book, record, { discoveryFresh, enrichmentFresh });
-      return { ok: true, hasData: bookHasEnrichmentData(record) };
+      applyRecordToGame(game, record, { discoveryFresh, enrichmentFresh });
+      return { ok: true, hasData: gameHasEnrichmentData(record) };
     }
     return { ok: false, hasData: false, error: e.message };
   }
 }
 
-async function enrichBatchWithRatings(books, opts){
+async function enrichBatchWithRatings(games, opts){
   const silent = opts && opts.silent;
   // Experimenting with concurrency 3 (was 1, then 2 — confirmed fine). Every
   // request still passes through the same global adaptive throttle
@@ -2659,20 +2674,20 @@ async function enrichBatchWithRatings(books, opts){
   // lane behind the others — but it's safe to try. Drop back down if
   // rate-limiting creeps up.
   let done = 0, missing = 0, firstError = null;
-  await mapWithConcurrency(books, 3, async (book) => {
-    const result = await enrichOneBook(book, 6);
+  await mapWithConcurrency(games, 3, async (game) => {
+    const result = await enrichOneGame(game, 6);
     done++;
     if (!result.ok || !result.hasData){
       missing++;
       if (result.error && !firstError) firstError = result.error;
     }
-    if (!silent) setSpinStatus(`Fetching details… ${done}/${books.length}`);
+    if (!silent) setSpinStatus(`Fetching details… ${done}/${games.length}`);
   });
 
   if (silent) return;
   if (missing){
     $('enrichStatusNote').textContent =
-      `Details loaded for ${books.length - missing}/${books.length}.` +
+      `Details loaded for ${games.length - missing}/${games.length}.` +
       (firstError ? ` (${firstError})` : ' (IGDB may simply have nothing on file for the rest.)') +
       ` Anything missing fills in automatically when you click into it.`;
   } else {
@@ -2683,11 +2698,11 @@ async function enrichBatchWithRatings(books, opts){
 // Looks up a single built-in list title on IGDB by name, picks the top
 // match, and caches the resolved key (or the confirmed absence of one)
 // so the same title is never searched for twice.
-async function searchBigBookForBook(book){
-  const searchKey = `${book.title}|${book.year}`;
+async function searchIGDBForGame(game){
+  const searchKey = `${game.title}|${game.year}`;
   const cached = wmSearchCache.get(searchKey);
   if (cached && isFresh(cached.cachedAt, WM_GLOBAL_MAX_STALE_MS)){
-    return cached.bbId;
+    return cached.gameId;
   }
 
   // Shared database lookup by title+year — checked before ever needing a
@@ -2698,54 +2713,54 @@ async function searchBigBookForBook(book){
   if (currentUser){
     try{
       const snap = await fbDb.collection('sharedGameRatings')
-        .where('title', '==', book.title)
-        .where('year', '==', book.year)
+        .where('title', '==', game.title)
+        .where('year', '==', game.year)
         .limit(1)
         .get();
       if (!snap.empty){
-        const bbId = Number(snap.docs[0].id);
-        wmSearchCache.set(searchKey, { bbId, cachedAt: Date.now() });
+        const gameId = Number(snap.docs[0].id);
+        wmSearchCache.set(searchKey, { gameId, cachedAt: Date.now() });
         saveWmSearchCache();
-        return bbId;
+        return gameId;
       }
     } catch(e){ console.warn('Shared database title/year lookup failed (may need a Firestore index on title+year) — falling back to live search', e.message); }
   }
 
-  let bbId = null;
+  let gameId = null;
   try{
-    const query = `fields name; search "${book.title.replace(/"/g, '\\"')}"; limit 5;`;
-    const results = await bbFetch('/games', query, 0, 3, `Built-in list search: "${book.title}"`);
+    const query = `fields name; search "${game.title.replace(/"/g, '\\"')}"; limit 5;`;
+    const results = await igdbFetch('/games', query, 0, 3, `Built-in list search: "${game.title}"`);
     // IGDB search doesn't return a year field to match against, so this
     // just takes the top result rather than trying to disambiguate by
     // year.
-    bbId = results[0] ? results[0].id : null;
+    gameId = results[0] ? results[0].id : null;
   } catch(e){
-    console.warn('IGDB search failed for', book.title, e.message);
+    console.warn('IGDB search failed for', game.title, e.message);
     wmSearchCache.delete(searchKey); // don't cache a failure as a confirmed no-match — worth retrying later
     return null;
   }
-  wmSearchCache.set(searchKey, { bbId, cachedAt: Date.now() });
+  wmSearchCache.set(searchKey, { gameId, cachedAt: Date.now() });
   saveWmSearchCache(); // fire-and-forget
-  return bbId;
+  return gameId;
 }
 
 // Best-effort: try to enrich each built-in list title with the same
 // ratings/cover/genres/description a live IGDB result would have.
 // Silently does nothing for a title it can't resolve — the built-in
 // list still displays exactly as before either way.
-async function enrichBuiltinListWithBigBook(books){
-  if (!currentUser) return; // every attempt would just fail the same sign-in check in bbFetch — skip the whole pass rather than waste it book by book
+async function enrichBuiltinListWithIGDB(games){
+  if (!currentUser) return; // every attempt would just fail the same sign-in check in igdbFetch — skip the whole pass rather than waste it game by game
   let done = 0;
-  await mapWithConcurrency(books, 1, async (book) => {
-    if (!book.bigBookId){
-      const bbId = await searchBigBookForBook(book);
-      if (bbId) book.bigBookId = bbId;
+  await mapWithConcurrency(games, 1, async (game) => {
+    if (!game.gameId){
+      const gameId = await searchIGDBForGame(game);
+      if (gameId) game.gameId = gameId;
     }
-    if (book.bigBookId){
-      await enrichOneBook(book, 2);
+    if (game.gameId){
+      await enrichOneGame(game, 2);
     }
     done++;
-    setSpinStatus(`Enriching built-in list… ${done}/${books.length}`);
+    setSpinStatus(`Enriching built-in list… ${done}/${games.length}`);
   }, 250);
 }
 
@@ -2755,42 +2770,39 @@ async function enrichBuiltinListWithBigBook(books){
 // one of these words clinically, for instance). No source-scoping needed
 // here, unlike the filters above — a title with no description simply
 // can't match anything, so it passes through either way.
-function matchesExplicitContentFilter(book){
+function matchesExplicitContentFilter(game){
   if (!filterExplicitContent) return true;
   const allKeywords = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords);
   if (!allKeywords.length) return true;
-  const haystack = `${book.title || ''} ${book.description || ''}`.toLowerCase();
+  const haystack = `${game.title || ''} ${game.description || ''}`.toLowerCase();
   return !allKeywords.some(kw => kw && haystack.includes(kw.toLowerCase()));
 }
 
-function matchesMinRating(book){
+function matchesMinRating(game){
   if (!minRating) return true;
-  if (book.userRating == null) return true; // no data — don't punish it
-  return book.userRating >= minRating;
+  if (game.userRating == null) return true; // no data — don't punish it
+  return game.userRating >= minRating;
 }
 
-function matchesMaxRating(book){
+function matchesMaxRating(game){
   if (!maxRating) return true;
-  if (book.userRating == null) return true; // no data — don't punish it
-  return book.userRating <= maxRating;
+  if (game.userRating == null) return true; // no data — don't punish it
+  return game.userRating <= maxRating;
 }
 
-// search-books' response nests each result as a single-element array —
-// {"books": [[{...}], [{...}]]} — confirmed directly from a real response,
-// not a guess. Flattened here so nothing downstream has to know about it.
 // Core discovery query — platform + genre, sorted by rating. Confirmed
-// live: a genre-filtered, date-ranged, rating-sorted query correctly
-// returns results (verified with a real RPG/2020 query before this was
-// relied on). IGDB gives one rating per game directly (0-100 scale,
-// converted to this app's 0-10 scale below) rather than needing the
-// rating-band-widening search IGDB required, so this is a
-// single query, not an iterative one.
+// live: a genre-filtered, platform-filtered, rating-sorted query
+// correctly returns results (verified with a real RPG/2020 query before
+// this was relied on). IGDB gives one rating per game directly (0-100
+// scale, converted to this app's 0-10 scale below) rather than needing
+// the rating-band-widening search Big Book API required (Books uses
+// that pattern), so this is a single query, not an iterative one.
 // KNOWN GAP: results can skew toward small, high-rated indie/niche
 // titles over broadly-known ones (no popularity/rating-count threshold
 // applied yet) — flagged as a follow-up, not fixed here.
 // KNOWN GAP: IGDB's catalog includes fan-made ROM hacks alongside
 // official releases — not filtered out yet.
-async function fetchBigBookByRating(platform, genre, targetCount, seenIds, reasonPrefix){
+async function fetchGamesByRating(platform, genre, targetCount, seenIds, reasonPrefix){
   const genreId = IGDB_GENRES[genre];
   const platformId = IGDB_PLATFORMS[platform];
   if (genreId == null || platformId == null) return [];
@@ -2798,14 +2810,14 @@ async function fetchBigBookByRating(platform, genre, targetCount, seenIds, reaso
   const ratingCeiling = (maxRating || 10) * 10;
   setSpinStatus(`${reasonPrefix} — searching…`);
   const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization,url; where genres = (${genreId}) & platforms = (${platformId}) & rating != null & rating >= ${ratingFloor} & rating <= ${ratingCeiling}; sort rating desc; limit ${targetCount};`;
-  const data = await bbFetch('/games', query, 0, 6, reasonPrefix);
+  const data = await igdbFetch('/games', query, 0, 6, reasonPrefix);
   const collected = [];
   data.forEach(g => {
-    if (seenIds.has(g.id) || collected.some(c => c.bigBookId === g.id)) return;
+    if (seenIds.has(g.id) || collected.some(c => c.gameId === g.id)) return;
     collected.push({
       title: g.name,
       year: g.first_release_date ? new Date(g.first_release_date * 1000).getUTCFullYear() : null,
-      bigBookId: g.id,
+      gameId: g.id,
       posterUrl: g.cover ? `https:${g.cover.url.replace('t_thumb', 't_cover_big')}` : null,
       authors: null, // games don't have an "author" concept the same way — left null, not shown
       userRating: g.rating != null ? Math.round(g.rating) / 10 : null, // IGDB's 0-100 scale -> this app's 0-10 scale
@@ -2828,7 +2840,7 @@ async function fetchBigBookByRating(platform, genre, targetCount, seenIds, reaso
 // one call each time regardless of size, so this costs nothing extra by
 // itself; what costs something is enrichment, which only ever runs on
 // titles we haven't already fetched+enriched this round.
-// Reconstructs book objects directly from the persistent cache for one
+// Reconstructs game objects directly from the persistent cache for one
 // platform/genre combo — no API call involved. Genre matching uses each
 // entry's real stored genre list (set when it was first cached), not
 // "which spin found it," so a title tagged both Horror and Thriller
@@ -2837,7 +2849,7 @@ async function fetchBigBookByRating(platform, genre, targetCount, seenIds, reaso
 // (the query already filters by platform), so it's trustworthy as soon
 // as discoveredAt is fresh — it doesn't need to wait on enrichment the
 // way posterUrl/rating/description do.
-function getCachedBooksForCombo(platform, genre){
+function getCachedGamesForCombo(platform, genre){
   const results = [];
   wmRatingsCache.forEach((entry, id) => {
     // Can't trust this record's platform/genre placement at all once its
@@ -2850,9 +2862,9 @@ function getCachedBooksForCombo(platform, genre){
     results.push({
       title: entry.title,
       year: entry.year,
-      bigBookId: id,
+      gameId: id,
       posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
-      userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
+      userRating: enrichmentFresh ? sanitizeUserRating(entry.userRating) : null,
       platforms: entry.platforms,
       igdbUrl: enrichmentFresh ? (entry.igdbUrl || null) : null,
       esrbRating: enrichmentFresh ? (entry.esrbRating || null) : null,
@@ -2863,12 +2875,12 @@ function getCachedBooksForCombo(platform, genre){
   return results;
 }
 
-// The shared-database equivalent of getCachedBooksForCombo above — a
-// real Firestore query across every signed-in user's contributed book
+// The shared-database equivalent of getCachedGamesForCombo above — a
+// real Firestore query across every signed-in user's contributed game
 // records for this platform+genre, not just this device's own local
 // cache. Deliberately does NOT filter by rating server-side — everything
 // matching genre gets downloaded in batches, and it's up to the
-// caller (buildBigBookPool) to run the normal filter pipeline on it and
+// caller (buildGamePool) to run the normal filter pipeline on it and
 // decide what's actually worth keeping. This also means this function no
 // longer writes anything to local storage itself — only genuinely
 // qualifying titles get committed locally, decided by the caller after
@@ -2890,7 +2902,7 @@ function getCachedBooksForCombo(platform, genre){
 // rejects the query outright. That failure is caught and treated as "no
 // shared data available this time," never as a hard error — the spin
 // still works using local cache and live discovery either way.
-async function getSharedBooksForComboBatch(platform, genre, batchSize, cursor){
+async function getSharedGamesForComboBatch(platform, genre, batchSize, cursor){
   if (!currentUser) return { candidates: [], cursor: null, exhausted: true };
   try{
     let query = fbDb.collection('sharedGameRatings')
@@ -2912,9 +2924,9 @@ async function getSharedBooksForComboBatch(platform, genre, batchSize, cursor){
         pool: {
           title: entry.title,
           year: entry.year,
-          bigBookId: id,
+          gameId: id,
           posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
-          userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
+          userRating: enrichmentFresh ? sanitizeUserRating(entry.userRating) : null,
           platforms: entry.platforms,
           igdbUrl: enrichmentFresh ? (entry.igdbUrl || null) : null,
           esrbRating: enrichmentFresh ? (entry.esrbRating || null) : null,
@@ -2934,19 +2946,19 @@ async function getSharedBooksForComboBatch(platform, genre, batchSize, cursor){
   }
 }
 
-async function buildBigBookPool(platform, genre){
+async function buildGamePool(platform, genre){
   // Full pass through the local cache FIRST — zero API calls — before ever
   // reaching for IGDB. With a well-warmed cache this can fully
   // satisfy a spin on its own.
   setSpinStatus('Checking local cache…');
   const seenIds = new Set();
   let pool = [];
-  const sharedRecordsById = new Map(); // bigBookId -> raw shared record, kept only long enough to decide what's worth committing locally after filtering
+  const sharedRecordsById = new Map(); // gameId -> raw shared record, kept only long enough to decide what's worth committing locally after filtering
 
   if (true){
-    getCachedBooksForCombo(platform, genre).forEach(m => {
+    getCachedGamesForCombo(platform, genre).forEach(m => {
       pool.push(m);
-      seenIds.add(m.bigBookId);
+      seenIds.add(m.gameId);
     });
 
     if (currentUser){
@@ -2968,13 +2980,13 @@ async function buildBigBookPool(platform, genre){
       let sharedBatchesUsed = 0;
       const sharedScanStart = Date.now();
       for (let batchNum = 0; batchNum < maxSharedBatches; batchNum++){
-        const { candidates, cursor, exhausted } = await getSharedBooksForComboBatch(platform, genre, sharedBatchSize, sharedCursor);
+        const { candidates, cursor, exhausted } = await getSharedGamesForComboBatch(platform, genre, sharedBatchSize, sharedCursor);
         sharedBatchesUsed++;
         candidates.forEach(c => {
-          if (!seenIds.has(c.pool.bigBookId)){
+          if (!seenIds.has(c.pool.gameId)){
             pool.push(c.pool);
-            seenIds.add(c.pool.bigBookId);
-            sharedRecordsById.set(c.pool.bigBookId, c.record);
+            seenIds.add(c.pool.gameId);
+            sharedRecordsById.set(c.pool.gameId, c.record);
           }
         });
         sharedCursor = cursor;
@@ -2985,12 +2997,12 @@ async function buildBigBookPool(platform, genre){
     }
 
     // Some cached entries may come back with their rating tier stale
-    // (nulled out by getCachedBooksForCombo/getSharedBooksForCombo) even
+    // (nulled out by getCachedGamesForCombo/getSharedGamesForComboBatch) even
     // though their discovery tier is still trusted — those need a fresh
     // enrichment pass too, not just newly-discovered live candidates
     // below, or they'd silently skip rating filtering forever instead of
     // getting current data.
-    const needsFreshRating = pool.filter(m => bookNeedsEnrichment(m) && !isBlocked(m.title, m.year));
+    const needsFreshRating = pool.filter(m => gameNeedsEnrichment(m) && !isBlocked(m.title, m.year));
     if (needsFreshRating.length){
       await enrichBatchWithRatings(needsFreshRating);
     }
@@ -3007,7 +3019,7 @@ async function buildBigBookPool(platform, genre){
   // trade for not accumulating local storage for titles that didn't
   // actually match what you wanted.
   if (sharedRecordsById.size){
-    const qualifiedIds = new Set(allQualified.map(m => m.bigBookId));
+    const qualifiedIds = new Set(allQualified.map(m => m.gameId));
     let committedAny = false;
     sharedRecordsById.forEach((record, id) => {
       if (!qualifiedIds.has(id)) return;
@@ -3023,22 +3035,22 @@ async function buildBigBookPool(platform, genre){
 
   // Only reach for live discovery if the cache alone doesn't cover Max
   // Results after filtering — searched by rating band (see
-  // fetchBigBookByRating above), so this already keeps widening on
+  // fetchGamesByRating above), so this already keeps widening on
   // its own until either enough titles are found or your configured
   // Minimum Rating is reached, replacing the old separate shortfall-retry
   // loop that used to sit here.
   if (survivors.length < maxResults){
     const needed = maxResults - survivors.length;
     didLiveFetch = true;
-    const fresh = await fetchBigBookByRating(platform, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
-    fresh.forEach(m => seenIds.add(m.bigBookId));
+    const fresh = await fetchGamesByRating(platform, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
+    fresh.forEach(m => seenIds.add(m.gameId));
     pool = pool.concat(fresh);
     await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)));
     ({ survivors } = computeFilteredSurvivors(pool));
   }
 
   const allCached = (list) => list.length > 0 &&
-    list.every(m => bookHasEnrichmentData(wmRatingsCache.get(m.bigBookId)));
+    list.every(m => gameHasEnrichmentData(wmRatingsCache.get(m.gameId)));
 
   // If we're fully cached so far, make ONE opportunistic attempt to grab 5
   // more — still sorted by popularity (edition count), same as the main
@@ -3049,9 +3061,9 @@ async function buildBigBookPool(platform, genre){
   if (didLiveFetch && pool.length < hardCap && allCached(pool)){
     const growBy = Math.min(hardCap, pool.length + 5) - pool.length;
     if (growBy > 0){
-      const fresh = await fetchBigBookByRating(platform, genre, growBy, seenIds, 'Free growth (fully cached so far)');
+      const fresh = await fetchGamesByRating(platform, genre, growBy, seenIds, 'Free growth (fully cached so far)');
       if (fresh.length){
-        fresh.forEach(m => seenIds.add(m.bigBookId));
+        fresh.forEach(m => seenIds.add(m.gameId));
         pool = pool.concat(fresh);
         await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)), { silent: true });
       }
@@ -3074,93 +3086,87 @@ function getPickerFor(title, year){
   return (entry && entry.picker && entry.picker !== 'Unknown') ? entry.picker : null;
 }
 
-function bookGenres(book){
-  if (book.genresOverride) return book.genresOverride;
-  const key = `${book.title}|${book.year}`;
+function gameGenres(game){
+  if (game.genresOverride) return game.genresOverride;
+  const key = `${game.title}|${game.year}`;
   if (EXTRA_GENRES[key]) return EXTRA_GENRES[key];
   return currentChoice ? [currentChoice.genre] : [];
 }
 
-function bookDetailLink(book){
+function gameDetailLink(game){
   // IGDB's own url field, confirmed live — a real, curated game page,
   // not a guess. Falls back to a general web search only for titles
   // that haven't been enriched yet (e.g. an untouched built-in list
   // entry), where no igdbUrl exists at all.
-  if (book.igdbUrl) return book.igdbUrl;
-  return `https://www.google.com/search?q=${encodeURIComponent(book.title + ' video game')}`;
+  if (game.igdbUrl) return game.igdbUrl;
+  return `https://www.google.com/search?q=${encodeURIComponent(game.title + ' video game')}`;
 }
 
-function bookCoverUrl(book){
-  return book.posterUrl || null;
+function gameCoverUrl(game){
+  return game.posterUrl || null;
 }
 
-function bookLinkLabel(book){
-  return book.igdbUrl ? 'IGDB' : 'Search';
+function gameLinkLabel(game){
+  return game.igdbUrl ? 'IGDB' : 'Search';
 }
 
-function genreChipsHtml(book){
-  const genres = bookGenres(book);
+function genreChipsHtml(game){
+  const genres = gameGenres(game);
   if (!genres.length) return '';
   return `<div class="genre-chips">${genres.map(g => `<span class="genre-chip">${escapeHtml(g)}</span>`).join('')}</div>`;
 }
 
-function bylineHtml(book){
+function bylineHtml(game){
   // Games don't have an "author" the way books do — showing platforms
   // here instead, since that's real, confirmed data and tells you
   // something genuinely useful about the game.
-  if (!book.platforms || !book.platforms.length) return '';
-  return `on ${escapeHtml(book.platforms.join(', '))}`;
+  if (!game.platforms || !game.platforms.length) return '';
+  return `on ${escapeHtml(game.platforms.join(', '))}`;
 }
 
-function metaLineHtml(book){
-  const genres = bookGenres(book);
-  const bits = [book.year || '—'];
+function metaLineHtml(game){
+  const genres = gameGenres(game);
+  const bits = [game.year || '—'];
   if (genres.length) bits.push(genres.join(', '));
-  if (book.esrbRating) bits.push(`ESRB ${book.esrbRating}`);
+  if (game.esrbRating) bits.push(`ESRB ${game.esrbRating}`);
   return bits.join(' · ');
 }
 
-function ratingChipsHtml(book){
+function ratingChipsHtml(game){
   const chips = [];
-  if (book.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${book.userRating.toFixed(1)}</span>`);
+  if (game.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${game.userRating.toFixed(1)}</span>`);
   if (!chips.length) return '';
   return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
 }
 
-// Builds a single .poster-card element — shared between the main
-// results grid and the Discover Books tab's grid, so both stay visually
-// identical rather than maintaining two copies of the same template.
-// onClick decides what happens when an unpicked card is clicked (opens
-// the pick modal on the main grid; chains into a new similar-books
-// search on the Discover Books tab, which has no meaningful platform/genre
-// to record a pick under).
-function buildBookCard(book, index, onClick){
-  const picked = isPicked(book.title, book.year);
+// Builds a single .poster-card element for the results grid.
+function buildGameCard(game, index, onClick){
+  const picked = isPicked(game.title, game.year);
   const card = document.createElement('div');
   card.className = 'poster-card' + (picked ? ' disabled' : '');
   card.dataset.idx = index;
-  const picker = picked ? getPickerFor(book.title, book.year) : null;
+  const picker = picked ? getPickerFor(game.title, game.year) : null;
   const watchedTagHtml = picked ? `<div class="watched-tag">PLAYED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
   card.innerHTML = `
     ${watchedTagHtml}
     <div class="poster-meta">
       <div class="p-num">${String(index + 1).padStart(2, '0')}</div>
-      <div class="p-title-row"><div class="p-title">${escapeHtml(book.title)}</div></div>
-      <div class="p-year">${book.year || '—'}</div>
-      <div class="rating-row">${ratingChipsHtml(book)}</div>
-      <div class="genre-row">${genreChipsHtml(book)}</div>
+      <div class="p-title-row"><div class="p-title">${escapeHtml(game.title)}</div></div>
+      <div class="p-year">${game.year || '—'}</div>
+      <div class="rating-row">${ratingChipsHtml(game)}</div>
+      <div class="genre-row">${genreChipsHtml(game)}</div>
       <div class="meta-footer">
-        <a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" title="View on ${bookLinkLabel(book)}">🔗 ${bookLinkLabel(book)}</a>
-        <button class="block-card-btn" title="Block this book">⛔</button>
+        <a class="tmdb-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" title="View on ${gameLinkLabel(game)}">🔗 ${gameLinkLabel(game)}</a>
+        <button class="block-card-btn" title="Block this game">⛔</button>
       </div>
     </div>
   `;
   card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
   card.querySelector('.block-card-btn').addEventListener('click', (e) => {
     e.stopPropagation();
-    blockBookFromGrid(book);
+    blockGameFromGrid(game);
   });
-  if (!picked && onClick) card.addEventListener('click', () => onClick(book));
+  if (!picked && onClick) card.addEventListener('click', () => onClick(game));
   return card;
 }
 
@@ -3174,22 +3180,22 @@ function renderResults(){
   grid.innerHTML = '';
   $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
 
-  currentBatch.forEach((book, i) => {
-    grid.appendChild(buildBookCard(book, i, openConfirm));
+  currentBatch.forEach((game, i) => {
+    grid.appendChild(buildGameCard(game, i, openConfirm));
   });
 }
 
-async function blockBookFromGrid(book){
-  if (!confirm(`Block "${book.title}" (${book.year || '—'}) so it never shows up in a spin again?`)) return;
-  blockedBooks.push({ title: book.title, year: book.year || null });
-  await saveBlockedBooks();
-  currentBatch = currentBatch.filter(m => !(m.title === book.title && m.year === book.year));
-  // Shows up immediately in the Filtered Out list, same {book, reason}
+async function blockGameFromGrid(game){
+  if (!confirm(`Block "${game.title}" (${game.year || '—'}) so it never shows up in a spin again?`)) return;
+  blockedGames.push({ title: game.title, year: game.year || null });
+  await saveBlockedGames();
+  currentBatch = currentBatch.filter(m => !(m.title === game.title && m.year === game.year));
+  // Shows up immediately in the Filtered Out list, same {game, reason}
   // shape every other exclusion reason already uses — rather than the
-  // book just silently vanishing from the grid with no trace of what
+  // game just silently vanishing from the grid with no trace of what
   // happened to it.
-  lastFilteredOut.push({ book, reason: 'Blocked' });
-  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. blocked from the Discover Books tab) — nothing to re-render
+  lastFilteredOut.push({ game, reason: 'Blocked' });
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session — nothing to re-render
   renderFilteredOut();
   renderBlockList();
 }
@@ -3197,27 +3203,27 @@ async function blockBookFromGrid(book){
 /* ==================================================================
    Confirm pick modal
    ================================================================== */
-function openConfirm(book){
+function openConfirm(game){
   const root = $('modalRoot');
-  const posterUrl = bookCoverUrl(book);
+  const posterUrl = gameCoverUrl(game);
   const posterHtml = posterUrl
-    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(book.title)} cover">`
+    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(game.title)} cover">`
     : `<div class="m-icon" id="modalPoster">🎮</div>`;
-  const showDetailsLookup = currentSource === 'bigbook' && book.bigBookId;
-  const canForceRefresh = !!book.bigBookId;
-  const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(book.bigBookId);
+  const showDetailsLookup = currentSource === 'igdb' && game.gameId;
+  const canForceRefresh = !!game.gameId;
+  const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(game.gameId);
   const showExtrasContainer = showDetailsLookup || canForceRefresh;
   root.innerHTML = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
         ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from IGDB'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
         ${posterHtml}
-        <h3>${escapeHtml(book.title)}</h3>
-        <p class="hint" id="modalByline" style="${bylineHtml(book) ? '' : 'display:none;'}">${bylineHtml(book)}</p>
-        <p id="modalMeta">${metaLineHtml(book)}</p>
-        <div id="modalRatings">${ratingChipsHtml(book)}</div>
-        <div id="modalGenres">${genreChipsHtml(book)}</div>
-        <p id="modalDescription" class="modal-description" style="${book.description ? '' : 'display:none;'}">${escapeHtml(book.description || '')}</p>
+        <h3>${escapeHtml(game.title)}</h3>
+        <p class="hint" id="modalByline" style="${bylineHtml(game) ? '' : 'display:none;'}">${bylineHtml(game)}</p>
+        <p id="modalMeta">${metaLineHtml(game)}</p>
+        <div id="modalRatings">${ratingChipsHtml(game)}</div>
+        <div id="modalGenres">${genreChipsHtml(game)}</div>
+        <p id="modalDescription" class="modal-description" style="${game.description ? '' : 'display:none;'}">${escapeHtml(game.description || '')}</p>
         ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showDetailsLookup ? 'Loading details…' : ''}</div>` : ''}
         <div class="row">
           <button class="btn-ghost" id="cancelPick">Cancel</button>
@@ -3228,7 +3234,7 @@ function openConfirm(book){
   `;
   $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
   $('cancelPick').addEventListener('click', closeModal);
-  $('confirmPick').addEventListener('click', () => openPickerPrompt(book));
+  $('confirmPick').addEventListener('click', () => openPickerPrompt(game));
 
   if (canForceRefresh && !alreadyRefreshedThisSpin){
     $('forceRefreshBtn').addEventListener('click', async () => {
@@ -3238,15 +3244,15 @@ function openConfirm(book){
       const extrasEl = document.getElementById('modalExtras');
       if (extrasEl) extrasEl.textContent = 'Loading details…';
       try{
-        const extras = await fetchBigBookExtras(book, true); // true = bypass every cache, local and shared
-        appendModalExtras(extras, book);
+        const extras = await fetchGameExtras(game, true); // true = bypass every cache, local and shared
+        appendModalExtras(extras, game);
       } finally {
         // Marked used here, not just on success — the API call already
         // went out and the quota's already spent whether or not it
         // ultimately threw, and this keeps the tracking set and what the
         // button visually shows always in sync if the modal is reopened
         // later in the same spin.
-        forceRefreshedThisSpin.add(book.bigBookId);
+        forceRefreshedThisSpin.add(game.gameId);
         // Only touch the button if the modal (and this button) is still
         // open — it may have been closed while the live call was in
         // flight. Once used, it stays permanently marked "Refreshed" for
@@ -3262,75 +3268,75 @@ function openConfirm(book){
   }
 
   if (showDetailsLookup){
-    fetchBigBookExtras(book).then(extras => appendModalExtras(extras, book));
+    fetchGameExtras(game).then(extras => appendModalExtras(extras, game));
   }
 }
 
-function appendModalExtras(extras, book){
-  if (!book.posterUrl && extras.posterUrl) book.posterUrl = extras.posterUrl;
-  if (extras.genres && extras.genres.length) book.genresOverride = extras.genres;
-  if (!book.description && extras.description) book.description = extras.description;
-  if (book.userRating == null && extras.userRating != null) book.userRating = extras.userRating;
-  if (extras.platforms && extras.platforms.length) book.platforms = extras.platforms;
-  if (extras.esrbRating) book.esrbRating = extras.esrbRating;
+function appendModalExtras(extras, game){
+  if (!game.posterUrl && extras.posterUrl) game.posterUrl = extras.posterUrl;
+  if (extras.genres && extras.genres.length) game.genresOverride = extras.genres;
+  if (!game.description && extras.description) game.description = extras.description;
+  if (game.userRating == null && extras.userRating != null) game.userRating = extras.userRating;
+  if (extras.platforms && extras.platforms.length) game.platforms = extras.platforms;
+  if (extras.esrbRating) game.esrbRating = extras.esrbRating;
 
-  backfillGridCard(book);
+  backfillGridCard(game);
 
   const container = document.getElementById('modalExtras');
   if (!container) return; // modal already closed — data above is still backfilled to the grid
 
   const bylineBox = document.getElementById('modalByline');
   if (bylineBox){
-    const byline = bylineHtml(book);
+    const byline = bylineHtml(game);
     bylineBox.textContent = byline;
     bylineBox.style.display = byline ? '' : 'none';
   }
   const metaBox = document.getElementById('modalMeta');
-  if (metaBox) metaBox.textContent = metaLineHtml(book);
+  if (metaBox) metaBox.textContent = metaLineHtml(game);
   const ratingsBox = document.getElementById('modalRatings');
-  if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(book);
+  if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(game);
   const genresBox = document.getElementById('modalGenres');
-  if (genresBox) genresBox.innerHTML = genreChipsHtml(book);
+  if (genresBox) genresBox.innerHTML = genreChipsHtml(game);
   const descBox = document.getElementById('modalDescription');
-  if (descBox && book.description){
-    descBox.textContent = book.description;
+  if (descBox && game.description){
+    descBox.textContent = game.description;
     descBox.style.display = '';
   }
 
   const posterEl = document.getElementById('modalPoster');
-  if (posterEl && posterEl.tagName !== 'IMG' && book.posterUrl){
+  if (posterEl && posterEl.tagName !== 'IMG' && game.posterUrl){
     const img = document.createElement('img');
     img.id = 'modalPoster';
-    img.src = book.posterUrl;
-    img.alt = book.title + ' cover';
+    img.src = game.posterUrl;
+    img.alt = game.title + ' cover';
     posterEl.replaceWith(img);
   }
 
   container.className = '';
-  container.innerHTML = detailLinkHtml(book);
+  container.innerHTML = detailLinkHtml(game);
 }
 
 // IGDB has no borrow/availability concept the way Open Library
-// did — this links out to the book's real page instead: Open Library's
+// did — this links out to the game's real page instead: Open Library's
 // own work page when we have that id, a WorldCat lookup by ISBN
 // otherwise, or a plain title search as the last resort. Matches
-// bookDetailLink/bookLinkLabel, which decide the same thing for the
+// gameDetailLink/gameLinkLabel, which decide the same thing for the
 // "Search" link shown before extras load.
-function detailLinkHtml(book){
-  return `<a class="tmdb-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
+function detailLinkHtml(game){
+  return `<a class="tmdb-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(gameLinkLabel(game))} →</a>`;
 }
 
 
 // needing a full re-render.
-function backfillGridCard(book){
-  const idx = currentBatch.indexOf(book);
+function backfillGridCard(game){
+  const idx = currentBatch.indexOf(game);
   if (idx === -1) return; // a new spin has replaced the batch since
   const card = document.querySelector(`.poster-card[data-idx="${idx}"]`);
   if (!card) return;
   const ratingRow = card.querySelector('.rating-row');
-  if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(book);
+  if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(game);
   const genreRow = card.querySelector('.genre-row');
-  if (genreRow) genreRow.innerHTML = genreChipsHtml(book);
+  if (genreRow) genreRow.innerHTML = genreChipsHtml(game);
 }
 
 function closeModal(){ $('modalRoot').innerHTML = ''; }
@@ -3346,78 +3352,78 @@ window.handleNativeBackPress = function(){
   return false;
 };
 
-async function confirmPick(book, picker){
-  const platform = currentChoice ? currentChoice.platform : ((book.platforms && book.platforms[0]) || 'Unknown');
+async function confirmPick(game, picker){
+  const platform = currentChoice ? currentChoice.platform : ((game.platforms && game.platforms[0]) || 'Unknown');
   const genre = currentChoice ? currentChoice.genre : 'Found via search';
   picks.push({
-    title: book.title, year: book.year,
+    title: game.title, year: game.year,
     platform: platform, genre: genre,
     picker: picker, pickedAt: new Date().toISOString().slice(0, 10),
-    bigBookId: book.bigBookId || null // lets the Discover Books tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
+    gameId: game.gameId || null // kept so a future feature could look this exact title back up without re-searching — not used anywhere yet
   });
   closeModal();
-  showTonightBanner(book, picker);
-  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. picked from the Discover Books tab) — nothing to re-render
+  showTonightBanner(game, picker);
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session — nothing to re-render
   renderHistory();
   await savePicks();
   await recordPick(picker);
 
-  if (currentSource === 'bigbook' && book.bigBookId){
-    fetchBigBookExtras(book).then(extras => appendTonightExtras(extras, book));
+  if (currentSource === 'igdb' && game.gameId){
+    fetchGameExtras(game).then(extras => appendTonightExtras(extras, game));
   }
 }
 
-// A book picked straight from a live spin has almost always already been
+// A game picked straight from a live spin has almost always already been
 // enriched during discovery, before the grid even rendered — this mostly
-// just returns what enrichOneBook already set on the book object. It
+// just returns what enrichOneGame already set on the game object. It
 // only does real work when forceRefresh is set (the "⟳ Refresh" button)
 // or for the rare case where discovery-time enrichment didn't complete
 // for this specific title.
-async function fetchBigBookExtras(book, forceRefresh){
-  await enrichOneBook(book, 6, forceRefresh);
+async function fetchGameExtras(game, forceRefresh){
+  await enrichOneGame(game, 6, forceRefresh);
   return {
-    posterUrl: book.posterUrl || null,
-    genres: book.genresOverride || null,
-    description: book.description || null,
-    userRating: book.userRating ?? null,
-    platforms: book.platforms || null,
-    esrbRating: book.esrbRating || null
+    posterUrl: game.posterUrl || null,
+    genres: game.genresOverride || null,
+    description: game.description || null,
+    userRating: game.userRating ?? null,
+    platforms: game.platforms || null,
+    esrbRating: game.esrbRating || null
   };
 }
 
-function appendTonightExtras(extras, book){
-  if (extras.genres && extras.genres.length) book.genresOverride = extras.genres;
-  if (book.userRating == null && extras.userRating != null) book.userRating = extras.userRating;
-  if (extras.platforms && extras.platforms.length) book.platforms = extras.platforms;
-  if (extras.esrbRating) book.esrbRating = extras.esrbRating;
-  backfillGridCard(book);
+function appendTonightExtras(extras, game){
+  if (extras.genres && extras.genres.length) game.genresOverride = extras.genres;
+  if (game.userRating == null && extras.userRating != null) game.userRating = extras.userRating;
+  if (extras.platforms && extras.platforms.length) game.platforms = extras.platforms;
+  if (extras.esrbRating) game.esrbRating = extras.esrbRating;
+  backfillGridCard(game);
 
   const banner = document.querySelector('#tonightBanner .tonight > div');
   if (!banner) return; // user already spun again / banner no longer showing
   const bylineBox = document.getElementById('tonightByline');
   if (bylineBox){
-    const byline = bylineHtml(book);
+    const byline = bylineHtml(game);
     bylineBox.textContent = byline;
     bylineBox.style.display = byline ? '' : 'none';
   }
   const metaBox = document.getElementById('tonightMeta');
-  if (metaBox) metaBox.textContent = `${metaLineHtml(book)} · Happy gaming`;
-  banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${detailLinkHtml(book)}</div>`);
+  if (metaBox) metaBox.textContent = `${metaLineHtml(game)} · Happy gaming`;
+  banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${detailLinkHtml(game)}</div>`);
 }
 
-function showTonightBanner(book, picker){
-  const posterUrl = bookCoverUrl(book);
+function showTonightBanner(game, picker){
+  const posterUrl = gameCoverUrl(game);
   const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🎮</div>';
-  const byline = bylineHtml(book);
+  const byline = bylineHtml(game);
   $('tonightBanner').innerHTML = `
     <div class="tonight">
       ${posterHtml}
       <div>
         <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
-        <h3>${escapeHtml(book.title)}</h3>
+        <h3>${escapeHtml(game.title)}</h3>
         ${byline ? `<p class="hint" id="tonightByline">${byline}</p>` : '<p class="hint" id="tonightByline" style="display:none;"></p>'}
-        <div id="tonightRatings">${ratingChipsHtml(book)}</div>
-        <p id="tonightMeta">${metaLineHtml(book)} · Happy gaming</p>
+        <div id="tonightRatings">${ratingChipsHtml(game)}</div>
+        <p id="tonightMeta">${metaLineHtml(game)} · Happy gaming</p>
       </div>
     </div>
   `;
@@ -3460,16 +3466,16 @@ function renderFilteredOut(){
   row.style.display = 'block';
   $('filteredOutToggleBtn').textContent = `Show ${lastFilteredOut.length} Filtered Out`;
   panel.style.display = 'none';
-  $('filteredOutList').innerHTML = lastFilteredOut.map(({ book, reason }, i) => `
-    <div class="history-item clickable" data-idx="${i}" title="Click for details — you can still pick this book">
-      <span class="h-name">${escapeHtml(book.title)} <span class="h-meta">(${book.year || '—'})</span></span>
+  $('filteredOutList').innerHTML = lastFilteredOut.map(({ game, reason }, i) => `
+    <div class="history-item clickable" data-idx="${i}" title="Click for details — you can still pick this game">
+      <span class="h-name">${escapeHtml(game.title)} <span class="h-meta">(${game.year || '—'})</span></span>
       <span class="h-meta">${escapeHtml(reason)}</span>
     </div>
   `).join('');
   $('filteredOutList').querySelectorAll('.history-item[data-idx]').forEach(el => {
     el.addEventListener('click', () => {
       const entry = lastFilteredOut[Number(el.dataset.idx)];
-      if (entry) openConfirm(entry.book);
+      if (entry) openConfirm(entry.game);
     });
   });
 }
@@ -3505,7 +3511,7 @@ async function removePickAt(idx){
 }
 
 $('clearHistoryBtn').addEventListener('click', async () => {
-  if (!confirm('Clear all past picks? Every book will become pickable again.')) return;
+  if (!confirm('Clear all past picks? Every game will become pickable again.')) return;
   picks = [];
   renderHistory();
   if (currentBatch.length) renderResults();
