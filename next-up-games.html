@@ -173,6 +173,7 @@
     .tab-btn{ padding: 8px 12px; font-size: 11px; }
     .reel{ width: 150px; height: 80px; }
     .reel-value{ font-size: 22px; }
+    .reel-value.long-text{ font-size: 12px; }
   }
 
   .theme-swatch-grid{ display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
@@ -326,6 +327,7 @@
     text-align:center;
     padding: 0 8px;
   }
+  .reel-value.long-text{ font-size: 15px; letter-spacing: 0.5px; line-height: 1.2; }
   .reel.spinning .reel-value{ color: var(--amber); }
 
   .spin-btn-row{ text-align:center; margin: 18px 0 30px; }
@@ -532,7 +534,7 @@
     <div class="marquee">
       <div class="sprockets"></div>
       <h1>🎮 NEXT UP - GAMES</h1>
-      <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
+      <div class="tagline">Spin for a random platform + genre, then pick from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
       <div class="version-badge" id="versionBadge"></div>
@@ -549,9 +551,9 @@
     <div id="mainTab">
 
       <div class="reel-stage">
-        <div class="reel" id="decadeReel">
-          <div class="reel-label">DECADE</div>
-          <div class="reel-value" id="decadeValue">----</div>
+        <div class="reel" id="platformReel">
+          <div class="reel-label">PLATFORM</div>
+          <div class="reel-value" id="platformValue">----</div>
         </div>
         <div class="reel" id="genreReel">
           <div class="reel-label">GENRE</div>
@@ -589,7 +591,7 @@
         </div>
         <div id="grid" class="grid"></div>
         <div id="emptyNote" class="empty-note" style="display:none;">
-          No titles available for this combo — spin again for a new decade & genre.
+          No titles available for this combo — spin again for a new platform & genre.
         </div>
         <div class="section-toggle" id="filteredOutToggleRow" style="display:none; margin-top:16px;">
           <button class="btn-ghost" id="filteredOutToggleBtn"></button>
@@ -622,15 +624,15 @@
 
       <div class="card" id="bbConnectionCard">
         <h2>IGDB <span class="status-pill status-connected">ALWAYS CONNECTED</span></h2>
-        <p class="desc">Games uses IGDB, routed through a small proxy — no account or API key needed on this device, but you do need to be <strong style="color:var(--cream);">signed in with Google</strong> to actually use it. Spins pull live game lists by decade + genre, with covers, ratings, and (when a title is picked) a search link to look it up further. If not signed in, "Always use built-in list" is selected below, or the service can't be reached, the app falls back to its built-in curated list.</p>
+        <p class="desc">Games uses IGDB, routed through a small proxy — no account or API key needed on this device, but you do need to be <strong style="color:var(--cream);">signed in with Google</strong> to actually use it. Spins pull live game lists by platform + genre, with covers, ratings, and (when a title is picked) a search link to look it up further. If not signed in, "Always use built-in list" is selected below, or the service can't be reached, the app falls back to its built-in curated list.</p>
         <div class="row" style="margin-top:8px;">
           <button class="btn-danger" id="clearCacheBtn">Clear Cache</button>
         </div>
 
-        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many games are already cached for a decade/genre. Those spins feel faster since little or no live lookup is needed.</p>
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many games are already cached for a platform/genre. Those spins feel faster since little or no live lookup is needed.</p>
         <div class="row">
           <select id="cacheStatsDecade" style="max-width:140px;">
-            <option value="all">All Decades</option>
+            <option value="all">All Platforms</option>
           </select>
           <select id="cacheStatsGenre" style="max-width:160px;">
             <option value="all">All Genres</option>
@@ -684,17 +686,6 @@
       </div>
 
       <div class="card">
-
-        <h2>Decades</h2>
-        <p class="desc">Check which decades you want included.</p>
-        <div class="select-all-row">
-          <button class="btn-ghost" id="decadesAllBtn">Select All</button>
-          <button class="btn-ghost" id="decadesNoneBtn">Select None</button>
-        </div>
-        <div id="decadeToggles" class="toggle-grid"></div>
-      </div>
-
-      <div class="card">
         <h2>Genres</h2>
         <p class="desc">Check which genres you want included.</p>
         <div class="select-all-row">
@@ -744,7 +735,7 @@
 
       <div class="card">
         <h2>Platforms</h2>
-        <p class="desc">Only shows games available on at least one checked platform. Applies to live IGDB spins only — the built-in list has no platform data until a title gets enriched, and an unenriched title is never excluded by this.</p>
+        <p class="desc">Check which platforms you want included — a spin picks one of these plus a genre, same as Genres below. Historical platforms are included alongside current ones, since a console only ever has games from the years it actually existed.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="platformsAllBtn">Select All</button>
           <button class="btn-ghost" id="platformsNoneBtn">Select None</button>
@@ -785,7 +776,7 @@
 
       <div class="card">
         <h2>Edit Built-in List</h2>
-        <p class="desc">Add or remove games from the built-in list for one decade + genre — used whenever that's the active source. These titles also get looked up automatically on IGDB for covers, ratings, and descriptions.</p>
+        <p class="desc">Add or remove games from the built-in list for one platform + genre — used whenever that's the active source. These titles also get looked up automatically on IGDB for covers, ratings, and descriptions.</p>
         <div class="row">
           <select id="editListDecade"></select>
           <select id="editListGenre"></select>
@@ -842,12 +833,12 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.6.0'; // MAJOR.MINOR.PATCH — substantially expanded GAME_DB, the built-in list. This also fixed a real functional gap, not just added content: GAME_DB previously only had 11 of the 22 confirmed IGDB genres represented at all, and since GENRES (which drives the genre filter toggles and what can ever be spun, live or built-in) is derived from GAME_DB's own keys, 11 genres — Point-and-Click, Music, Real Time Strategy, Simulator, Turn-Based Strategy, Tactical, Hack and Slash, Quiz/Trivia, Pinball, Visual Novel, Card & Board Game, MOBA — could never be selected at all. All 22 genres are now represented with at least one confident title, and many existing sparse cells got a second entry. Still deliberately incomplete in places (mainly the 2020s bucket) where I didn't have confident picks — left empty rather than guessed.
+const APP_VERSION = '0.9.0'; // MAJOR.MINOR.PATCH — major architecture change: decade removed entirely as a spin dimension and filter, replaced with platform (23 verified IGDB platforms, current + historical). Year is now pure display info on each game, not something you spin on or narrow by — this fixes the "decade + platform that didn't exist yet" impossible-combination problem the old design had. GAME_DB completely rebuilt: all 267 prior entries remapped from decade/genre to platform/genre, each title assigned to its single most-associated platform (built-in list only — live IGDB discovery still matches a game to any platform it's genuinely tagged with). "Arcade" was considered as a 24th platform but removed after revalidation; those titles were remapped to genuine home console ports where one exists. One title (1981's Video Pinball, an Atari 2600 exclusive) had no honest fit in the 23 platforms and was dropped rather than force-placed. Found and fixed a real bug during this build: IGDB_PLATFORMS still only had the original 7 platforms — the 16 historical ones were drafted in an earlier session but never actually applied before the architecture pivot, silently orphaning most of the new GAME_DB until caught by a live test.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
   'book_picks', 'blocked_books',
-  'custom_book_additions', 'custom_book_removals', 'enabled_decades',
+  'custom_book_additions', 'custom_book_removals',
   'enabled_genres', 'enabled_platforms',
   'min_rating', 'max_rating_ceiling',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
@@ -855,187 +846,178 @@ const SYNCED_KEYS = new Set([
 ]);
 
 /* ==================================================================
-   Curated game database — decade -> genre -> [{title,year}]
-   Deliberately minimal starter set — just enough to make the built-in
-   list path functional end to end, not a real catalog. Only genres
-   where a well-known, confidently-accurate title comes to mind are
-   populated per decade; everything else is left empty rather than
-   guessed at, same philosophy as Books' starter set. Expanding this to
-   real coverage is explicit follow-up work, not attempted here.
+   Curated game database — platform -> genre -> [{title,year}]
+   Rebuilt from the decade-based version (see below): each title is assigned to
+   exactly one platform (the one it's most associated with/best known
+   on), even though many are genuinely available on several — a
+   deliberate simplification so the built-in list stays a single
+   lookup per title rather than needing multi-platform tracking. Live
+   IGDB discovery is not limited this way: a game there can match any
+   platform it's actually tagged with.
+   A few titles' true home platform (Sega Saturn, Dreamcast, Atari
+   2600, Wii U) isn't in the 23 verified IGDB platforms this app
+   supports, so those were mapped to the closest reasonable fit
+   instead (mostly PC, or a later port's platform) rather than
+   dropped — except one (the 1981 Atari exclusive "Video Pinball"),
+   which had no honest fit anywhere and was dropped rather than
+   force-placed.
    ================================================================== */
 const GAME_DB = {
-'1970_1980s':{
-Platform:[{title:"Super Mario Bros.",year:1985}],
+"Android":{
+Arcade:[{title:"Geometry Dash",year:2013}]
+},
+"Game Boy":{
 Puzzle:[{title:"Tetris",year:1984}],
-Shooter:[{title:"Space Invaders",year:1978}],
-Arcade:[{title:"Pac-Man",year:1980}],
-Adventure:[{title:"Zork",year:1980}],
-Racing:[{title:"Pole Position",year:1982}],
-'Role-Playing':[{title:"Dragon Quest",year:1986}],
-Fighting:[{title:"Karate Champ",year:1984}],
-Strategy:[],
-Sport:[{title:"Track & Field",year:1983}],
-Indie:[],
-'Point-and-Click':[{title:"Maniac Mansion",year:1987}],
-Music:[],
-'Real Time Strategy':[],
-Simulator:[{title:"SimCity",year:1989}],
-'Turn-Based Strategy':[],
-Tactical:[],
-'Hack and Slash':[],
-'Quiz/Trivia':[],
-Pinball:[{title:"Pinball Construction Set",year:1983}],
-'Visual Novel':[],
-'Card & Board Game':[],
-MOBA:[]
+"Role-Playing":[{title:"Pokémon Red and Blue",year:1996}]
 },
-1990:{
-Platform:[{title:"Super Mario World",year:1990},{title:"Sonic the Hedgehog",year:1991}],
-'Role-Playing':[{title:"Final Fantasy VII",year:1997},{title:"Chrono Trigger",year:1995}],
-Fighting:[{title:"Street Fighter II",year:1991},{title:"Mortal Kombat",year:1992}],
-Shooter:[{title:"Doom",year:1993},{title:"GoldenEye 007",year:1997}],
-Racing:[{title:"Gran Turismo",year:1997},{title:"Mario Kart 64",year:1996}],
-Strategy:[{title:"StarCraft",year:1998},{title:"Civilization",year:1991}],
+"Game Boy Advance":{
+Tactical:[{title:"Advance Wars",year:2001}],
+"Visual Novel":[{title:"Phoenix Wright: Ace Attorney",year:2001}]
+},
+"Nintendo 3DS":{
+Tactical:[{title:"Fire Emblem: Awakening",year:2012}]
+},
+"Nintendo 64":{
 Adventure:[{title:"The Legend of Zelda: Ocarina of Time",year:1998}],
-Puzzle:[{title:"The Secret of Monkey Island",year:1990}],
-Sport:[{title:"NBA Jam",year:1993}],
-Arcade:[{title:"Street Fighter II",year:1991}],
-Indie:[],
-'Point-and-Click':[{title:"The Secret of Monkey Island",year:1990},{title:"Myst",year:1993}],
-Music:[{title:"PaRappa the Rapper",year:1996}],
-'Real Time Strategy':[{title:"Command & Conquer",year:1995},{title:"Age of Empires",year:1997}],
-Simulator:[{title:"RollerCoaster Tycoon",year:1999}],
-'Turn-Based Strategy':[{title:"Civilization",year:1991}],
-Tactical:[{title:"Fire Emblem: Shadow Dragon and the Blade of Light",year:1990}],
-'Hack and Slash':[{title:"Diablo",year:1996}],
-'Quiz/Trivia':[{title:"You Don't Know Jack",year:1995}],
-Pinball:[],
-'Visual Novel':[],
-'Card & Board Game':[],
-MOBA:[]
+Fighting:[{title:"Super Smash Bros.",year:1999}],
+Platform:[{title:"Super Mario 64",year:1996},{title:"Banjo-Kazooie",year:1998}],
+Racing:[{title:"Mario Kart 64",year:1996},{title:"Diddy Kong Racing",year:1997}],
+Shooter:[{title:"GoldenEye 007",year:1997}]
 },
-2000:{
-'Role-Playing':[{title:"Final Fantasy X",year:2001},{title:"The Elder Scrolls III: Morrowind",year:2002}],
-Shooter:[{title:"Halo: Combat Evolved",year:2001},{title:"Call of Duty 4: Modern Warfare",year:2007}],
-Platform:[{title:"Super Mario Galaxy",year:2007}],
-Strategy:[{title:"Warcraft III: Reign of Chaos",year:2002}],
-Racing:[{title:"Need for Speed: Most Wanted",year:2005}],
-Puzzle:[{title:"Portal",year:2007}],
-Adventure:[{title:"Shadow of the Colossus",year:2005}],
+"Nintendo DS":{
+Music:[{title:"Elite Beat Agents",year:2006}],
+Platform:[{title:"New Super Mario Bros.",year:2006}],
+Puzzle:[{title:"Professor Layton and the Curious Village",year:2007}]
+},
+"Nintendo Entertainment System":{
+Arcade:[{title:"Pac-Man",year:1980},{title:"Frogger",year:1981}],
+Fighting:[{title:"Karate Champ",year:1984},{title:"Yie Ar Kung-Fu",year:1984}],
+"Hack and Slash":[{title:"Gauntlet",year:1985}],
+Platform:[{title:"Super Mario Bros.",year:1985},{title:"Donkey Kong",year:1981},{title:"Super Mario Bros. 3",year:1988},{title:"Metroid",year:1986}],
+Puzzle:[{title:"Q*bert",year:1982}],
+Racing:[{title:"Pole Position",year:1982}],
+"Role-Playing":[{title:"Dragon Quest",year:1986},{title:"Final Fantasy",year:1987}],
+Shooter:[{title:"Space Invaders",year:1978},{title:"Galaga",year:1981}],
+Sport:[{title:"Track & Field",year:1983},{title:"Punch-Out!!",year:1984}],
+Tactical:[{title:"Fire Emblem: Shadow Dragon and the Blade of Light",year:1990}]
+},
+"Nintendo GameCube":{
 Fighting:[{title:"Super Smash Bros. Melee",year:2001}],
-Sport:[{title:"Wii Sports",year:2006}],
+Racing:[{title:"Mario Kart: Double Dash",year:2003}],
+Tactical:[{title:"Fire Emblem: Path of Radiance",year:2005}]
+},
+"Nintendo Switch":{
+Adventure:[{title:"The Legend of Zelda: Breath of the Wild",year:2017}],
+Fighting:[{title:"Super Smash Bros. Ultimate",year:2018}],
+"Hack and Slash":[{title:"Bayonetta 2",year:2014}],
+Platform:[{title:"Super Mario Odyssey",year:2017},{title:"Super Mario 3D World",year:2013},{title:"Super Mario Bros. Wonder",year:2023},{title:"Kirby and the Forgotten Land",year:2022}],
+Racing:[{title:"Mario Kart 8",year:2014}]
+},
+"PC (Microsoft Windows)":{
+Adventure:[{title:"Myst",year:1993},{title:"Grim Fandango",year:1998},{title:"Day of the Tentacle",year:1993},{title:"Full Throttle",year:1995},{title:"Firewatch",year:2016},{title:"What Remains of Edith Finch",year:2017},{title:"Elden Ring",year:2022},{title:"Zork",year:1980},{title:"Colossal Cave Adventure",year:1976},{title:"King's Quest",year:1984}],
+Arcade:[{title:"Daytona USA",year:1993},{title:"Virtua Fighter",year:1993},{title:"Downwell",year:2015},{title:"Centipede",year:1981}],
+"Card & Board Game":[{title:"Hearthstone",year:2014},{title:"Slay the Spire",year:2019},{title:"Marvel Snap",year:2022}],
+Fighting:[{title:"Virtua Fighter",year:1993},{title:"Soulcalibur",year:1998}],
+"Hack and Slash":[{title:"Diablo",year:1996},{title:"Diablo II",year:2000},{title:"DmC: Devil May Cry",year:2013}],
+Indie:[{title:"Cave Story",year:2004},{title:"World of Goo",year:2008},{title:"Stardew Valley",year:2016},{title:"Hollow Knight",year:2017},{title:"Papers, Please",year:2013},{title:"Hyper Light Drifter",year:2016},{title:"Hades",year:2020},{title:"Cult of the Lamb",year:2022}],
+MOBA:[{title:"Defense of the Ancients",year:2003},{title:"Dota 2",year:2013},{title:"League of Legends",year:2009},{title:"Smite",year:2014}],
+Music:[{title:"Thumper",year:2016},{title:"Crypt of the NecroDancer",year:2015}],
+Pinball:[{title:"Pinball Construction Set",year:1983}],
+Platform:[{title:"Psychonauts",year:2005},{title:"Celeste",year:2018},{title:"Ori and the Blind Forest",year:2015},{title:"Rayman Legends",year:2013}],
+"Point-and-Click":[{title:"The Secret of Monkey Island",year:1990},{title:"Monkey Island 2: LeChuck's Revenge",year:1991},{title:"King's Quest VI",year:1992},{title:"Gabriel Knight: Sins of the Fathers",year:1993},{title:"Sam & Max Save the World",year:2006},{title:"Kentucky Route Zero",year:2013},{title:"The Wolf Among Us",year:2013},{title:"Maniac Mansion",year:1987},{title:"Mystery House",year:1980}],
+Puzzle:[{title:"Lemmings",year:1991},{title:"Portal",year:2007},{title:"Bejeweled",year:2001},{title:"Portal 2",year:2011},{title:"The Witness",year:2016},{title:"Baba Is You",year:2019}],
+"Quiz/Trivia":[{title:"You Don't Know Jack",year:1995}],
+Racing:[{title:"Need for Speed",year:1994}],
+"Real Time Strategy":[{title:"Command & Conquer",year:1995},{title:"Age of Empires",year:1997},{title:"Warcraft: Orcs & Humans",year:1994},{title:"Total Annihilation",year:1997},{title:"Dune II",year:1992},{title:"Company of Heroes",year:2006},{title:"Warcraft III: Reign of Chaos",year:2002},{title:"Age of Mythology",year:2002},{title:"StarCraft II",year:2010},{title:"Company of Heroes 2",year:2013}],
+"Role-Playing":[{title:"Baldur's Gate",year:1998},{title:"Fallout",year:1997},{title:"The Elder Scrolls III: Morrowind",year:2002},{title:"Dragon Age: Origins",year:2009},{title:"The Witcher 3: Wild Hunt",year:2015},{title:"The Elder Scrolls V: Skyrim",year:2011},{title:"Divinity: Original Sin II",year:2017},{title:"Undertale",year:2015},{title:"Fallout 4",year:2015},{title:"Baldur's Gate 3",year:2023},{title:"Diablo IV",year:2023},{title:"Ultima",year:1981},{title:"Wizardry: Proving Grounds of the Mad Overlord",year:1981}],
+Shooter:[{title:"Doom",year:1993},{title:"Quake",year:1996},{title:"Duke Nukem 3D",year:1996},{title:"Half-Life",year:1998},{title:"Wolfenstein 3D",year:1992},{title:"Unreal",year:1998},{title:"Half-Life 2",year:2004},{title:"Left 4 Dead",year:2008},{title:"Overwatch",year:2016},{title:"Fortnite",year:2017},{title:"PUBG: Battlegrounds",year:2017},{title:"Titanfall 2",year:2016},{title:"Apex Legends",year:2019},{title:"Call of Duty: Modern Warfare II",year:2022},{title:"Asteroids",year:1979},{title:"Defender",year:1981}],
+Simulator:[{title:"RollerCoaster Tycoon",year:1999},{title:"SimCity 2000",year:1994},{title:"The Sims",year:2000},{title:"The Sims 2",year:2004},{title:"Euro Truck Simulator 2",year:2012},{title:"Cities: Skylines",year:2015},{title:"Kerbal Space Program",year:2015},{title:"Microsoft Flight Simulator",year:2020},{title:"SimCity",year:1989},{title:"Microsoft Flight Simulator",year:1982}],
+Sport:[{title:"Rocket League",year:2015}],
+Strategy:[{title:"StarCraft",year:1998},{title:"Civilization",year:1991},{title:"Civilization II",year:1996},{title:"Age of Empires",year:1997},{title:"Command & Conquer",year:1995},{title:"Warcraft II: Tides of Darkness",year:1995},{title:"X-COM: UFO Defense",year:1994},{title:"Warcraft III: Reign of Chaos",year:2002},{title:"Age of Mythology",year:2002},{title:"Rise of Nations",year:2003},{title:"Civilization VI",year:2016},{title:"Total War: Warhammer",year:2016},{title:"Crusader Kings II",year:2012},{title:"The Ancient Art of War",year:1984}],
+Tactical:[{title:"Into the Breach",year:2018}],
+"Turn-Based Strategy":[{title:"Civilization",year:1991},{title:"Civilization II",year:1996},{title:"Heroes of Might and Magic",year:1995},{title:"X-COM: UFO Defense",year:1994},{title:"Civilization III",year:2001},{title:"Civilization IV",year:2005},{title:"XCOM: Enemy Unknown",year:2012},{title:"XCOM 2",year:2016}],
+"Visual Novel":[{title:"Doki Doki Literature Club",year:2017}]
+},
+"PlayStation":{
+Fighting:[{title:"Tekken",year:1994},{title:"Marvel vs. Capcom",year:1998},{title:"Street Fighter Alpha",year:1995}],
+Music:[{title:"PaRappa the Rapper",year:1996},{title:"Vib-Ribbon",year:1999}],
+Platform:[{title:"Crash Bandicoot",year:1996},{title:"Rayman",year:1995},{title:"Spyro the Dragon",year:1998},{title:"Castlevania: Symphony of the Night",year:1997}],
+Racing:[{title:"Gran Turismo",year:1997},{title:"Ridge Racer",year:1993},{title:"Wipeout",year:1995}],
+"Role-Playing":[{title:"Final Fantasy VII",year:1997},{title:"Suikoden",year:1995},{title:"Xenogears",year:1998}],
+Sport:[{title:"Tony Hawk's Pro Skater",year:1999}],
+Tactical:[{title:"Final Fantasy Tactics",year:1997}]
+},
+"PlayStation 2":{
+Adventure:[{title:"Shadow of the Colossus",year:2005},{title:"Ico",year:2001},{title:"Prince of Persia: The Sands of Time",year:2003}],
+Arcade:[{title:"Rez",year:2001}],
+Fighting:[{title:"Guilty Gear X",year:2000},{title:"Tekken 5",year:2004},{title:"Soulcalibur II",year:2002}],
+"Hack and Slash":[{title:"God of War",year:2005},{title:"Devil May Cry",year:2001}],
+Music:[{title:"Guitar Hero",year:2005}],
+Platform:[{title:"Ratchet & Clank",year:2002},{title:"Jak and Daxter: The Precursor Legacy",year:2001},{title:"Sly Cooper and the Thievius Raccoonus",year:2002}],
+Racing:[{title:"Need for Speed: Most Wanted",year:2005},{title:"Burnout 3: Takedown",year:2004}],
+"Role-Playing":[{title:"Final Fantasy X",year:2001},{title:"Persona 3",year:2006},{title:"Kingdom Hearts",year:2002}],
+Sport:[{title:"SSX",year:2000}]
+},
+"PlayStation 3":{
+Adventure:[{title:"The Last of Us",year:2013}],
+Platform:[{title:"LittleBigPlanet",year:2008}],
+"Role-Playing":[{title:"Dark Souls",year:2011}],
+Tactical:[{title:"Valkyria Chronicles",year:2008}]
+},
+"PlayStation 4":{
+Adventure:[{title:"Red Dead Redemption 2",year:2018}],
+Fighting:[{title:"Mortal Kombat X",year:2015},{title:"Street Fighter V",year:2016}],
+"Role-Playing":[{title:"Persona 5",year:2016},{title:"Bloodborne",year:2015},{title:"Nier: Automata",year:2017}],
+Shooter:[{title:"Destiny",year:2014}]
+},
+"PlayStation 5":{
+Adventure:[{title:"God of War Ragnarök",year:2022}],
+Fighting:[{title:"Street Fighter 6",year:2023}]
+},
+"PlayStation Portable":{
+"Visual Novel":[{title:"Danganronpa: Trigger Happy Havoc",year:2010}]
+},
+"Sega Mega Drive/Genesis":{
+Fighting:[{title:"Mortal Kombat",year:1992}],
+Platform:[{title:"Sonic the Hedgehog",year:1991},{title:"Sonic the Hedgehog 2",year:1992}],
+Puzzle:[{title:"Puyo Puyo",year:1991}],
+Racing:[{title:"Out Run",year:1986}]
+},
+"Super Nintendo Entertainment System":{
+Fighting:[{title:"Street Fighter II",year:1991},{title:"Killer Instinct",year:1994}],
+Platform:[{title:"Super Mario World",year:1990},{title:"Donkey Kong Country",year:1994},{title:"Mega Man X",year:1993}],
+Puzzle:[{title:"Tetris Attack",year:1996}],
+Racing:[{title:"Super Mario Kart",year:1992}],
+"Role-Playing":[{title:"Chrono Trigger",year:1995},{title:"Final Fantasy VI",year:1994},{title:"EarthBound",year:1994}],
+Sport:[{title:"NBA Jam",year:1993}],
+Tactical:[{title:"Front Mission",year:1995},{title:"Tactics Ogre: Let Us Cling Together",year:1995}]
+},
+"Wii":{
+Fighting:[{title:"Super Smash Bros. Brawl",year:2008}],
+Platform:[{title:"Super Mario Galaxy",year:2007}],
+Sport:[{title:"Wii Sports",year:2006}]
+},
+"Xbox":{
+"Hack and Slash":[{title:"Ninja Gaiden",year:2004}],
+Racing:[{title:"Forza Motorsport",year:2005}],
+"Role-Playing":[{title:"Fable",year:2004}],
+Shooter:[{title:"Halo: Combat Evolved",year:2001}]
+},
+"Xbox 360":{
 Arcade:[{title:"Geometry Wars: Retro Evolved",year:2005}],
 Indie:[{title:"Braid",year:2008}],
-'Point-and-Click':[],
-Music:[{title:"Guitar Hero",year:2005},{title:"Rock Band",year:2007}],
-'Real Time Strategy':[{title:"Company of Heroes",year:2006}],
-Simulator:[{title:"The Sims",year:2000}],
-'Turn-Based Strategy':[{title:"Civilization III",year:2001}],
-Tactical:[{title:"Advance Wars",year:2001}],
-'Hack and Slash':[{title:"Diablo II",year:2000},{title:"God of War",year:2005}],
-'Quiz/Trivia':[],
-Pinball:[],
-'Visual Novel':[{title:"Phoenix Wright: Ace Attorney",year:2001}],
-'Card & Board Game':[],
-MOBA:[{title:"Defense of the Ancients",year:2003}]
+Music:[{title:"Rock Band",year:2007}],
+"Role-Playing":[{title:"The Elder Scrolls IV: Oblivion",year:2006},{title:"Mass Effect",year:2007},{title:"Fallout 3",year:2008}],
+Shooter:[{title:"Call of Duty 4: Modern Warfare",year:2007},{title:"Halo 3",year:2007},{title:"BioShock",year:2007},{title:"Gears of War",year:2006},{title:"Call of Duty: Black Ops",year:2010}]
 },
-2010:{
-'Role-Playing':[{title:"The Witcher 3: Wild Hunt",year:2015},{title:"Dark Souls",year:2011}],
-Shooter:[{title:"Overwatch",year:2016},{title:"Fortnite",year:2017}],
-Platform:[{title:"Super Mario Odyssey",year:2017}],
-Adventure:[{title:"The Legend of Zelda: Breath of the Wild",year:2017}],
-Strategy:[{title:"Civilization VI",year:2016}],
-Racing:[{title:"Forza Horizon 4",year:2018}],
-Fighting:[{title:"Super Smash Bros. Ultimate",year:2018}],
-Indie:[{title:"Stardew Valley",year:2016},{title:"Hollow Knight",year:2017}],
-Puzzle:[{title:"Portal 2",year:2011}],
-Sport:[{title:"Rocket League",year:2015}],
-Arcade:[{title:"Geometry Dash",year:2013}],
-'Point-and-Click':[{title:"Kentucky Route Zero",year:2013}],
-Music:[{title:"Thumper",year:2016}],
-'Real Time Strategy':[{title:"StarCraft II",year:2010}],
-Simulator:[{title:"Euro Truck Simulator 2",year:2012},{title:"Cities: Skylines",year:2015}],
-'Turn-Based Strategy':[{title:"XCOM: Enemy Unknown",year:2012}],
-Tactical:[{title:"Into the Breach",year:2018}],
-'Hack and Slash':[{title:"DmC: Devil May Cry",year:2013}],
-'Quiz/Trivia':[],
-Pinball:[],
-'Visual Novel':[{title:"Doki Doki Literature Club",year:2017}],
-'Card & Board Game':[{title:"Hearthstone",year:2014}],
-MOBA:[{title:"Dota 2",year:2013},{title:"League of Legends",year:2009}]
+"Xbox One":{
+Platform:[{title:"Cuphead",year:2017}],
+Racing:[{title:"Forza Horizon 4",year:2018},{title:"Forza Horizon 3",year:2016}]
 },
-2020:{
-'Role-Playing':[{title:"Baldur's Gate 3",year:2023}],
-Platform:[{title:"Super Mario Bros. Wonder",year:2023}],
-Adventure:[{title:"Elden Ring",year:2022}],
-Puzzle:[],
-Shooter:[],
-Fighting:[],
-Strategy:[],
-Racing:[],
-Sport:[],
-Arcade:[],
-Indie:[],
-'Point-and-Click':[],
-Music:[],
-'Real Time Strategy':[],
-Simulator:[{title:"Microsoft Flight Simulator",year:2020}],
-'Turn-Based Strategy':[],
-Tactical:[],
-'Hack and Slash':[],
-'Quiz/Trivia':[],
-Pinball:[],
-'Visual Novel':[],
-'Card & Board Game':[],
-MOBA:[]
+"Xbox Series X|S":{
+Racing:[{title:"Forza Horizon 5",year:2021}]
 }
 };
-
-// Games as a medium really only starts in the early 1970s (Pong, 1972),
-// and the earliest ~15-20 years have far fewer well-known, still-played
-// titles than any decade from the 1990s on — so, same reasoning as
-// Books' pre-1980 buckets, the earliest era is one wide bucket rather
-// than being split into individual sparse decades.
-const DECADE_DEFS = [
-  { key: '1970_1980s', label: '1970s-1980s', startYear: 1970, endYear: 1989 },
-  { key: '1990', label: '1990s', startYear: 1990, endYear: 1999 },
-  { key: '2000', label: '2000s', startYear: 2000, endYear: 2009 },
-  { key: '2010', label: '2010s', startYear: 2010, endYear: 2019 },
-  { key: '2020', label: '2020s', startYear: 2020, endYear: 2029 }
-];
-const DECADE_DEF_BY_KEY = Object.fromEntries(DECADE_DEFS.map(d => [d.key, d]));
-const DECADES = DECADE_DEFS.map(d => d.key);
-const GENRES = Object.keys(GAME_DB[DECADES[0]]).sort();
-
-function decadeLabel(key){
-  const def = DECADE_DEF_BY_KEY[key];
-  return def ? def.label : String(key);
-}
-function decadeStartYear(key){
-  const def = DECADE_DEF_BY_KEY[key];
-  return def ? def.startYear : Number(key);
-}
-function decadeEndYear(key){
-  const def = DECADE_DEF_BY_KEY[key];
-  return def ? def.endYear : Number(key) + 9;
-}
-// IGDB's first_release_date is a Unix timestamp in seconds, not a plain
-// year — confirmed from a live response. These convert a decade
-// bucket's year bounds into the timestamp range an Apicalypse `where`
-// clause needs.
-function decadeStartTimestamp(key){
-  return Math.floor(Date.UTC(decadeStartYear(key), 0, 1) / 1000);
-}
-function decadeEndTimestamp(key){
-  return Math.floor(Date.UTC(decadeEndYear(key), 11, 31, 23, 59, 59) / 1000);
-}
-// Used by confirmPick's fallback when a game is picked outside the spin
-// flow — maps a raw release year back to whichever bucket it actually
-// falls in.
-function yearToDecadeKey(year){
-  const def = DECADE_DEFS.find(d => year >= d.startYear && year <= d.endYear);
-  return def ? def.key : null;
-}
 
 // All 23 genres IGDB actually returns (confirmed live against the real
 // /genres endpoint, not assumed from docs) — every one is a reasonable
@@ -1082,7 +1064,29 @@ const IGDB_PLATFORMS = {
   'Xbox Series X|S': 169,
   'Xbox One': 49,
   'Nintendo Switch': 130,
-  'Android': 34
+  'Android': 34,
+  // Historical platforms — no longer sold new, but a lot of well-known
+  // games only ever released on these. Confirmed live against the real
+  // /platforms endpoint, not assumed — two of these (GameCube, PSP) use
+  // IGDB's actual longer name rather than the common short one, which
+  // matters: a mismatched name here silently fails to match any game
+  // data, the same trap 'PC' fell into before it was fixed.
+  'Nintendo Entertainment System': 18,
+  'Super Nintendo Entertainment System': 19,
+  'Sega Mega Drive/Genesis': 29,
+  'Nintendo 64': 4,
+  'Nintendo GameCube': 21,
+  'Wii': 5,
+  'PlayStation': 7,
+  'PlayStation 2': 8,
+  'PlayStation 3': 9,
+  'Xbox': 11,
+  'Xbox 360': 12,
+  'Game Boy': 33,
+  'Game Boy Advance': 24,
+  'Nintendo DS': 20,
+  'Nintendo 3DS': 37,
+  'PlayStation Portable': 38
 };
 
 // ESRB is organization id 1 within IGDB's age_ratings system — confirmed
@@ -1099,15 +1103,26 @@ const ESRB_RATINGS = {
   7: 'AO'    // Adults Only
 };
 
-function comboKey(decade, genre){ return `${decade}|${genre}`; }
+// Sourced directly from IGDB_GENRES/IGDB_PLATFORMS rather than derived from
+// GAME_DB's own keys — GAME_DB is a curated starter list that will never
+// populate every genre for every platform, and deriving the toggle-able
+// set from it caused a real bug once already (11 genres were silently
+// unselectable because GAME_DB hadn't populated them yet). Sourcing from
+// the confirmed IGDB constants means the toggles always reflect everything
+// live discovery actually supports, independent of the built-in list's
+// completeness.
+const GENRES = Object.keys(IGDB_GENRES).sort();
+const PLATFORM_KEYS = Object.keys(IGDB_PLATFORMS).sort();
 
-// Returns the built-in list for one decade/genre with the user's own edits
+function comboKey(platform, genre){ return `${platform}|${genre}`; }
+
+// Returns the built-in list for one platform/genre with the user's own edits
 // applied — anything they've removed hidden, anything they've added
 // appended. GAME_DB itself is never modified; this is the only place that
 // should be read from when the built-in list is actually used for a spin.
-function getEffectiveBookList(decade, genre){
-  const base = (GAME_DB[decade] && GAME_DB[decade][genre]) || [];
-  const key = comboKey(decade, genre);
+function getEffectiveBookList(platform, genre){
+  const base = (GAME_DB[platform] && GAME_DB[platform][genre]) || [];
+  const key = comboKey(platform, genre);
   const removed = new Set(customRemovals[key] || []);
   const kept = base.filter(m => !removed.has(`${m.title}|${m.year}`));
   const additions = customAdditions[key] || [];
@@ -1242,7 +1257,6 @@ const wmDetailsCache = new Map(); // bigBookId -> {posterUrl, genres, descriptio
 const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
 const wmRatingsCache = new Map(); // bigBookId -> {title, year, genres, posterUrl, description, userRating, platforms, esrbRating, discoveredAt, enrichedAt} — used for the whole grid (session only)
 const wmSearchCache = new Map(); // "title|year" -> bigBookId (or null for a confirmed no-match), used to enrich the built-in list
-let enabledDecades = DECADES.slice();
 let enabledGenres = GENRES.slice();
 let enabledPlatforms = Object.keys(IGDB_PLATFORMS);
 
@@ -1290,8 +1304,8 @@ const DEFAULT_EXPLICIT_KEYWORDS = [
 ];
 let customExplicitKeywords = []; // user-added, on top of the built-in list above
 let blockedBooks = []; // {title, year|null}
-let customAdditions = {}; // "decade|genre" -> [{title, year}] — user-added built-in-list entries
-let customRemovals = {}; // "decade|genre" -> ["title|year", ...] — built-in entries the user has hidden
+let customAdditions = {}; // "platform|genre" -> [{title, year}] — user-added built-in-list entries
+let customRemovals = {}; // "platform|genre" -> ["title|year", ...] — built-in entries the user has hidden
 let maxResults = MAX_RESULTS_DEFAULT;
 
 const $ = (id) => document.getElementById(id);
@@ -1429,7 +1443,6 @@ const SYNCED_KEY_DEFAULTS = {
   blocked_books: () => [],
   custom_book_additions: () => ({}),
   custom_book_removals: () => ({}),
-  enabled_decades: () => DECADES.slice(),
   enabled_genres: () => GENRES.slice(),
   enabled_platforms: () => Object.keys(IGDB_PLATFORMS),
   min_rating: () => 0,
@@ -1576,7 +1589,6 @@ async function savePicks(){ await saveJSON('book_picks', picks); }
 async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
 async function saveMinRating(){ await saveJSON('min_rating', minRating); }
 async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
-async function saveEnabledDecades(){ await saveJSON('enabled_decades', enabledDecades); }
 async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
 async function saveEnabledPlatforms(){ await saveJSON('enabled_platforms', enabledPlatforms); }
 
@@ -1649,7 +1661,6 @@ async function init(){
   dataSourcePref = await loadJSON('data_source_pref', 'auto');
   minRating = await loadJSON('min_rating', 0);
   maxRating = await loadJSON('max_rating_ceiling', 10);
-  enabledDecades = await loadJSON('enabled_decades', DECADES.slice());
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
   enabledPlatforms = await loadJSON('enabled_platforms', Object.keys(IGDB_PLATFORMS));
   // Migration: a genre added to the app after someone already saved their
@@ -1948,21 +1959,6 @@ function renderAdmin(){
   $('minRatingSelect').value = String(minRating);
   $('maxRatingSelect').value = String(maxRating);
 
-  $('decadeToggles').innerHTML = DECADES.map(d => `
-    <label class="toggle-chip ${enabledDecades.includes(d) ? '' : 'off'}">
-      <input type="checkbox" data-decade="${d}" ${enabledDecades.includes(d) ? 'checked' : ''}> ${decadeLabel(d)}
-    </label>
-  `).join('');
-  $('decadeToggles').querySelectorAll('input').forEach(cb => {
-    cb.addEventListener('change', async () => {
-      const d = cb.dataset.decade;
-      if (cb.checked) { if (!enabledDecades.includes(d)) enabledDecades.push(d); }
-      else { enabledDecades = enabledDecades.filter(x => x !== d); }
-      renderAdmin();
-      await saveEnabledDecades();
-    });
-  });
-
   $('genreToggles').innerHTML = GENRES.map(g => `
     <label class="toggle-chip ${enabledGenres.includes(g) ? '' : 'off'}">
       <input type="checkbox" data-genre="${escapeHtml(g)}" ${enabledGenres.includes(g) ? 'checked' : ''}> ${escapeHtml(g)}
@@ -2040,13 +2036,13 @@ function isBlocked(title, year){
 }
 
 function populateEditListDropdowns(){
-  const decadeSel = $('editListDecade');
-  if (decadeSel.options.length === 0){
-    DECADES.forEach(d => {
+  const platformSel = $('editListDecade');
+  if (platformSel.options.length === 0){
+    PLATFORM_KEYS.forEach(p => {
       const opt = document.createElement('option');
-      opt.value = String(d);
-      opt.textContent = decadeLabel(d);
-      decadeSel.appendChild(opt);
+      opt.value = p;
+      opt.textContent = p;
+      platformSel.appendChild(opt);
     });
   }
   const genreSel = $('editListGenre');
@@ -2061,11 +2057,11 @@ function populateEditListDropdowns(){
 }
 
 function renderEditList(){
-  const decade = $('editListDecade').value;
+  const platform = $('editListDecade').value;
   const genre = $('editListGenre').value;
-  const key = comboKey(decade, genre);
+  const key = comboKey(platform, genre);
   const removedSet = new Set(customRemovals[key] || []);
-  const baseList = (GAME_DB[decade] && GAME_DB[decade][genre]) || [];
+  const baseList = (GAME_DB[platform] && GAME_DB[platform][genre]) || [];
   const additions = customAdditions[key] || [];
 
   const rows = [];
@@ -2109,9 +2105,9 @@ async function addEditListBook(){
     $('editListError').style.display = 'block';
     return;
   }
-  const decade = $('editListDecade').value;
+  const platform = $('editListDecade').value;
   const genre = $('editListGenre').value;
-  const key = comboKey(decade, genre);
+  const key = comboKey(platform, genre);
   if (!customAdditions[key]) customAdditions[key] = [];
   customAdditions[key].push({ title, year });
   await saveCustomAdditions();
@@ -2125,10 +2121,10 @@ $('editListGenre').addEventListener('change', renderEditList);
 $('editListAddBtn').addEventListener('click', addEditListBook);
 $('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListBook(); });
 $('editListResetBtn').addEventListener('click', async () => {
-  const decade = $('editListDecade').value;
+  const platform = $('editListDecade').value;
   const genre = $('editListGenre').value;
-  const key = comboKey(decade, genre);
-  if (!confirm(`Reset ${decadeLabel(decade)} ${genre} back to the default built-in list? This removes anything you've added or removed for this combo.`)) return;
+  const key = comboKey(platform, genre);
+  if (!confirm(`Reset ${platform} ${genre} back to the default built-in list? This removes anything you've added or removed for this combo.`)) return;
   delete customAdditions[key];
   delete customRemovals[key];
   await saveCustomAdditions();
@@ -2139,8 +2135,6 @@ $('editListResetBtn').addEventListener('click', async () => {
 $('blockAddBtn').addEventListener('click', addBlockedBook);
 $('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedBook(); });
 
-$('decadesAllBtn').addEventListener('click', async () => { enabledDecades = DECADES.slice(); renderAdmin(); await saveEnabledDecades(); });
-$('decadesNoneBtn').addEventListener('click', async () => { enabledDecades = []; renderAdmin(); await saveEnabledDecades(); });
 $('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES.slice(); renderAdmin(); await saveEnabledGenres(); });
 $('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
 $('platformsAllBtn').addEventListener('click', async () => { enabledPlatforms = Object.keys(IGDB_PLATFORMS); renderAdmin(); await saveEnabledPlatforms(); });
@@ -2236,13 +2230,13 @@ $('maxResultsInput').addEventListener('change', async (e) => {
 });
 
 function populateCacheStatsDropdowns(){
-  const decadeSel = $('cacheStatsDecade');
-  if (decadeSel.options.length <= 1){
-    DECADES.forEach(d => {
+  const platformSel = $('cacheStatsDecade');
+  if (platformSel.options.length <= 1){
+    PLATFORM_KEYS.forEach(p => {
       const opt = document.createElement('option');
-      opt.value = String(d);
-      opt.textContent = decadeLabel(d);
-      decadeSel.appendChild(opt);
+      opt.value = p;
+      opt.textContent = p;
+      platformSel.appendChild(opt);
     });
   }
   const genreSel = $('cacheStatsGenre');
@@ -2257,23 +2251,23 @@ function populateCacheStatsDropdowns(){
 }
 
 function updateCacheStats(){
-  const decadeSel = $('cacheStatsDecade').value;
+  const platformSel = $('cacheStatsDecade').value;
   const genreSel = $('cacheStatsGenre').value;
   let count = 0;
-  let missingYearData = 0;
+  let missingPlatformData = 0;
   wmRatingsCache.forEach((entry) => {
-    if (decadeSel !== 'all'){
-      if (entry.year == null){ missingYearData++; return; }
-      if (yearToDecadeKey(entry.year) !== decadeSel) return;
+    if (platformSel !== 'all'){
+      if (!entry.platforms || !entry.platforms.length){ missingPlatformData++; return; }
+      if (!entry.platforms.includes(platformSel)) return;
     }
     if (genreSel !== 'all'){
       if (!entry.genres || !entry.genres.includes(genreSel)) return;
     }
     count++;
   });
-  let text = `${count} game${count === 1 ? '' : 's'} cached for ${decadeSel === 'all' ? 'all decades' : decadeLabel(decadeSel)} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
-  if (decadeSel !== 'all' && missingYearData){
-    text += ` (${missingYearData} cached entries from before this feature can't be counted by decade until re-fetched.)`;
+  let text = `${count} game${count === 1 ? '' : 's'} cached for ${platformSel === 'all' ? 'all platforms' : platformSel} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
+  if (platformSel !== 'all' && missingPlatformData){
+    text += ` (${missingPlatformData} cached entries from before this feature can't be counted by platform until re-fetched.)`;
   }
   $('cacheStatsResult').textContent = text;
 }
@@ -2348,10 +2342,10 @@ async function spin(){
   bbUnavailable = false;
   bbConsecutiveFailedCalls = 0;
 
-  const decadePool = DECADES.filter(d => enabledDecades.includes(d));
+  const platformPool = PLATFORM_KEYS.filter(p => enabledPlatforms.includes(p));
   const genrePool = GENRES.filter(g => enabledGenres.includes(g));
-  if (!decadePool.length || !genrePool.length){
-    $('spinError').textContent = 'Turn at least one decade and one genre back on in the Admin tab first.';
+  if (!platformPool.length || !genrePool.length){
+    $('spinError').textContent = 'Turn at least one platform and one genre back on in the Admin tab first.';
     $('spinError').style.display = 'block';
     return;
   }
@@ -2360,47 +2354,57 @@ async function spin(){
   $('resultsArea').style.display = 'none';
   $('tonightBanner').innerHTML = '';
 
-  const finalDecade = randomFrom(decadePool);
+  const finalPlatform = randomFrom(platformPool);
   const finalGenre = randomFrom(genrePool);
 
-  const decadeReel = $('decadeReel'), genreReel = $('genreReel');
-  decadeReel.classList.add('spinning'); genreReel.classList.add('spinning');
+  const platformReel = $('platformReel'), genreReel = $('genreReel');
+  platformReel.classList.add('spinning'); genreReel.classList.add('spinning');
+
+  // Platform names vary a lot in length ("Wii" vs "Super Nintendo
+  // Entertainment System") — the reel box has a fixed height for the
+  // sprocket-hole decoration either side of it, so a long name needs a
+  // smaller font rather than being allowed to grow the box.
+  function setPlatformReelText(text){
+    const el = $('platformValue');
+    el.textContent = text;
+    el.classList.toggle('long-text', text.length > 14);
+  }
 
   let ticks = 0;
   const maxTicks = 16;
   await new Promise((resolve) => {
     const timer = setInterval(() => {
       ticks++;
-      $('decadeValue').textContent = decadeLabel(randomFrom(decadePool));
+      setPlatformReelText(randomFrom(platformPool));
       $('genreValue').textContent = randomFrom(genrePool);
       if (ticks >= maxTicks){
         clearInterval(timer);
-        $('decadeValue').textContent = decadeLabel(finalDecade);
+        setPlatformReelText(finalPlatform);
         $('genreValue').textContent = finalGenre;
-        decadeReel.classList.remove('spinning'); genreReel.classList.remove('spinning');
+        platformReel.classList.remove('spinning'); genreReel.classList.remove('spinning');
         resolve();
       }
     }, 70);
   });
 
-  currentChoice = { decade: finalDecade, genre: finalGenre };
+  currentChoice = { platform: finalPlatform, genre: finalGenre };
 
   const useWm = dataSourcePref === 'auto' && !!currentUser && !!IGDB_GENRES[finalGenre];
 
   if (useWm){
     try{
-      lastFullPool = await buildBigBookPool(finalDecade, finalGenre);
+      lastFullPool = await buildBigBookPool(finalPlatform, finalGenre);
       currentSource = 'bigbook';
       setSpinStatus('');
     } catch(e){
-      lastFullPool = getEffectiveBookList(finalDecade, finalGenre);
+      lastFullPool = getEffectiveBookList(finalPlatform, finalGenre);
       currentSource = 'builtin';
       setSpinStatus('');
       $('spinError').textContent = 'IGDB request failed (' + e.message + ') — showing the built-in list instead.';
       $('spinError').style.display = 'block';
     }
   } else {
-    lastFullPool = getEffectiveBookList(finalDecade, finalGenre);
+    lastFullPool = getEffectiveBookList(finalPlatform, finalGenre);
     currentSource = 'builtin';
     try{
       await enrichBuiltinListWithBigBook(lastFullPool);
@@ -2440,10 +2444,6 @@ function computeFilteredSurvivors(pool){
     }
     if (!matchesMaxRating(m)){
       filteredOut.push({ book: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
-      return;
-    }
-    if (!matchesPlatform(m)){
-      filteredOut.push({ book: m, reason: `Not on any of your enabled platforms` });
       return;
     }
     survivors.push(m);
@@ -2775,17 +2775,10 @@ function matchesMaxRating(book){
   return book.userRating <= maxRating;
 }
 
-function matchesPlatform(book){
-  const allPlatformKeys = Object.keys(IGDB_PLATFORMS);
-  if (enabledPlatforms.length === allPlatformKeys.length) return true; // every platform enabled — no real constraint
-  if (!book.platforms || !book.platforms.length) return true; // no data (e.g. an unenriched built-in list entry) — don't punish it
-  return book.platforms.some(p => enabledPlatforms.includes(p));
-}
-
 // search-books' response nests each result as a single-element array —
 // {"books": [[{...}], [{...}]]} — confirmed directly from a real response,
 // not a guess. Flattened here so nothing downstream has to know about it.
-// Core discovery query — decade + genre, sorted by rating. Confirmed
+// Core discovery query — platform + genre, sorted by rating. Confirmed
 // live: a genre-filtered, date-ranged, rating-sorted query correctly
 // returns results (verified with a real RPG/2020 query before this was
 // relied on). IGDB gives one rating per game directly (0-100 scale,
@@ -2797,22 +2790,14 @@ function matchesPlatform(book){
 // applied yet) — flagged as a follow-up, not fixed here.
 // KNOWN GAP: IGDB's catalog includes fan-made ROM hacks alongside
 // official releases — not filtered out yet.
-async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonPrefix){
+async function fetchBigBookByRating(platform, genre, targetCount, seenIds, reasonPrefix){
   const genreId = IGDB_GENRES[genre];
-  if (genreId == null) return [];
-  const startTs = decadeStartTimestamp(decade);
-  const endTs = decadeEndTimestamp(decade);
+  const platformId = IGDB_PLATFORMS[platform];
+  if (genreId == null || platformId == null) return [];
   const ratingFloor = (minRating || 0) * 10; // app's 0-10 display scale -> IGDB's native 0-100 scale
   const ratingCeiling = (maxRating || 10) * 10;
-  const allPlatformKeys = Object.keys(IGDB_PLATFORMS);
-  // Only added as a real constraint when the user has actually deselected
-  // at least one platform — "any of every platform" is equivalent to no
-  // filter at all, so there's no reason to add the clause in that case.
-  const platformClause = (enabledPlatforms.length > 0 && enabledPlatforms.length < allPlatformKeys.length)
-    ? ` & platforms = (${enabledPlatforms.map(p => IGDB_PLATFORMS[p]).join(',')})`
-    : '';
   setSpinStatus(`${reasonPrefix} — searching…`);
-  const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization,url; where genres = (${genreId}) & first_release_date >= ${startTs} & first_release_date <= ${endTs} & rating != null & rating >= ${ratingFloor} & rating <= ${ratingCeiling}${platformClause}; sort rating desc; limit ${targetCount};`;
+  const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization,url; where genres = (${genreId}) & platforms = (${platformId}) & rating != null & rating >= ${ratingFloor} & rating <= ${ratingCeiling}; sort rating desc; limit ${targetCount};`;
   const data = await bbFetch('/games', query, 0, 6, reasonPrefix);
   const collected = [];
   data.forEach(g => {
@@ -2844,19 +2829,22 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
 // itself; what costs something is enrichment, which only ever runs on
 // titles we haven't already fetched+enriched this round.
 // Reconstructs book objects directly from the persistent cache for one
-// decade/genre combo — no API call involved. Genre matching uses each
+// platform/genre combo — no API call involved. Genre matching uses each
 // entry's real stored genre list (set when it was first cached), not
 // "which spin found it," so a title tagged both Horror and Thriller
-// correctly shows up for either.
-function getCachedBooksForCombo(decade, genre){
+// correctly shows up for either. Platform matching works the same way:
+// platforms.name comes back as part of the discovery response itself
+// (the query already filters by platform), so it's trustworthy as soon
+// as discoveredAt is fresh — it doesn't need to wait on enrichment the
+// way posterUrl/rating/description do.
+function getCachedBooksForCombo(platform, genre){
   const results = [];
   wmRatingsCache.forEach((entry, id) => {
-    // Can't trust this record's decade/genre placement at all once its
+    // Can't trust this record's platform/genre placement at all once its
     // discovery tier has gone stale — skip it entirely rather than risk
     // matching it into a combo it may no longer actually belong to.
     if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return;
-    if (entry.year == null) return;
-    if (yearToDecadeKey(entry.year) !== decade) return;
+    if (!entry.platforms || !entry.platforms.includes(platform)) return;
     if (!entry.genres || !entry.genres.includes(genre)) return;
     const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
     results.push({
@@ -2865,7 +2853,7 @@ function getCachedBooksForCombo(decade, genre){
       bigBookId: id,
       posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
       userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
-      platforms: enrichmentFresh ? (entry.platforms || null) : null,
+      platforms: entry.platforms,
       igdbUrl: enrichmentFresh ? (entry.igdbUrl || null) : null,
       esrbRating: enrichmentFresh ? (entry.esrbRating || null) : null,
       genresOverride: entry.genres,
@@ -2877,9 +2865,9 @@ function getCachedBooksForCombo(decade, genre){
 
 // The shared-database equivalent of getCachedBooksForCombo above — a
 // real Firestore query across every signed-in user's contributed book
-// records for this decade+genre, not just this device's own local cache.
-// Deliberately does NOT filter by rating server-side — everything
-// matching decade+genre gets downloaded in batches, and it's up to the
+// records for this platform+genre, not just this device's own local
+// cache. Deliberately does NOT filter by rating server-side — everything
+// matching genre gets downloaded in batches, and it's up to the
 // caller (buildBigBookPool) to run the normal filter pipeline on it and
 // decide what's actually worth keeping. This also means this function no
 // longer writes anything to local storage itself — only genuinely
@@ -2893,22 +2881,20 @@ function getCachedBooksForCombo(decade, genre){
 // successive batches, checking after each one, until either enough
 // survive or the data genuinely runs out.
 //
-// Needs a Firestore composite index on (genres array-contains, year
-// range, ordered by year) to actually work — until that index exists,
-// Firestore rejects the query outright. That failure is caught and
-// treated as "no shared data available this time," never as a hard
-// error — the spin still works using local cache and live discovery
-// either way. Fastest way to create the index: trigger this once while
-// signed in with a key connected, then check the browser console for a
-// Firestore error containing a direct link that auto-configures the
-// correct index.
-async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
+// Platform filtering happens client-side after the fetch, not as a
+// second Firestore where-clause — Firestore doesn't allow array-contains
+// on two different fields in one query, so this can only filter
+// server-side by genre and then check platforms locally on the batch
+// that comes back. Needs a Firestore index on (genres array-contains,
+// ordered by year) to actually work — until that index exists, Firestore
+// rejects the query outright. That failure is caught and treated as "no
+// shared data available this time," never as a hard error — the spin
+// still works using local cache and live discovery either way.
+async function getSharedBooksForComboBatch(platform, genre, batchSize, cursor){
   if (!currentUser) return { candidates: [], cursor: null, exhausted: true };
   try{
     let query = fbDb.collection('sharedGameRatings')
       .where('genres', 'array-contains', genre)
-      .where('year', '>=', decadeStartYear(decade))
-      .where('year', '<=', decadeEndYear(decade))
       .orderBy('year')
       .limit(batchSize);
     if (cursor) query = query.startAfter(cursor);
@@ -2917,7 +2903,8 @@ async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
     const candidates = [];
     snap.forEach(doc => {
       const entry = doc.data();
-      if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return; // can't trust this record's decade/genre placement once stale
+      if (!isFresh(entry.discoveredAt, WM_DISCOVERY_STALE_MS)) return; // can't trust this record's platform/genre placement once stale
+      if (!entry.platforms || !entry.platforms.includes(platform)) return;
       const id = Number(doc.id) || doc.id;
       const enrichmentFresh = isFresh(entry.enrichedAt, WM_ENRICHMENT_STALE_MS);
       candidates.push({
@@ -2928,7 +2915,7 @@ async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
           bigBookId: id,
           posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
           userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
-          platforms: enrichmentFresh ? (entry.platforms || null) : null,
+          platforms: entry.platforms,
           igdbUrl: enrichmentFresh ? (entry.igdbUrl || null) : null,
           esrbRating: enrichmentFresh ? (entry.esrbRating || null) : null,
           genresOverride: entry.genres,
@@ -2942,12 +2929,12 @@ async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
       exhausted: snap.docs.length < batchSize // fewer than requested means there's nothing left to page through
     };
   } catch(e){
-    console.warn('Shared discovery query failed (likely missing Firestore index — create one on sharedGameRatings for genres array-contains + year range, ordered by year) — continuing with local cache and live discovery only', e.message);
+    console.warn('Shared discovery query failed (likely missing Firestore index — create one on sharedGameRatings for genres array-contains, ordered by year) — continuing with local cache and live discovery only', e.message);
     return { candidates: [], cursor: null, exhausted: true };
   }
 }
 
-async function buildBigBookPool(decade, genre){
+async function buildBigBookPool(platform, genre){
   // Full pass through the local cache FIRST — zero API calls — before ever
   // reaching for IGDB. With a well-warmed cache this can fully
   // satisfy a spin on its own.
@@ -2957,7 +2944,7 @@ async function buildBigBookPool(decade, genre){
   const sharedRecordsById = new Map(); // bigBookId -> raw shared record, kept only long enough to decide what's worth committing locally after filtering
 
   if (true){
-    getCachedBooksForCombo(decade, genre).forEach(m => {
+    getCachedBooksForCombo(platform, genre).forEach(m => {
       pool.push(m);
       seenIds.add(m.bigBookId);
     });
@@ -2965,7 +2952,7 @@ async function buildBigBookPool(decade, genre){
     if (currentUser){
       setSpinStatus('Checking shared database…');
       // Genuinely exhaustive — keeps pulling batches until the shared data
-      // for this decade+genre actually runs out (or a generous hard cap
+      // for this platform+genre actually runs out (or a generous hard cap
       // is hit), rather than stopping once "enough" survivors are found.
       // Since the whole accumulated pool gets sorted and trimmed to the
       // top maxResults only once, at the very end, this naturally means a
@@ -2981,7 +2968,7 @@ async function buildBigBookPool(decade, genre){
       let sharedBatchesUsed = 0;
       const sharedScanStart = Date.now();
       for (let batchNum = 0; batchNum < maxSharedBatches; batchNum++){
-        const { candidates, cursor, exhausted } = await getSharedBooksForComboBatch(decade, genre, sharedBatchSize, sharedCursor);
+        const { candidates, cursor, exhausted } = await getSharedBooksForComboBatch(platform, genre, sharedBatchSize, sharedCursor);
         sharedBatchesUsed++;
         candidates.forEach(c => {
           if (!seenIds.has(c.pool.bigBookId)){
@@ -3043,7 +3030,7 @@ async function buildBigBookPool(decade, genre){
   if (survivors.length < maxResults){
     const needed = maxResults - survivors.length;
     didLiveFetch = true;
-    const fresh = await fetchBigBookByRating(decade, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
+    const fresh = await fetchBigBookByRating(platform, genre, needed, seenIds, `Discovery — cache covered ${survivors.length}/${maxResults}`);
     fresh.forEach(m => seenIds.add(m.bigBookId));
     pool = pool.concat(fresh);
     await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)));
@@ -3062,7 +3049,7 @@ async function buildBigBookPool(decade, genre){
   if (didLiveFetch && pool.length < hardCap && allCached(pool)){
     const growBy = Math.min(hardCap, pool.length + 5) - pool.length;
     if (growBy > 0){
-      const fresh = await fetchBigBookByRating(decade, genre, growBy, seenIds, 'Free growth (fully cached so far)');
+      const fresh = await fetchBigBookByRating(platform, genre, growBy, seenIds, 'Free growth (fully cached so far)');
       if (fresh.length){
         fresh.forEach(m => seenIds.add(m.bigBookId));
         pool = pool.concat(fresh);
@@ -3145,7 +3132,7 @@ function ratingChipsHtml(book){
 // identical rather than maintaining two copies of the same template.
 // onClick decides what happens when an unpicked card is clicked (opens
 // the pick modal on the main grid; chains into a new similar-books
-// search on the Discover Books tab, which has no meaningful decade/genre
+// search on the Discover Books tab, which has no meaningful platform/genre
 // to record a pick under).
 function buildBookCard(book, index, onClick){
   const picked = isPicked(book.title, book.year);
@@ -3178,7 +3165,7 @@ function buildBookCard(book, index, onClick){
 }
 
 function renderResults(){
-  $('resultsTitle').textContent = `${decadeLabel(currentChoice.decade)} ${currentChoice.genre}`;
+  $('resultsTitle').textContent = `${currentChoice.platform} ${currentChoice.genre}`;
   $('resultsCount').textContent = `${currentBatch.length} game${currentBatch.length === 1 ? '' : 's'}`;
   $('resultsArea').style.display = 'block';
   updateSourceNote();
@@ -3360,12 +3347,11 @@ window.handleNativeBackPress = function(){
 };
 
 async function confirmPick(book, picker){
-  const yearDecadeKey = book.year ? yearToDecadeKey(book.year) : null;
-  const decade = currentChoice ? decadeLabel(currentChoice.decade) : (yearDecadeKey ? decadeLabel(yearDecadeKey) : 'Unknown');
+  const platform = currentChoice ? currentChoice.platform : ((book.platforms && book.platforms[0]) || 'Unknown');
   const genre = currentChoice ? currentChoice.genre : 'Found via search';
   picks.push({
     title: book.title, year: book.year,
-    decade: decade, genre: genre,
+    platform: platform, genre: genre,
     picker: picker, pickedAt: new Date().toISOString().slice(0, 10),
     bigBookId: book.bigBookId || null // lets the Discover Books tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
   });
@@ -3498,7 +3484,7 @@ function renderHistory(){
     <div class="history-item">
       <span class="h-name">${escapeHtml(p.title)} <span class="h-meta">(${p.year || '—'})</span></span>
       <span class="h-meta" style="display:flex; align-items:center; gap:10px;">
-        ${p.decade} · ${p.genre}${p.picker ? ' · picked by ' + escapeHtml(p.picker) : ''} · ${p.pickedAt}
+        ${p.platform} · ${p.genre}${p.picker ? ' · picked by ' + escapeHtml(p.picker) : ''} · ${p.pickedAt}
         <button class="btn-danger btn-icon" title="Remove this pick" data-remove-idx="${idx}">✕</button>
       </span>
     </div>
