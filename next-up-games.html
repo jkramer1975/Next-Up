@@ -627,7 +627,7 @@
           <button class="btn-danger" id="clearCacheBtn">Clear Cache</button>
         </div>
 
-        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many books are already cached for a decade/genre. Those spins feel faster since little or no live lookup is needed.</p>
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many games are already cached for a decade/genre. Those spins feel faster since little or no live lookup is needed.</p>
         <div class="row">
           <select id="cacheStatsDecade" style="max-width:140px;">
             <option value="all">All Decades</option>
@@ -705,10 +705,48 @@
       </div>
 
       <div class="card">
+        <h2>User Rating</h2>
+        <p class="desc">Only shows games within this rating range (0–10). Games with no rating data (including the built-in list, until enriched) are never excluded by this.</p>
+        <div class="row">
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Minimum</div>
+            <select id="minRatingSelect">
+              <option value="0">0.0+</option>
+              <option value="1">1.0+</option>
+              <option value="2">2.0+</option>
+              <option value="3">3.0+</option>
+              <option value="4">4.0+</option>
+              <option value="5">5.0+</option>
+              <option value="6">6.0+</option>
+              <option value="7">7.0+</option>
+              <option value="8">8.0+</option>
+              <option value="9">9.0+</option>
+            </select>
+          </div>
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Maximum</div>
+            <select id="maxRatingSelect">
+              <option value="1">Up to 1.0</option>
+              <option value="2">Up to 2.0</option>
+              <option value="3">Up to 3.0</option>
+              <option value="4">Up to 4.0</option>
+              <option value="5">Up to 5.0</option>
+              <option value="6">Up to 6.0</option>
+              <option value="7">Up to 7.0</option>
+              <option value="8">Up to 8.0</option>
+              <option value="9">Up to 9.0</option>
+              <option value="10">Up to 10.0</option>
+            </select>
+          </div>
+        </div>
+        <div class="hint" id="ratingRangeNote" style="display:none; margin-top:8px; color: var(--amber);"></div>
+      </div>
+
+      <div class="card">
         <h2>Explicit Content Filter</h2>
         <p class="desc">Best-effort — checks title and description against a keyword list, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
         <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
-          <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Books With Explicit Content
+          <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Games With Explicit Content
         </label>
         <div class="row">
           <input type="text" id="explicitKeywordInput" placeholder="Add a keyword or phrase">
@@ -727,7 +765,7 @@
           <button class="btn-primary" id="blockAddBtn">Block</button>
         </div>
         <div id="blockList" class="crew-list"></div>
-        <div class="hint" id="blockEmptyHint" style="display:none;">No blocked books.</div>
+        <div class="hint" id="blockEmptyHint" style="display:none;">No blocked games.</div>
       </div>
 
     </div>
@@ -794,7 +832,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — fixed a real, significant bug: this file was still using Books' localStorage prefix ('nbk_'), Firestore sync document name ('books'), window.storage keys, and pick-stats field name — meaning every local setting (picks, blocked games, decade/genre toggles, color theme) and the entire cloud sync path were shared with Books instead of scoped to Games. Also fixed leftover Books icons/text (tonight banner fallback icon and "Happy reading", modal fallback icon, "WATCHED" badge) found through live testing.
+const APP_VERSION = '0.4.0'; // MAJOR.MINOR.PATCH — game detail links now use IGDB's own confirmed url field (a real, curated page) instead of falling back to a Google search every time; falls back to search only for titles that haven't been enriched yet. Also fixed a significant, previously-undiscovered bug: sharedGameRatings was never added to firestore.rules at all, meaning every Firestore read/write for Games' shared cache has been silently rejected since this app was first built — the shared-cache architecture has never actually been able to work.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1072,6 +1110,8 @@ let currentChoice = null;
 let currentSource = 'builtin'; // 'builtin' | 'omdb' | 'tmdb'
 
 let dataSourcePref = 'auto'; // 'auto' | 'builtin'
+let minRating = 0;
+let maxRating = 10; // top of the 0-10 scale — "Any rating" was removed as a selectable option, matching Movies/TV/Books
 
 const WM_DISCOVERY_STALE_MS = 20 * 24 * 60 * 60 * 1000;
 const WM_ENRICHMENT_STALE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -1108,6 +1148,7 @@ function mergeFreshestTiers(local, shared){
     merged.description = shared.description;
     merged.userRating = shared.userRating;
     merged.platforms = shared.platforms;
+    merged.igdbUrl = shared.igdbUrl;
     merged.esrbRating = shared.esrbRating;
     merged.enrichedAt = shared.enrichedAt;
   }
@@ -1123,6 +1164,7 @@ function applyRecordToBook(book, record, tierFlags){
     if (record.description && !book.description) book.description = record.description;
     if (record.userRating != null && book.userRating == null) book.userRating = record.userRating;
     if (record.platforms && record.platforms.length) book.platforms = record.platforms;
+    if (record.igdbUrl) book.igdbUrl = record.igdbUrl;
     if (record.esrbRating) book.esrbRating = record.esrbRating;
   }
 }
@@ -1460,6 +1502,8 @@ function renderAuthUI(){
 
 async function savePicks(){ await saveJSON('book_picks', picks); }
 async function saveDataSourcePref(){ await saveJSON('data_source_pref', dataSourcePref); }
+async function saveMinRating(){ await saveJSON('min_rating', minRating); }
+async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
 async function saveEnabledDecades(){ await saveJSON('enabled_decades', enabledDecades); }
 async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
 
@@ -1530,6 +1574,8 @@ async function init(){
   picks = await loadJSON('book_picks', []);
   loadSharedCrew();
   dataSourcePref = await loadJSON('data_source_pref', 'auto');
+  minRating = await loadJSON('min_rating', 0);
+  maxRating = await loadJSON('max_rating_ceiling', 10);
   enabledDecades = await loadJSON('enabled_decades', DECADES.slice());
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
   // Migration: a genre added to the app after someone already saved their
@@ -1825,6 +1871,8 @@ function renderAdmin(){
   renderEditList();
 
   document.querySelectorAll('input[name=dataSource]').forEach(r => { r.checked = (r.value === dataSourcePref); });
+  $('minRatingSelect').value = String(minRating);
+  $('maxRatingSelect').value = String(maxRating);
 
   $('decadeToggles').innerHTML = DECADES.map(d => `
     <label class="toggle-chip ${enabledDecades.includes(d) ? '' : 'off'}">
@@ -2006,6 +2054,50 @@ $('decadesAllBtn').addEventListener('click', async () => { enabledDecades = DECA
 $('decadesNoneBtn').addEventListener('click', async () => { enabledDecades = []; renderAdmin(); await saveEnabledDecades(); });
 $('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES.slice(); renderAdmin(); await saveEnabledGenres(); });
 $('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
+
+function showRatingRangeNote(text){
+  const el = $('ratingRangeNote');
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(showRatingRangeNote._t);
+  showRatingRangeNote._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+const RATING_GAP = 1;
+function ratingOptionValues(selectId){
+  return Array.from($(selectId).options).map(o => Number(o.value)).sort((a, b) => a - b);
+}
+function smallestRatingAtLeast(value, selectId){
+  const opts = ratingOptionValues(selectId);
+  return opts.find(v => v >= value - 1e-9) ?? null;
+}
+function largestRatingAtMost(value, selectId){
+  const opts = ratingOptionValues(selectId);
+  let result = null;
+  for (const v of opts){ if (v <= value + 1e-9) result = v; else break; }
+  return result;
+}
+$('minRatingSelect').addEventListener('change', async (e) => {
+  minRating = Number(e.target.value);
+  if (maxRating !== 0 && (maxRating - minRating) < RATING_GAP - 1e-9){
+    const bumped = smallestRatingAtLeast(minRating + RATING_GAP, 'maxRatingSelect');
+    maxRating = bumped != null ? bumped : 0; // no room left above — remove the cap entirely
+    $('maxRatingSelect').value = String(maxRating);
+    await saveMaxRating();
+    showRatingRangeNote(`Maximum adjusted to keep at least a ${RATING_GAP}-point gap from the minimum.`);
+  }
+  await saveMinRating();
+});
+$('maxRatingSelect').addEventListener('change', async (e) => {
+  maxRating = Number(e.target.value);
+  if (maxRating !== 0 && minRating !== 0 && (maxRating - minRating) < RATING_GAP - 1e-9){
+    const lowered = largestRatingAtMost(maxRating - RATING_GAP, 'minRatingSelect');
+    minRating = lowered != null ? lowered : 0; // no room left below — remove the floor entirely
+    $('minRatingSelect').value = String(minRating);
+    await saveMinRating();
+    showRatingRangeNote(`Minimum adjusted to keep at least a ${RATING_GAP}-point gap from the maximum.`);
+  }
+  await saveMaxRating();
+});
 
 $('signInBtn').addEventListener('click', signInWithGoogle);
 $('signOutBtn').addEventListener('click', signOutOfGoogle);
@@ -2251,6 +2343,14 @@ function computeFilteredSurvivors(pool){
       filteredOut.push({ book: m, reason: 'Excluded by explicit content filter' });
       return;
     }
+    if (!matchesMinRating(m)){
+      filteredOut.push({ book: m, reason: `Rating ${m.userRating.toFixed(1)} below your ${minRating.toFixed(1)}+ minimum` });
+      return;
+    }
+    if (!matchesMaxRating(m)){
+      filteredOut.push({ book: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
+      return;
+    }
     survivors.push(m);
   });
 
@@ -2348,7 +2448,7 @@ function bookNeedsEnrichment(book){
 // here for the discovery-time enrichment path, same role
 // fetchBigBookDetails played for Books.
 async function fetchBigBookDetails(id, maxAttempts, reason){
-  const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization; where id = ${id};`;
+  const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization,url; where id = ${id};`;
   const data = await bbFetch('/games', query, 0, maxAttempts, reason);
   return (data && data[0]) || null;
 }
@@ -2414,6 +2514,7 @@ async function enrichOneBook(book, maxAttempts, forceRefresh){
       description: description,
       userRating: details.rating != null ? Math.round(details.rating * 10) / 10 : (book.userRating ?? null), // IGDB's 0-100 scale -> this app's 0-10 scale
       platforms: (details.platforms || []).map(p => p.name),
+      igdbUrl: details.url || (book.igdbUrl || null),
       esrbRating: esrb ? (ESRB_RATINGS[esrb.rating_category] || null) : (book.esrbRating || null),
       enrichedAt: now
     };
@@ -2567,6 +2668,18 @@ function matchesExplicitContentFilter(book){
   return !allKeywords.some(kw => kw && haystack.includes(kw.toLowerCase()));
 }
 
+function matchesMinRating(book){
+  if (!minRating) return true;
+  if (book.userRating == null) return true; // no data — don't punish it
+  return book.userRating >= minRating;
+}
+
+function matchesMaxRating(book){
+  if (!maxRating) return true;
+  if (book.userRating == null) return true; // no data — don't punish it
+  return book.userRating <= maxRating;
+}
+
 // search-books' response nests each result as a single-element array —
 // {"books": [[{...}], [{...}]]} — confirmed directly from a real response,
 // not a guess. Flattened here so nothing downstream has to know about it.
@@ -2587,9 +2700,11 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
   if (genreId == null) return [];
   const startTs = decadeStartTimestamp(decade);
   const endTs = decadeEndTimestamp(decade);
+  const ratingFloor = (minRating || 0) * 10; // app's 0-10 display scale -> IGDB's native 0-100 scale
+  const ratingCeiling = (maxRating || 10) * 10;
   setSpinStatus(`${reasonPrefix} — searching…`);
-  const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization; where genres = (${genreId}) & first_release_date >= ${startTs} & first_release_date <= ${endTs} & rating != null; sort rating desc; limit ${targetCount};`;
-  const data = await igdbFetch('games', query);
+  const query = `fields name,rating,genres.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization,url; where genres = (${genreId}) & first_release_date >= ${startTs} & first_release_date <= ${endTs} & rating != null & rating >= ${ratingFloor} & rating <= ${ratingCeiling}; sort rating desc; limit ${targetCount};`;
+  const data = await bbFetch('/games', query, 0, 6, reasonPrefix);
   const collected = [];
   data.forEach(g => {
     if (seenIds.has(g.id) || collected.some(c => c.bigBookId === g.id)) return;
@@ -2603,6 +2718,7 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
       genresOverride: (g.genres || []).map(x => x.name),
       platforms: (g.platforms || []).map(x => x.name),
       description: g.summary || null,
+      igdbUrl: g.url || null,
       esrbRating: (() => {
         const esrb = (g.age_ratings || []).find(r => r.organization === 1);
         return esrb ? (ESRB_RATINGS[esrb.rating_category] || null) : null;
@@ -2610,19 +2726,6 @@ async function fetchBigBookByRating(decade, genre, targetCount, seenIds, reasonP
     });
   });
   return collected;
-}
-
-async function igdbFetch(endpoint, apicalypseBody){
-  const res = await fetch(`${IGDB_PROXY_BASE}/${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: apicalypseBody
-  });
-  if (!res.ok){
-    const text = await res.text();
-    throw new Error(`IGDB request failed (${res.status}): ${text}`);
-  }
-  return res.json();
 }
 
 // Builds the pool for one spin. Always re-fetches from scratch with a
@@ -2654,6 +2757,7 @@ function getCachedBooksForCombo(decade, genre){
       posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
       userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
       platforms: enrichmentFresh ? (entry.platforms || null) : null,
+      igdbUrl: enrichmentFresh ? (entry.igdbUrl || null) : null,
       esrbRating: enrichmentFresh ? (entry.esrbRating || null) : null,
       genresOverride: entry.genres,
       description: enrichmentFresh ? (entry.description || null) : null
@@ -2716,6 +2820,7 @@ async function getSharedBooksForComboBatch(decade, genre, batchSize, cursor){
           posterUrl: enrichmentFresh ? (entry.posterUrl || null) : null,
           userRating: enrichmentFresh ? (entry.userRating ?? null) : null,
           platforms: enrichmentFresh ? (entry.platforms || null) : null,
+          igdbUrl: enrichmentFresh ? (entry.igdbUrl || null) : null,
           esrbRating: enrichmentFresh ? (entry.esrbRating || null) : null,
           genresOverride: entry.genres,
           description: enrichmentFresh ? (entry.description || null) : null
@@ -2881,10 +2986,11 @@ function bookGenres(book){
 }
 
 function bookDetailLink(book){
-  // IGDB may have its own linkable URL/slug field, but that hasn't been
-  // verified live yet — falling back to a general web search rather
-  // than guess at an unconfirmed field, same discipline as everything
-  // else built this session.
+  // IGDB's own url field, confirmed live — a real, curated game page,
+  // not a guess. Falls back to a general web search only for titles
+  // that haven't been enriched yet (e.g. an untouched built-in list
+  // entry), where no igdbUrl exists at all.
+  if (book.igdbUrl) return book.igdbUrl;
   return `https://www.google.com/search?q=${encodeURIComponent(book.title + ' video game')}`;
 }
 
@@ -2893,7 +2999,7 @@ function bookCoverUrl(book){
 }
 
 function bookLinkLabel(book){
-  return 'Search';
+  return book.igdbUrl ? 'IGDB' : 'Search';
 }
 
 function genreChipsHtml(book){
@@ -2907,7 +3013,7 @@ function bylineHtml(book){
   // here instead, since that's real, confirmed data and tells you
   // something genuinely useful about the game.
   if (!book.platforms || !book.platforms.length) return '';
-  return `on ${escapeHtml(book.platforms.slice(0, 3).join(', '))}${book.platforms.length > 3 ? ', +' + (book.platforms.length - 3) + ' more' : ''}`;
+  return `on ${escapeHtml(book.platforms.join(', '))}`;
 }
 
 function metaLineHtml(book){
