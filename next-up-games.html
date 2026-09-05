@@ -419,10 +419,16 @@
   .poster-card.disabled .p-title{ text-decoration: line-through; text-decoration-color: var(--velvet); }
   .rating-row{ min-height: 24px; margin-top: 6px; }
   .genre-row{ min-height: 22px; margin-bottom: 2px; }
+  .theme-row{ min-height: 22px; margin-bottom: 2px; }
   .genre-chips{ display:flex; flex-wrap:wrap; gap:4px; }
   .genre-chip{
     font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
     background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .theme-chip{
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
+    background: rgba(90,158,111,0.14); color: var(--green); border: 1px solid var(--green);
     padding: 2px 6px; border-radius: 4px;
   }
   .rating-chip{
@@ -430,11 +436,11 @@
     background: rgba(var(--amber-rgb),0.14); color: var(--amber); border: 1px solid var(--amber-dim);
     padding: 2px 6px; border-radius: 4px;
   }
-  .tmdb-link{
+  .detail-link{
     display:inline-block; font-family: var(--font-mono); font-size: 11px;
     color: var(--amber); text-decoration:none; border-bottom: 1px dotted var(--amber-dim);
   }
-  .tmdb-link:hover{ color: var(--cream); border-bottom-color: var(--cream); }
+  .detail-link:hover{ color: var(--cream); border-bottom-color: var(--cream); }
   .meta-footer{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:10px; }
   .watched-tag{
     position:absolute; top:8px; right:8px; z-index:2;
@@ -843,7 +849,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.10.1'; // MAJOR.MINOR.PATCH — the 0.10.0 release described adding a Themes filter and reordering Platforms to the top, but neither actually made it into the published file — only the version-comment text survived, none of the real code (IGDB_THEMES, enabledThemes, themeToggles, matchesTheme, the query wiring). Re-implemented all of it from scratch this time and — unlike last time — independently re-verified the actual published file afterward instead of trusting the working copy.
+const APP_VERSION = '0.10.3'; // MAJOR.MINOR.PATCH — themes are now actually displayed on each game (poster card and modal), in a distinct green-tinted chip style separate from genre chips. The data was already being fetched and stored on every game object since the Themes filter was added, just never rendered anywhere. Also fixed a leftover ".tmdb-link" CSS class name in this file (same misleading-name issue already fixed in Books — the class styles the game detail link, which has nothing to do with TMDB), renamed to ".detail-link".
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1062,12 +1068,11 @@ const IGDB_GENRES = {
 };
 
 // IGDB "themes" — a genuinely separate classification field from
-// genres, confirmed live against the real /themes endpoint. All 22 that
-// exist are included here rather than a curated subset, matching how
-// Genres itself doesn't pre-exclude anything and leaves content
-// concerns to the separate Explicit Content Filter instead of
-// duplicating that logic here. "Crafting" was checked and doesn't exist
-// as a theme (or turn up via search at all), so it isn't included.
+// genres, confirmed live against the real /themes endpoint. 21 of the
+// 22 that exist are included here; "Erotic" was deliberately excluded
+// rather than left in like everything else. "Crafting" was checked and
+// doesn't exist as a theme (or turn up via search at all), so it isn't
+// included either.
 const IGDB_THEMES = {
   '4X (explore, expand, exploit, and exterminate)': 41,
   'Action': 1,
@@ -1075,7 +1080,6 @@ const IGDB_THEMES = {
   'Comedy': 27,
   'Drama': 31,
   'Educational': 34,
-  'Erotic': 42,
   'Fantasy': 17,
   'Historical': 22,
   'Horror': 19,
@@ -3209,6 +3213,11 @@ function genreChipsHtml(game){
   return `<div class="genre-chips">${genres.map(g => `<span class="genre-chip">${escapeHtml(g)}</span>`).join('')}</div>`;
 }
 
+function themeChipsHtml(game){
+  if (!game.themes || !game.themes.length) return '';
+  return `<div class="genre-chips">${game.themes.map(t => `<span class="theme-chip">${escapeHtml(t)}</span>`).join('')}</div>`;
+}
+
 function bylineHtml(game){
   // Games don't have an "author" the way books do — showing platforms
   // here instead, since that's real, confirmed data and tells you
@@ -3248,13 +3257,14 @@ function buildGameCard(game, index, onClick){
       <div class="p-year">${game.year || '—'}</div>
       <div class="rating-row">${ratingChipsHtml(game)}</div>
       <div class="genre-row">${genreChipsHtml(game)}</div>
+      <div class="theme-row">${themeChipsHtml(game)}</div>
       <div class="meta-footer">
-        <a class="tmdb-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" title="View on ${gameLinkLabel(game)}">🔗 ${gameLinkLabel(game)}</a>
+        <a class="detail-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" title="View on ${gameLinkLabel(game)}">🔗 ${gameLinkLabel(game)}</a>
         <button class="block-card-btn" title="Block this game">⛔</button>
       </div>
     </div>
   `;
-  card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
+  card.querySelector('.detail-link').addEventListener('click', (e) => e.stopPropagation());
   card.querySelector('.block-card-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     blockGameFromGrid(game);
@@ -3316,6 +3326,7 @@ function openConfirm(game){
         <p id="modalMeta">${metaLineHtml(game)}</p>
         <div id="modalRatings">${ratingChipsHtml(game)}</div>
         <div id="modalGenres">${genreChipsHtml(game)}</div>
+        <div id="modalThemes">${themeChipsHtml(game)}</div>
         <p id="modalDescription" class="modal-description" style="${game.description ? '' : 'display:none;'}">${escapeHtml(game.description || '')}</p>
         ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showDetailsLookup ? 'Loading details…' : ''}</div>` : ''}
         <div class="row">
@@ -3390,6 +3401,8 @@ function appendModalExtras(extras, game){
   if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(game);
   const genresBox = document.getElementById('modalGenres');
   if (genresBox) genresBox.innerHTML = genreChipsHtml(game);
+  const themesBox = document.getElementById('modalThemes');
+  if (themesBox) themesBox.innerHTML = themeChipsHtml(game);
   const descBox = document.getElementById('modalDescription');
   if (descBox && game.description){
     descBox.textContent = game.description;
@@ -3416,7 +3429,7 @@ function appendModalExtras(extras, game){
 // gameDetailLink/gameLinkLabel, which decide the same thing for the
 // "Search" link shown before extras load.
 function detailLinkHtml(game){
-  return `<a class="tmdb-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(gameLinkLabel(game))} →</a>`;
+  return `<a class="detail-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(gameLinkLabel(game))} →</a>`;
 }
 
 
@@ -3430,6 +3443,8 @@ function backfillGridCard(game){
   if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(game);
   const genreRow = card.querySelector('.genre-row');
   if (genreRow) genreRow.innerHTML = genreChipsHtml(game);
+  const themeRow = card.querySelector('.theme-row');
+  if (themeRow) themeRow.innerHTML = themeChipsHtml(game);
 }
 
 function closeModal(){ $('modalRoot').innerHTML = ''; }
