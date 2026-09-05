@@ -547,8 +547,8 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn active" id="tabMainBtn">🎮 Next Up</button>
       <button class="tab-btn" id="tabSearchBtn">🔍 Game Search</button>
+      <button class="tab-btn active" id="tabMainBtn">🎮 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Video Game Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">🎮 Built-In Video Game List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
@@ -870,7 +870,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.11.0'; // MAJOR.MINOR.PATCH — added a new "Game Search" tab: direct title search against IGDB, three-tier cached (local, shared Firestore, live), using the same proven search "..." syntax already confirmed working elsewhere in this app. Deliberately scoped down from Books' equivalent — no "browse history"/"similar games" follow-on, just search and pick, per explicit request to keep this simple for now. Verified live end-to-end: search -> results grid (rating, genre, and theme chips all correctly populated) -> pick modal -> confirmed pick correctly recorded with a "Found via search" genre and the game's own platform, and blocking a search result correctly adds it to the blocked list. Found and fixed two unrelated real bugs while building this: three storage keys still literally said "openlibrary" (Books' actual API, leftover from the original book-to-game rename pass), renamed to "igdb_*"; and sharedGameRatings' Firestore rule was missing "themes" from its allowed-fields list, meaning shared-cache writes for any themed game have likely been silently rejected since the Themes feature shipped — added it, and added the new sharedGameSearches rule this feature needs.
+const APP_VERSION = '0.11.2'; // MAJOR.MINOR.PATCH — moved the Game Search tab button to the front of the row, ahead of Next Up.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2920,13 +2920,21 @@ async function enrichAndRenderGamesGrid(candidates, containerId, statusText){
     container.innerHTML = `<p class="hint">${statusText || 'No games found.'}</p>`;
     return;
   }
-  const games = candidates.map(toGridGame);
+  let games = candidates.map(toGridGame);
   container.innerHTML = '<p class="hint">Loading details…</p>';
   await mapWithConcurrency(games, 3, async (game) => {
     if (!game.gameId) return;
     try{ await enrichOneGame(game, 3); }
     catch(e){ /* best-effort — card still renders with whatever it already had */ }
   });
+  // Search results skip the main spin's rating/theme-preference/blocked
+  // filters on purpose — those are "what should a random spin show me"
+  // preferences, and a deliberate search for a specific title shouldn't
+  // be constrained by them. But the explicit content protections are a
+  // safety concern, not a preference, so both checks the main spin uses
+  // — the keyword filter and the silent Erotic theme exclusion — still
+  // apply here too, same as everywhere else in this app.
+  games = games.filter(g => matchesExplicitContentFilter(g) && !(filterExplicitContent && g.themes && g.themes.includes('Erotic')));
   // Sorted by rating descending, same as the main Next Up grid — ratings
   // only become known/accurate after enrichment above, so this has to
   // happen after that pass completes, not before. Unrated games sort to
@@ -2938,6 +2946,10 @@ async function enrichAndRenderGamesGrid(candidates, containerId, statusText){
     return b.userRating - a.userRating;
   });
   container.innerHTML = '';
+  if (!games.length){
+    container.innerHTML = `<p class="hint">${statusText || 'No games found.'}</p>`;
+    return;
+  }
   const grid = document.createElement('div');
   grid.className = 'grid';
   games.forEach((game, i) => {
