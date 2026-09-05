@@ -539,7 +539,7 @@
 
     <div class="marquee">
       <div class="sprockets"></div>
-      <h1>🎮 NEXT UP - GAMES</h1>
+      <h1>🎮 NEXT UP - VIDEO GAMES</h1>
       <div class="tagline">Spin for a random platform + genre, then pick from the list.</div>
       <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
@@ -548,8 +548,8 @@
 
     <div class="tabs">
       <button class="tab-btn active" id="tabMainBtn">🎮 Next Up</button>
-      <button class="tab-btn" id="tabFiltersBtn">🎯 Game Filters</button>
-      <button class="tab-btn" id="tabBuiltinBtn">🎮 Built-In Game List</button>
+      <button class="tab-btn" id="tabFiltersBtn">🎯 Video Game Filters</button>
+      <button class="tab-btn" id="tabBuiltinBtn">🎮 Built-In Video Game List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -682,7 +682,7 @@
 
     </div>
 
-    <!-- ===================== GAME FILTERS TAB ===================== -->
+    <!-- ===================== VIDEO GAME FILTERS TAB ===================== -->
     <div id="filtersTab" style="display:none;">
 
       <div class="card" id="rerunFiltersCard" style="display:none;">
@@ -787,7 +787,7 @@
 
     </div>
 
-    <!-- ===================== BUILT-IN GAME LIST TAB ===================== -->
+    <!-- ===================== BUILT-IN VIDEO GAME LIST TAB ===================== -->
     <div id="builtinTab" style="display:none;">
 
       <div class="card">
@@ -849,7 +849,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.10.4'; // MAJOR.MINOR.PATCH — the Explicit Content Filter now also excludes any game IGDB itself tags with the "Erotic" theme (real, structured data, checked independently of the Themes filter checkboxes, since Erotic was deliberately removed from that list in 0.10.2 and can no longer be toggled there). Per explicit preference, this exclusion is completely silent — these games never appear in the Filtered Out list, unlike every other exclusion reason. Gated on the same master toggle as the keyword-based filter, so turning that off allows these back too. Verified directly: a mocked Erotic-tagged game is excluded with the filter on (and the filtered-out count stays at zero), and correctly reappears with the filter off.
+const APP_VERSION = '0.10.5'; // MAJOR.MINOR.PATCH — renamed the app's identity labels from "Games" to "Video Games" throughout (H1 header, both tab button labels, HTML section comments) ahead of a planned future "Board Games" app, so the two don't collide once that exists. Generic in-app mentions of "games" were deliberately left alone (e.g. "Add or remove games from the built-in list") — only identity-defining labels changed, to avoid every sentence turning into "video game" redundantly.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
