@@ -761,7 +761,7 @@
 
       <div class="card">
         <h2>Explicit Content Filter</h2>
-        <p class="desc">Best-effort — checks title and description against a keyword list, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
+        <p class="desc">Also excludes any game IGDB itself tags with the "Erotic" theme — real, structured data, not a guess, so these never appear anywhere, including the Filtered Out list below. Beyond that, this is best-effort: a keyword match on title and description, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
         <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
           <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Games With Explicit Content
         </label>
@@ -849,7 +849,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.10.3'; // MAJOR.MINOR.PATCH — themes are now actually displayed on each game (poster card and modal), in a distinct green-tinted chip style separate from genre chips. The data was already being fetched and stored on every game object since the Themes filter was added, just never rendered anywhere. Also fixed a leftover ".tmdb-link" CSS class name in this file (same misleading-name issue already fixed in Books — the class styles the game detail link, which has nothing to do with TMDB), renamed to ".detail-link".
+const APP_VERSION = '0.10.4'; // MAJOR.MINOR.PATCH — the Explicit Content Filter now also excludes any game IGDB itself tags with the "Erotic" theme (real, structured data, checked independently of the Themes filter checkboxes, since Erotic was deliberately removed from that list in 0.10.2 and can no longer be toggled there). Per explicit preference, this exclusion is completely silent — these games never appear in the Filtered Out list, unlike every other exclusion reason. Gated on the same master toggle as the keyword-based filter, so turning that off allows these back too. Verified directly: a mocked Erotic-tagged game is excluded with the filter on (and the filtered-out count stays at zero), and correctly reappears with the filter off.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2514,6 +2514,14 @@ function computeFilteredSurvivors(pool){
   const survivors = [];
   const filteredOut = [];
   pool.forEach(m => {
+    // Deliberately silent — unlike every other exclusion reason below,
+    // this one never shows up in the Filtered Out list at all. IGDB's
+    // "Erotic" theme is real, structured data (confirmed live), not a
+    // text-match guess, so there's no ambiguity to explain to the user
+    // the way the keyword-based explicit filter sometimes has. Only
+    // applies when the Explicit Content Filter is on; turning that off
+    // turns this off too, same as the keyword-based check below.
+    if (filterExplicitContent && m.themes && m.themes.includes('Erotic')) return;
     if (isBlocked(m.title, m.year)){
       filteredOut.push({ game: m, reason: 'Blocked' });
       return;
