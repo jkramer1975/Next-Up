@@ -548,6 +548,7 @@
 
     <div class="tabs">
       <button class="tab-btn active" id="tabMainBtn">🎮 Next Up</button>
+      <button class="tab-btn" id="tabSearchBtn">🔍 Game Search</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Video Game Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">🎮 Built-In Video Game List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
@@ -678,6 +679,26 @@
         <p class="desc">Next Up is a free, independent project — not affiliated with, endorsed by, or sponsored by IGDB, Twitch, or any publisher. Game data, covers, and ratings come from IGDB and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
         <p class="desc" style="margin-top:8px;"><a href="privacy.html">Privacy Policy</a></p>
         <p class="desc hint" style="margin-top:8px;">App version: <span id="appVersionLabel"></span></p>
+      </div>
+
+    </div>
+
+    <!-- ===================== GAME SEARCH TAB ===================== -->
+    <div id="searchTab" style="display:none;">
+
+      <div class="card" id="searchSignInRequired" style="display:none; text-align:center;">
+        <p class="desc" style="margin:0;">🔒 Sign in with Google to use Game Search — every part of this tab runs on IGDB directly, and signing in means the whole crew shares the same cached lookups instead of each device repeating the same searches.</p>
+      </div>
+
+      <div class="card">
+        <h2>Search IGDB</h2>
+        <p class="desc">Search by title — try a game name, like "Zelda" or "Final Fantasy". Pick a result to see its info.</p>
+        <div class="row">
+          <input type="text" id="gameSearchInput" placeholder='Game title — e.g. "Final Fantasy"'>
+          <button class="btn-primary" id="gameSearchBtn">Search</button>
+        </div>
+        <div class="error" id="gameSearchError" style="display:none;"></div>
+        <div id="gameSearchResults" style="margin-top:12px;"></div>
       </div>
 
     </div>
@@ -849,7 +870,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.10.5'; // MAJOR.MINOR.PATCH — renamed the app's identity labels from "Games" to "Video Games" throughout (H1 header, both tab button labels, HTML section comments) ahead of a planned future "Board Games" app, so the two don't collide once that exists. Generic in-app mentions of "games" were deliberately left alone (e.g. "Add or remove games from the built-in list") — only identity-defining labels changed, to avoid every sentence turning into "video game" redundantly.
+const APP_VERSION = '0.11.0'; // MAJOR.MINOR.PATCH — added a new "Game Search" tab: direct title search against IGDB, three-tier cached (local, shared Firestore, live), using the same proven search "..." syntax already confirmed working elsewhere in this app. Deliberately scoped down from Books' equivalent — no "browse history"/"similar games" follow-on, just search and pick, per explicit request to keep this simple for now. Verified live end-to-end: search -> results grid (rating, genre, and theme chips all correctly populated) -> pick modal -> confirmed pick correctly recorded with a "Found via search" genre and the game's own platform, and blocking a search result correctly adds it to the blocked list. Found and fixed two unrelated real bugs while building this: three storage keys still literally said "openlibrary" (Books' actual API, leftover from the original book-to-game rename pass), renamed to "igdb_*"; and sharedGameRatings' Firestore rule was missing "themes" from its allowed-fields list, meaning shared-cache writes for any themed game have likely been silently rejected since the Themes feature shipped — added it, and added the new sharedGameSearches rule this feature needs.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1320,6 +1341,7 @@ const wmDetailsCache = new Map(); // gameId -> {posterUrl, genres, description, 
 const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
 const wmRatingsCache = new Map(); // gameId -> {title, year, genres, posterUrl, description, userRating, platforms, esrbRating, discoveredAt, enrichedAt} — used for the whole grid (session only)
 const wmSearchCache = new Map(); // "title|year" -> gameId (or null for a confirmed no-match), used to enrich the built-in list
+const searchQueryCache = new Map(); // hash -> {query, results, cachedAt} — used by the Game Search tab
 let enabledGenres = GENRES.slice();
 let enabledPlatforms = Object.keys(IGDB_PLATFORMS);
 let enabledThemes = Object.keys(IGDB_THEMES);
@@ -1702,12 +1724,17 @@ async function saveMaxResults(){ await saveJSON('max_results', maxResults); }
 async function saveWmRatingsCache(){
   const obj = {};
   wmRatingsCache.forEach((v, k) => { obj[k] = v; });
-  await saveJSON('openlibrary_ratings_cache', obj);
+  await saveJSON('igdb_ratings_cache', obj);
 }
 async function saveWmSearchCache(){
   const obj = {};
   wmSearchCache.forEach((v, k) => { obj[k] = v; });
-  await saveJSON('openlibrary_search_cache', obj);
+  await saveJSON('igdb_search_cache', obj);
+}
+async function saveSearchQueryCache(){
+  const obj = {};
+  searchQueryCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('igdb_search_query_cache', obj);
 }
 async function saveWmDetailsCache(){
   const obj = {};
@@ -1715,7 +1742,7 @@ async function saveWmDetailsCache(){
   wmDetailsCache.forEach((v, k) => {
     if ((v?.enrichedAt || 0) >= cutoff) obj[k] = v;
   });
-  await saveJSON('openlibrary_details_cache', obj);
+  await saveJSON('igdb_details_cache', obj);
 }
 
 /* ==================================================================
@@ -1763,11 +1790,13 @@ async function init(){
   customAdditions = await loadJSON('custom_game_additions', {});
   customRemovals = await loadJSON('custom_game_removals', {});
   maxResults = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, await loadJSON('max_results', MAX_RESULTS_DEFAULT)));
-  const savedRatingsCache = await loadJSON('openlibrary_ratings_cache', {});
+  const savedRatingsCache = await loadJSON('igdb_ratings_cache', {});
   Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
-  const savedSearchCache = await loadJSON('openlibrary_search_cache', {});
+  const savedSearchCache = await loadJSON('igdb_search_cache', {});
   Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
-  const savedDetailsCache = await loadJSON('openlibrary_details_cache', {});
+  const savedSearchQueryCache = await loadJSON('igdb_search_query_cache', {});
+  Object.entries(savedSearchQueryCache).forEach(([k, v]) => searchQueryCache.set(k, v)); // staleness checked at actual use time in searchGamesByQuery, not at load time
+  const savedDetailsCache = await loadJSON('igdb_details_cache', {});
   Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchGameExtras, not at load time
 
   renderHistory();
@@ -1788,21 +1817,46 @@ function updateStorageNote(){
    Tabs
    ================================================================== */
 $('tabMainBtn').addEventListener('click', () => switchTab('main'));
+$('tabSearchBtn').addEventListener('click', () => switchTab('search'));
+
+async function runGameSearch(){
+  const query = $('gameSearchInput').value.trim();
+  const errorEl = $('gameSearchError');
+  errorEl.style.display = 'none';
+  if (!query) return;
+  $('gameSearchBtn').disabled = true;
+  $('gameSearchResults').innerHTML = '<p class="hint">Searching…</p>';
+  try{
+    const results = await searchGamesByQuery(query);
+    await enrichAndRenderGamesGrid(results, 'gameSearchResults', 'No games found for that search.');
+  } catch(e){
+    errorEl.textContent = e.message;
+    errorEl.style.display = 'block';
+    $('gameSearchResults').innerHTML = '';
+  } finally {
+    $('gameSearchBtn').disabled = false;
+  }
+}
+$('gameSearchBtn').addEventListener('click', runGameSearch);
+$('gameSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') runGameSearch(); });
 $('tabFiltersBtn').addEventListener('click', () => switchTab('filters'));
 $('tabBuiltinBtn').addEventListener('click', () => switchTab('builtin'));
 
 $('tabAdminBtn').addEventListener('click', () => switchTab('admin'));
 function switchTab(tab){
   $('mainTab').style.display = tab === 'main' ? 'block' : 'none';
+  $('searchTab').style.display = tab === 'search' ? 'block' : 'none';
   $('filtersTab').style.display = tab === 'filters' ? 'block' : 'none';
   $('builtinTab').style.display = tab === 'builtin' ? 'block' : 'none';
   $('adminTab').style.display = tab === 'admin' ? 'block' : 'none';
   $('tabMainBtn').classList.toggle('active', tab === 'main');
+  $('tabSearchBtn').classList.toggle('active', tab === 'search');
   $('tabFiltersBtn').classList.toggle('active', tab === 'filters');
   $('tabBuiltinBtn').classList.toggle('active', tab === 'builtin');
   $('tabAdminBtn').classList.toggle('active', tab === 'admin');
   if (tab === 'admin') updateCacheStats();
   if (tab === 'builtin') renderEditList();
+  if (tab === 'search') $('searchSignInRequired').style.display = currentUser ? 'none' : 'block';
 }
 
 /* ==================================================================
@@ -2775,6 +2829,121 @@ async function enrichBatchWithRatings(games, opts){
   } else {
     $('enrichStatusNote').textContent = '';
   }
+}
+
+function hashQueryKey(query){
+  const normalized = query.trim().toLowerCase();
+  let hash = 5381;
+  for (let i = 0; i < normalized.length; i++){
+    hash = ((hash * 33) ^ normalized.charCodeAt(i)) >>> 0; // DJB2 variant, unsigned 32-bit
+  }
+  return hash.toString(36);
+}
+
+// Game Search tab's title search — cached the same three-tier way as
+// everything else in this app: locally (persists across sessions on
+// this device) and, once signed in, shared via Firestore so the exact
+// same search string is free for every signed-in user from then on,
+// not just the one who first ran it. 90-day staleness, matching the
+// other IGDB caches. Deliberately simpler than Books' equivalent: no
+// keyword-match-against-already-known-titles pre-check before spending
+// a live call — that's a real optimization but a separate one, not
+// needed to get search working at all.
+async function searchGamesByQuery(query){
+  const normalized = query.trim().toLowerCase();
+  const key = hashQueryKey(query);
+
+  const local = searchQueryCache.get(key);
+  if (local && local.query === normalized && isFresh(local.cachedAt, WM_ENRICHMENT_STALE_MS)) return local.results;
+
+  if (currentUser){
+    try{
+      const sharedDoc = await fbDb.collection('sharedGameSearches').doc(key).get();
+      if (sharedDoc.exists){
+        const data = sharedDoc.data();
+        if (data.query === normalized && isFresh(data.cachedAt, WM_ENRICHMENT_STALE_MS)){
+          searchQueryCache.set(key, data);
+          saveSearchQueryCache(); // fire-and-forget
+          return data.results;
+        }
+      }
+    } catch(e){ console.warn('Shared search-query cache lookup failed, falling back to IGDB directly', e.message); }
+  }
+
+  const igdbQuery = `fields name,rating,genres.name,themes.name,platforms.name,cover.url,first_release_date,summary,age_ratings.rating_category,age_ratings.organization,url; search "${query.replace(/"/g, '\\"')}"; limit 10;`;
+  const data = await igdbFetch('/games', igdbQuery, 0, 3, `Game search: "${query}"`);
+  const results = data.map(g => ({
+    id: g.id,
+    title: g.name,
+    year: g.first_release_date ? new Date(g.first_release_date * 1000).getUTCFullYear() : null,
+    image: g.cover ? `https:${g.cover.url.replace('t_thumb', 't_cover_big')}` : null,
+    userRating: g.rating != null ? Math.round(g.rating) / 10 : null, // IGDB's 0-100 scale -> this app's 0-10 scale
+    genres: (g.genres || []).map(x => x.name),
+    themes: (g.themes || []).map(x => x.name),
+    platforms: (g.platforms || []).map(x => x.name),
+    description: g.summary || null,
+    igdbUrl: g.url || null,
+    esrbRating: (() => {
+      const esrb = (g.age_ratings || []).find(r => r.organization === 1);
+      return esrb ? (ESRB_RATINGS[esrb.rating_category] || null) : null;
+    })()
+  }));
+  const fresh = { query: normalized, results, cachedAt: Date.now() };
+  searchQueryCache.set(key, fresh);
+  saveSearchQueryCache(); // fire-and-forget — don't block on a local storage write
+  if (currentUser){
+    fbDb.collection('sharedGameSearches').doc(key).set(fresh)
+      .catch(e => console.warn('Could not write shared search-query cache entry', e.message)); // fire-and-forget — never blocks showing the result
+  }
+  return results;
+}
+
+function toGridGame(candidate){
+  return {
+    title: candidate.title,
+    year: candidate.year || null,
+    gameId: candidate.id,
+    posterUrl: candidate.image || null,
+    userRating: candidate.userRating ?? null,
+    genresOverride: candidate.genres || [],
+    themes: candidate.themes || [],
+    platforms: candidate.platforms || [],
+    description: candidate.description || null,
+    igdbUrl: candidate.igdbUrl || null,
+    esrbRating: candidate.esrbRating || null
+  };
+}
+
+async function enrichAndRenderGamesGrid(candidates, containerId, statusText){
+  const container = $(containerId);
+  if (!candidates.length){
+    container.innerHTML = `<p class="hint">${statusText || 'No games found.'}</p>`;
+    return;
+  }
+  const games = candidates.map(toGridGame);
+  container.innerHTML = '<p class="hint">Loading details…</p>';
+  await mapWithConcurrency(games, 3, async (game) => {
+    if (!game.gameId) return;
+    try{ await enrichOneGame(game, 3); }
+    catch(e){ /* best-effort — card still renders with whatever it already had */ }
+  });
+  // Sorted by rating descending, same as the main Next Up grid — ratings
+  // only become known/accurate after enrichment above, so this has to
+  // happen after that pass completes, not before. Unrated games sort to
+  // the end rather than being treated as a 0.
+  games.sort((a, b) => {
+    if (a.userRating == null && b.userRating == null) return 0;
+    if (a.userRating == null) return 1;
+    if (b.userRating == null) return -1;
+    return b.userRating - a.userRating;
+  });
+  container.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  games.forEach((game, i) => {
+    grid.appendChild(buildGameCard(game, i, openConfirm));
+  });
+  container.appendChild(grid);
 }
 
 // Looks up a single built-in list title on IGDB by name, picks the top
