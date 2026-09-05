@@ -258,7 +258,6 @@
             <div class="title">TV Shows</div>
             <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
           </div>
-          <div class="badge">Beta</div>
         </a>
 
         <a class="app-card" href="next-up-books.html">
@@ -267,16 +266,14 @@
             <div class="title">Books</div>
             <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
           </div>
-          <div class="badge">Beta</div>
         </a>
 
         <a class="app-card" href="next-up-games.html">
           <div class="icon">🎮</div>
           <div>
-            <div class="title">Games</div>
-            <div class="desc">Spin for a random decade + genre, then pick from the list.</div>
+            <div class="title">Video Games</div>
+            <div class="desc">Spin for a random platform + genre, then pick from the list.</div>
           </div>
-          <div class="badge">Beta</div>
         </a>
       </div>
 
@@ -307,7 +304,7 @@
     </div>
   </div>
 <script>
-const INDEX_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH, same scheme as the individual apps — MAJOR stays 0 until told otherwise; tracked independently from each app's own version, since this is a separate file. Added the Games app card. Also fixed a real, pre-existing gap found during a cross-app audit: the Pick Stats dropdown only ever had Movies/TV Shows — Books had never been added despite tracking its own stats this whole time. STAT_SECTIONS existed but was never actually wired up to the dropdown (which was hardcoded HTML); now the dropdown is generated from STAT_SECTIONS directly, so a future app only needs one array updated, not two places kept in sync by hand.
+const INDEX_VERSION = '0.2.2'; // MAJOR.MINOR.PATCH, same scheme as the individual apps — MAJOR stays 0 until told otherwise; tracked independently from each app's own version, since this is a separate file. Removed the "Beta" badge from TV Shows, Books, and Video Games — all four app cards now look consistent, no badges anywhere.
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
 function escapeHtml(s){
@@ -365,7 +362,7 @@ const STAT_SECTIONS = [
   { key: 'movies', label: 'Movies' },
   { key: 'tv', label: 'TV Shows' },
   { key: 'books', label: 'Books' },
-  { key: 'games', label: 'Games' }
+  { key: 'games', label: 'Video Games' }
 ];
 
 function populateStatsSectionOptions(){
