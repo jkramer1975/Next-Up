@@ -539,7 +539,7 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn" id="tabDiscoverBtn">🔍 Discover Books</button>
+      <button class="tab-btn" id="tabDiscoverBtn">🔍 Book Search</button>
       <button class="tab-btn active" id="tabMainBtn">📚 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Book Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">📚 Built-In Book List</button>
@@ -798,7 +798,7 @@
     <div id="discoverTab" style="display:none;">
 
       <div class="card" id="discoverSignInRequired" style="display:none; text-align:center;">
-        <p class="desc" style="margin:0;">🔒 Sign in with Google to use Discover Books — every part of this tab runs on Big Book API directly, and signing in means the whole crew shares the same cached lookups instead of each device repeating the same searches.</p>
+        <p class="desc" style="margin:0;">🔒 Sign in with Google to use Book Search — every part of this tab runs on Big Book API directly, and signing in means the whole crew shares the same cached lookups instead of each device repeating the same searches.</p>
       </div>
 
       <div class="card">
@@ -863,7 +863,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.5.1'; // MAJOR.MINOR.PATCH — cross-app naming audit (prompted by leftover "book" references found in Games, which was copied from this file): fixed a stale currentSource comment claiming values 'omdb'/'tmdb' when the real values are 'builtin'/'bigbook' (both this file and TV had the identical stale comment, tracing back to a shared ancestor version), and renamed the misleading '.tmdb-link' CSS class (used for the book detail link, which has nothing to do with TMDB) to '.detail-link'.
+const APP_VERSION = '0.5.2'; // MAJOR.MINOR.PATCH — renamed "Discover Books" to "Book Search" throughout (tab label plus every internal comment referencing it), for consistency and clarity.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1057,7 +1057,7 @@ function decadeEndYear(key){
   return def ? def.endYear : Number(key) + 9;
 }
 // Used by confirmPick's fallback when a book is picked outside the spin
-// flow (e.g. from Discover Books) — maps a raw publish year back to
+// flow (e.g. from Book Search) — maps a raw publish year back to
 // whichever bucket it actually falls in, so a 1925 book correctly
 // resolves to "1900s-1940s" rather than a literal (and non-existent)
 // "1920s" label.
@@ -2634,7 +2634,7 @@ function hashQueryKey(query){
   return hash.toString(36);
 }
 
-// Discover Books tab's title-or-topic search — cached the same
+// Book Search tab's title-or-topic search — cached the same
 // three-tier way as everything else in this app: locally (persists
 // across sessions on this device) and, once signed in, shared via
 // Firestore so the exact same search string is free for every
@@ -2647,7 +2647,7 @@ async function saveSearchQueryCache(){
   searchQueryCache.forEach((v, k) => { obj[k] = v; });
   await saveJSON('bigbook_search_query_cache', obj);
 }
-// User-facing title-or-topic search for the Discover Books tab —
+// User-facing title-or-topic search for the Book Search tab —
 // returns several candidates to choose from, unlike searchBigBookForBook
 // (used internally to enrich the built-in list), which just takes the
 // single top result since there's no user present there to disambiguate.
@@ -2655,7 +2655,7 @@ async function saveSearchQueryCache(){
 // own ontology (confirmed directly from their docs), so this already
 // handles both an exact title and a topic like "books about dragons" —
 // no separate keyword-search mechanism is needed.
-// Tries to answer a Discover Books search entirely from books this
+// Tries to answer a Book Search search entirely from books this
 // crew (or the wider signed-in user base) has already discovered and
 // enriched, before ever spending a live API call. Firestore's
 // array-contains-any only accepts up to 10 values, so at most the
@@ -3424,11 +3424,11 @@ function ratingChipsHtml(book){
 }
 
 // Builds a single .poster-card element — shared between the main
-// results grid and the Discover Books tab's grid, so both stay visually
+// results grid and the Book Search tab's grid, so both stay visually
 // identical rather than maintaining two copies of the same template.
 // onClick decides what happens when an unpicked card is clicked (opens
 // the pick modal on the main grid; chains into a new similar-books
-// search on the Discover Books tab, which has no meaningful decade/genre
+// search on the Book Search tab, which has no meaningful decade/genre
 // to record a pick under).
 function buildBookCard(book, index, onClick){
   const picked = isPicked(book.title, book.year);
@@ -3485,7 +3485,7 @@ async function blockBookFromGrid(book){
   // book just silently vanishing from the grid with no trace of what
   // happened to it.
   lastFilteredOut.push({ book, reason: 'Blocked' });
-  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. blocked from the Discover Books tab) — nothing to re-render
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. blocked from the Book Search tab) — nothing to re-render
   renderFilteredOut();
   renderBlockList();
 }
@@ -3527,7 +3527,7 @@ function openConfirm(book){
   if (canForceRefresh){
     // Full-size, clickable poster-cards read far better than the small
     // thumbnails that used to render inside this modal — so this now
-    // closes the modal and hands off to the Discover Books tab's own
+    // closes the modal and hands off to the Book Search tab's own
     // results grid instead of rendering anything in place here.
     $('similarBooksBtn').addEventListener('click', () => {
       closeModal();
@@ -3630,7 +3630,7 @@ function detailLinkHtml(book){
   return `<a class="detail-link" href="${bookDetailLink(book)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(bookLinkLabel(book))} →</a>`;
 }
 
-// Core flow for the Discover Books tab — given a book (from search results,
+// Core flow for the Book Search tab — given a book (from search results,
 // past picks, or chained from a similar-book result), fetches and
 // displays what's similar to it in the tab's results card.
 // Converts a search-result or similar-book candidate (id/title/image/
@@ -3653,7 +3653,7 @@ function toGridBook(candidate){
 }
 
 // Shared by both the search results and the similar-books results in
-// the Discover Books tab — looks up full details (cover, rating,
+// the Book Search tab — looks up full details (cover, rating,
 // description, authors, page count) for each candidate via the same
 // enrichment + cache path the rest of the app uses, then renders them
 // as the same poster-card grid the main Next Up page uses. Clicking a
@@ -3792,11 +3792,11 @@ async function confirmPick(book, picker){
     title: book.title, year: book.year,
     decade: decade, genre: genre,
     picker: picker, pickedAt: new Date().toISOString().slice(0, 10),
-    bigBookId: book.bigBookId || null // lets the Discover Books tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
+    bigBookId: book.bigBookId || null // lets the Book Search tab skip re-searching for this title later — older picks made before this existed will just re-search on demand instead
   });
   closeModal();
   showTonightBanner(book, picker);
-  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. picked from the Discover Books tab) — nothing to re-render
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session (e.g. picked from the Book Search tab) — nothing to re-render
   renderHistory();
   await savePicks();
   await recordPick(picker);
