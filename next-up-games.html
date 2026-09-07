@@ -590,8 +590,9 @@
         <div class="source-note" id="enrichStatusNote"></div>
       </div>
 
+      <div id="tonightBanner"></div>
+
       <div id="resultsArea" style="display:none;">
-        <div id="tonightBanner"></div>
         <div class="results-head">
           <h2 id="resultsTitle"></h2>
           <span class="count" id="resultsCount"></span>
@@ -870,7 +871,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.11.2'; // MAJOR.MINOR.PATCH — moved the Game Search tab button to the front of the row, ahead of Next Up.
+const APP_VERSION = '0.11.3'; // MAJOR.MINOR.PATCH — fixed a real, already-shipped display bug found while building TV Search and checking whether the same architecture had the same problem here too: the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens — meaning a pick made via Game Search (no prior spin) would silently populate the banner's content but never actually show it, even though the pick itself was recorded correctly. Moved the banner outside resultsArea so it displays regardless of how the pick happened.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
