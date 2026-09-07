@@ -917,7 +917,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — added a new "TV Search" tab: direct title search against Watchmode, three-tier cached (local, shared Firestore, live), same architecture as Games Search. Before building, verified live whether Watchmode's search results actually use 'tv_series' as the type value for TV shows — an existing comment in this file had flagged that value as an unverified guess. Confirmed correct (Breaking Bad, Stranger Things, The Office all consistently returned tagged 'tv_series'), and also discovered a third type, 'tv_movie' (made-for-TV films), deliberately left out of scope since this app's premise is ongoing shows, not one-off films. Refactored the inline card-building logic in renderResults into a reusable buildShowCard function so Search could use the same cards as the main grid, verified zero regression on the existing spin flow afterward. Found and fixed three real, separate bugs surfaced while building this: confirmPick had no null-safe fallback for currentChoice at all (unlike Games, which already did) and would have thrown the moment anyone picked from search; renderResults was called unconditionally in both confirmPick and blockShowFromGrid, same underlying issue; and openConfirm itself, plus showTonightBanner, both had unguarded currentChoice.genre access that also would have thrown. All fixed with the same "Found via search" fallback pattern Games already used. Also found and fixed a real, already-shipped display bug in both this file and Games: the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens — meaning a pick made via search (no prior spin) would silently populate the banner's content but never actually show it. Moved the banner outside resultsArea in both files so it displays regardless of how the pick happened.
+const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — added a new "TV Search" tab: direct title search against Watchmode, three-tier cached (local, shared Firestore, live), same architecture as Games Search. Before building, verified live whether Watchmode's search results actually use 'tv_series' as the type value for TV shows — an existing comment in this file had flagged that value as an unverified guess. Confirmed correct (Breaking Bad, Stranger Things, The Office all consistently returned tagged 'tv_series'), and also discovered a third type, 'tv_movie' (made-for-TV films), deliberately left out of scope since this app's premise is ongoing shows, not one-off films. Refactored the inline card-building logic in renderResults into a reusable buildShowCard function so Search could use the same cards as the main grid, verified zero regression on the existing spin flow afterward. Found and fixed three real, separate bugs surfaced while building this: confirmPick had no null-safe fallback for currentChoice at all (unlike Games, which already did) and would have thrown the moment anyone picked from search; renderResults was called unconditionally in both confirmPick and blockShowFromGrid, same underlying issue; and openConfirm itself, plus showTonightBanner, both had unguarded currentChoice.genre access that also would have thrown. All fixed with the same "Found via search" fallback pattern Games already used. Also found and fixed a real, already-shipped display bug in both this file and Games: the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens — meaning a pick made via search (no prior spin) would silently populate the banner's content but never actually show it. Moved the banner outside resultsArea in both files so it displays regardless of how the pick happened. // Also added endYear (confirmed live: null means still airing, a number is the year it ended — Simpsons and Breaking Bad both checked and correct) to the modal and Tonight's Pick banner, shown as a plain year range. Attempted a season count feature using Watchmode's /title/{id}/seasons/ endpoint too, confirmed live to exist and return real data — but a real, user-caught discrepancy (Simpsons showing 24 seasons from this endpoint against a real current count of 37) revealed my own verification of it had been flawed: the live test response got truncated by my own test script before I ever saw its true length, and the season counts used afterward in automated testing were fabricated mock data, not confirmed real ones. Removed entirely rather than ship something unverified as if it were reliable — endYear alone, which was properly verified with real data both times, is what's kept.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1186,6 +1186,7 @@ function mergeFreshestTiers(local, shared){
     merged.posterUrl = shared.posterUrl;
     merged.description = shared.description;
     merged.usRating = shared.usRating;
+    merged.endYear = shared.endYear;
     merged.enrichedAt = shared.enrichedAt;
   }
   if ((shared.languageAt || 0) > (local.languageAt || 0)){
@@ -1209,6 +1210,7 @@ function applyRecordToShow(show, record, tierFlags){
     if (record.posterUrl && !show.posterUrl) show.posterUrl = record.posterUrl;
     if (record.description && !show.description) show.description = record.description;
     if (record.usRating) show.usRating = record.usRating;
+    show.endYear = record.endYear; // null is a meaningful, confirmed "still ongoing" — not the same as never having checked
   }
   if (flags.languageFresh){
     if (record.language) show.language = record.language;
@@ -3080,6 +3082,7 @@ async function enrichOneShow(show, maxAttempts){
       posterUrl: firstString(details.poster, details.poster_url, details.poster_image, details.backdrop),
       description: firstString(details.plot_overview, details.overview, details.description, details.plot),
       usRating: firstString(details.us_rating, details.mpaa_rating, details.content_rating, details.rating_certification),
+      endYear: details.end_year != null ? details.end_year : null, // still ongoing when null — confirmed live: Simpsons (still airing) has null, Breaking Bad (ended 2013) has 2013
       enrichedAt: now,
       language: normalizeLanguage(firstString(details.original_language, details.language, details.spoken_language_codes && details.spoken_language_codes[0])),
       languageAt: now,
@@ -3517,6 +3520,7 @@ function getCachedShowsForCombo(decade, genre){
       userRating: ratingFresh ? entry.userRating : null,
       criticScore: ratingFresh ? entry.criticScore : null,
       usRating: enrichmentFresh ? entry.usRating : null,
+      endYear: enrichmentFresh ? entry.endYear : undefined,
       genresOverride: entry.genres,
       language: languageFresh ? (entry.language || null) : null,
       description: enrichmentFresh ? (entry.description || null) : null
@@ -3584,6 +3588,7 @@ async function getSharedShowsForComboBatch(decade, genre, batchSize, cursor){
           userRating: ratingFresh ? entry.userRating : null,
           criticScore: ratingFresh ? entry.criticScore : null,
           usRating: enrichmentFresh ? entry.usRating : null,
+          endYear: enrichmentFresh ? entry.endYear : undefined,
           genresOverride: entry.genres,
           language: languageFresh ? (entry.language || null) : null,
           description: enrichmentFresh ? (entry.description || null) : null
@@ -3973,6 +3978,7 @@ function appendModalExtras(extras, show){
   if (!show.posterUrl && extras.posterUrl) show.posterUrl = extras.posterUrl;
   if (extras.genres && extras.genres.length) show.genresOverride = extras.genres;
   if (!show.description && extras.description) show.description = extras.description;
+  if (show.endYear === undefined && extras.endYear !== undefined) show.endYear = extras.endYear;
 
   backfillGridCard(show);
 
@@ -3999,6 +4005,7 @@ function appendModalExtras(extras, show){
   }
 
   const bits = [];
+  bits.push(yearRangeHtml(show));
   bits.push(renderOfferSection('Streaming', '📺', extras.streamNames));
   bits.push(renderOfferSection('Rent', '🎬', extras.rentNames));
   bits.push(renderOfferSection('Buy', '🛒', extras.buyNames));
@@ -4009,6 +4016,22 @@ function appendModalExtras(extras, show){
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">▶ Watch Trailer</a>`);
   container.className = '';
   container.innerHTML = bits.join('');
+}
+
+// "1989–ongoing" / "2008–2013" / nothing at all if endYear hasn't been
+// checked yet. endYear === null is a confirmed "still airing" (distinct
+// from undefined, "haven't checked") — see the endYear comment on
+// enrichOneShow's fresh object for where that distinction is confirmed
+// live. Deliberately doesn't show season count — Watchmode's
+// /seasons/ endpoint was tried and dropped after its count came back
+// lower than the real, current season count for at least one real show
+// checked directly (a live discrepancy, not a hypothetical one), with
+// no way to confirm from this endpoint alone whether that's a stale
+// cache, a genuinely incomplete catalog, or something else — not
+// reliable enough to show as fact.
+function yearRangeHtml(show){
+  if (show.endYear === undefined || !show.year) return '';
+  return `<div class="hint" style="margin-top:8px;">${show.year}–${show.endYear == null ? 'ongoing' : show.endYear}</div>`;
 }
 
 // Renders one labeled row of chips (Streaming/Rent/Buy) — returns an empty
@@ -4076,6 +4099,7 @@ function mergeDetailsFreshestTiers(local, shared){
     merged.genres = shared.genres;
     merged.description = shared.description;
     merged.usRating = shared.usRating;
+    merged.endYear = shared.endYear;
     merged.enrichedAt = shared.enrichedAt;
   }
   if ((shared.ratedAt || 0) > (local.ratedAt || 0)){
@@ -4100,6 +4124,7 @@ function recordToExtrasResult(record, tierFlags){
     genres: tierFlags.enrichmentFresh ? (record.genres || null) : null,
     description: tierFlags.enrichmentFresh ? (record.description ?? null) : null,
     usRating: tierFlags.enrichmentFresh ? (record.usRating ?? null) : null,
+    endYear: tierFlags.enrichmentFresh ? record.endYear : undefined,
     userRating: tierFlags.ratingFresh ? (record.userRating ?? null) : null,
     criticScore: tierFlags.ratingFresh ? (record.criticScore ?? null) : null,
     streamNames: tierFlags.streamingFresh ? (record.streamNames || []) : [],
@@ -4222,6 +4247,7 @@ async function fetchWatchmodeExtras(show, forceRefresh){
       fresh.posterUrl = posterUrl;
       fresh.description = description;
       fresh.usRating = usRating;
+      fresh.endYear = details && details.end_year != null ? details.end_year : null;
       fresh.enrichedAt = now;
     }
     if (gotRating){
@@ -4264,6 +4290,7 @@ function appendTonightExtras(extras, show){
   if (show.criticScore == null && extras.criticScore != null) show.criticScore = extras.criticScore;
   if (!show.usRating && extras.usRating) show.usRating = extras.usRating;
   if (extras.genres && extras.genres.length) show.genresOverride = extras.genres;
+  if (show.endYear === undefined && extras.endYear !== undefined) show.endYear = extras.endYear;
   backfillGridCard(show);
 
   const banner = document.querySelector('#tonightBanner .tonight > div');
@@ -4276,6 +4303,8 @@ function appendTonightExtras(extras, show){
   const ratingsContainer = document.getElementById('tonightRatings');
   if (ratingsContainer) ratingsContainer.innerHTML = ratingChipsHtml(show);
   const bits = [];
+  const yearRangeText = (show.endYear !== undefined && show.year) ? `${show.year}–${show.endYear == null ? 'ongoing' : show.endYear}` : null;
+  if (yearRangeText) bits.push(`<span class="genre-chip">${escapeHtml(yearRangeText)}</span>`);
   if (extras.trailerUrl) bits.push(`<a class="tmdb-link" href="${extras.trailerUrl}" target="_blank" rel="noopener">▶ Watch Trailer</a>`);
   if (extras.streamNames && extras.streamNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Streaming: ${escapeHtml(extras.streamNames.join(', '))}</span>`);
   if (extras.rentNames && extras.rentNames.length) bits.push(`<span class="genre-chip" style="margin-left:6px;">Rent: ${escapeHtml(extras.rentNames.join(', '))}</span>`);
