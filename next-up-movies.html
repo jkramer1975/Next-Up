@@ -553,6 +553,7 @@
       <button class="tab-btn active" id="tabMainBtn">🎬 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Movie Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">🎬 Built-In Movie List</button>
+      <button class="tab-btn" id="tabSearchBtn">🔍 Movie Search</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -592,8 +593,9 @@
         <div class="source-note" id="enrichStatusNote"></div>
       </div>
 
+      <div id="tonightBanner"></div>
+
       <div id="resultsArea" style="display:none;">
-        <div id="tonightBanner"></div>
         <div class="results-head">
           <h2 id="resultsTitle"></h2>
           <span class="count" id="resultsCount"></span>
@@ -618,6 +620,26 @@
         <div class="footer-actions">
           <button class="btn-danger" id="clearHistoryBtn">Clear All History</button>
         </div>
+      </div>
+
+    </div>
+
+    <!-- ===================== MOVIE SEARCH TAB ===================== -->
+    <div id="searchTab" style="display:none;">
+
+      <div class="card" id="searchSignInRequired" style="display:none; text-align:center;">
+        <p class="desc" style="margin:0;">🔒 Connect a Watchmode API key in Admin to use Movie Search — this feature runs on Watchmode directly, and signing in with Google too means the whole crew shares the same cached lookups instead of each device repeating the same searches.</p>
+      </div>
+
+      <div class="card">
+        <h2>Search Watchmode</h2>
+        <p class="desc">Search by title — try a movie name, like "Inception" or "The Matrix". Pick a result to see its info.</p>
+        <div class="row">
+          <input type="text" id="movieSearchInput" placeholder='Movie title — e.g. "Inception"'>
+          <button class="btn-primary" id="movieSearchBtn">Search</button>
+        </div>
+        <div class="error" id="movieSearchError" style="display:none;"></div>
+        <div id="movieSearchResults" style="margin-top:12px;"></div>
       </div>
 
     </div>
@@ -895,7 +917,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: streaming availability (and the tonight-banner follow-up lookup) only ever triggered when currentSource === 'watchmode', meaning a picked movie that came from the built-in list never showed streaming info even when fully enriched with a valid watchmodeId and a working key. Now gated on whether the movie actually has a resolved watchmodeId (matching how canForceRefresh was already correctly gated), not on which source the current spin happened to come from.
+const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — added a new "Movie Search" tab, positioned between Built-In Movie List and Admin from the start: direct title search against Watchmode, three-tier cached (local, shared Firestore, live), same architecture as TV/Games Search. Type filter (=== 'movie') was already confirmed live during TV Search's verification pass, not assumed here. Refactored the inline card-building logic in renderResults into a reusable buildMovieCard function so Search could use the same cards as the main grid, verified zero regression on the existing spin flow afterward. Found and fixed the exact same five bugs TV had before its own Search feature shipped, all present here too: confirmPick had no null-safe fallback for currentChoice at all; openConfirm and showTonightBanner both had unguarded currentChoice.genre access; blockMovieFromGrid called renderResults unconditionally; and the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens, so a pick made via search would silently populate the banner's content but never show it. All fixed with the same patterns already established fixing TV. Verified end-to-end: search -> results grid -> modal -> confirmed pick recorded with a "Found via search" genre -> Tonight's Pick banner correctly displays, plus blocking a search result and the explicit content filter both confirmed working on search results specifically.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1214,6 +1236,7 @@ const wmDetailsCache = new Map(); // watchmode title id -> {trailerUrl, posterUr
 const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
 const wmRatingsCache = new Map(); // watchmode title id -> {userRating, usRating} only, used for the whole grid (session only)
 const wmSearchCache = new Map(); // "title|year" -> watchmode id (or null for a confirmed no-match), used to enrich the built-in list
+const searchQueryCache = new Map(); // hash -> {query, results, cachedAt} — used by the Movie Search tab
 let enabledDecades = DECADES.slice();
 let enabledGenres = GENRES.slice();
 let enabledContentRatings = CONTENT_RATINGS.slice();
@@ -1667,6 +1690,11 @@ async function saveWmSearchCache(){
   wmSearchCache.forEach((v, k) => { obj[k] = v; });
   await saveJSON('watchmode_search_cache', obj);
 }
+async function saveSearchQueryCache(){
+  const obj = {};
+  searchQueryCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('watchmode_search_query_cache', obj);
+}
 async function saveWmDetailsCache(){
   const obj = {};
   const cutoff = Date.now() - WM_DETAILS_PRUNE_MS;
@@ -1755,6 +1783,8 @@ async function init(){
   Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
   const savedSearchCache = await loadJSON('watchmode_search_cache', {});
   Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
+  const savedSearchQueryCache = await loadJSON('watchmode_search_query_cache', {});
+  Object.entries(savedSearchQueryCache).forEach(([k, v]) => searchQueryCache.set(k, v)); // staleness checked at actual use time in searchMoviesByQuery, not at load time
   const savedDetailsCache = await loadJSON('watchmode_details_cache', {});
   Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchWatchmodeExtras, not at load time
   wmWarmupDone = await loadJSON('watchmode_warmup_done', false);
@@ -1819,20 +1849,45 @@ function updateStorageNote(){
    Tabs
    ================================================================== */
 $('tabMainBtn').addEventListener('click', () => switchTab('main'));
+$('tabSearchBtn').addEventListener('click', () => switchTab('search'));
+
+async function runMovieSearch(){
+  const query = $('movieSearchInput').value.trim();
+  const errorEl = $('movieSearchError');
+  errorEl.style.display = 'none';
+  if (!query) return;
+  $('movieSearchBtn').disabled = true;
+  $('movieSearchResults').innerHTML = '<p class="hint">Searching…</p>';
+  try{
+    const results = await searchMoviesByQuery(query);
+    await enrichAndRenderMoviesGrid(results, 'movieSearchResults', 'No movies found for that search.');
+  } catch(e){
+    errorEl.textContent = e.message;
+    errorEl.style.display = 'block';
+    $('movieSearchResults').innerHTML = '';
+  } finally {
+    $('movieSearchBtn').disabled = false;
+  }
+}
+$('movieSearchBtn').addEventListener('click', runMovieSearch);
+$('movieSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') runMovieSearch(); });
 $('tabFiltersBtn').addEventListener('click', () => switchTab('filters'));
 $('tabBuiltinBtn').addEventListener('click', () => switchTab('builtin'));
 $('tabAdminBtn').addEventListener('click', () => switchTab('admin'));
 function switchTab(tab){
   $('mainTab').style.display = tab === 'main' ? 'block' : 'none';
+  $('searchTab').style.display = tab === 'search' ? 'block' : 'none';
   $('filtersTab').style.display = tab === 'filters' ? 'block' : 'none';
   $('builtinTab').style.display = tab === 'builtin' ? 'block' : 'none';
   $('adminTab').style.display = tab === 'admin' ? 'block' : 'none';
   $('tabMainBtn').classList.toggle('active', tab === 'main');
+  $('tabSearchBtn').classList.toggle('active', tab === 'search');
   $('tabFiltersBtn').classList.toggle('active', tab === 'filters');
   $('tabBuiltinBtn').classList.toggle('active', tab === 'builtin');
   $('tabAdminBtn').classList.toggle('active', tab === 'admin');
   if (tab === 'admin') updateCacheStats();
   if (tab === 'builtin') renderEditList();
+  if (tab === 'search') $('searchSignInRequired').style.display = wmKey ? 'none' : 'block';
 }
 
 /* ==================================================================
@@ -3098,6 +3153,119 @@ async function enrichBatchWithRatings(movies, opts){
   }
 }
 
+function hashQueryKey(query){
+  const normalized = query.trim().toLowerCase();
+  let hash = 5381;
+  for (let i = 0; i < normalized.length; i++){
+    hash = ((hash * 33) ^ normalized.charCodeAt(i)) >>> 0; // DJB2 variant, unsigned 32-bit
+  }
+  return hash.toString(36);
+}
+
+// Movie Search tab's title search — cached the same three-tier way as
+// everything else in this app: locally (persists across sessions on
+// this device) and, once signed in, shared via Firestore so the exact
+// same search string is free for every signed-in user from then on,
+// not just the one who first ran it. 90-day staleness, matching the
+// other Watchmode caches. Results are filtered to type === 'movie' —
+// confirmed live (Inception and several other real movies consistently
+// came back tagged this way during the TV Search verification pass),
+// not assumed.
+async function searchMoviesByQuery(query){
+  const normalized = query.trim().toLowerCase();
+  const key = hashQueryKey(query);
+
+  const local = searchQueryCache.get(key);
+  if (local && local.query === normalized && isFresh(local.cachedAt, WM_ENRICHMENT_STALE_MS)) return local.results;
+
+  if (currentUser){
+    try{
+      const sharedDoc = await fbDb.collection('sharedMovieSearches').doc(key).get();
+      if (sharedDoc.exists){
+        const data = sharedDoc.data();
+        if (data.query === normalized && isFresh(data.cachedAt, WM_ENRICHMENT_STALE_MS)){
+          searchQueryCache.set(key, data);
+          saveSearchQueryCache(); // fire-and-forget
+          return data.results;
+        }
+      }
+    } catch(e){ console.warn('Shared search-query cache lookup failed, falling back to Watchmode directly', e.message); }
+  }
+
+  if (!wmKey) throw new Error('Connect a Watchmode API key in Admin to use Movie Search.');
+
+  const data = await wmFetch('/search/', { search_field: 'name', search_value: query }, 0, 3, `Movie search: "${query}"`);
+  const rawResults = data.title_results || data.results || [];
+  const results = rawResults
+    .filter(r => r.type === 'movie')
+    .slice(0, 10)
+    .map(r => ({
+      id: r.id,
+      title: r.name || r.title,
+      year: r.year || null
+    }));
+  const fresh = { query: normalized, results, cachedAt: Date.now() };
+  searchQueryCache.set(key, fresh);
+  saveSearchQueryCache(); // fire-and-forget — don't block on a local storage write
+  if (currentUser){
+    fbDb.collection('sharedMovieSearches').doc(key).set(fresh)
+      .catch(e => console.warn('Could not write shared search-query cache entry', e.message)); // fire-and-forget — never blocks showing the result
+  }
+  return results;
+}
+
+function toGridMovie(candidate){
+  return {
+    title: candidate.title,
+    year: candidate.year || null,
+    watchmodeId: candidate.id,
+    posterUrl: null,
+    userRating: null,
+    genresOverride: []
+  };
+}
+
+async function enrichAndRenderMoviesGrid(candidates, containerId, statusText){
+  const container = $(containerId);
+  if (!candidates.length){
+    container.innerHTML = `<p class="hint">${statusText || 'No movies found.'}</p>`;
+    return;
+  }
+  let movies = candidates.map(toGridMovie);
+  container.innerHTML = '<p class="hint">Loading details…</p>';
+  await mapWithConcurrency(movies, 3, async (movie) => {
+    if (!movie.watchmodeId) return;
+    try{ await enrichOneMovie(movie, 3); }
+    catch(e){ /* best-effort — card still renders with whatever it already had */ }
+  });
+  // Explicit content protection is a safety concern, not a "what should
+  // a random spin show me" preference, so it applies here too, same as
+  // everywhere else in this app — unlike rating/genre-preference/blocked
+  // filters, which deliberately don't apply to a deliberate search.
+  movies = movies.filter(m => matchesExplicitContentFilter(m));
+  // Sorted by rating descending, same as the main Next Up grid — ratings
+  // only become known/accurate after enrichment above, so this has to
+  // happen after that pass completes, not before. Unrated movies sort to
+  // the end rather than being treated as a 0.
+  movies.sort((a, b) => {
+    if (a.userRating == null && b.userRating == null) return 0;
+    if (a.userRating == null) return 1;
+    if (b.userRating == null) return -1;
+    return b.userRating - a.userRating;
+  });
+  container.innerHTML = '';
+  if (!movies.length){
+    container.innerHTML = `<p class="hint">${statusText || 'No movies found.'}</p>`;
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  movies.forEach((movie, i) => {
+    grid.appendChild(buildMovieCard(movie, i, openConfirm));
+  });
+  container.appendChild(grid);
+}
+
 // Looks up a single built-in list title on Watchmode by name, picks the
 // best match (same title's type=movie, matching year if possible), and
 // caches the resolved ID (or the confirmed absence of one) so the same
@@ -3644,6 +3812,36 @@ function ratingChipsHtml(movie){
   return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
 }
 
+function buildMovieCard(movie, index, onClick){
+  const picked = isPicked(movie.title, movie.year);
+  const card = document.createElement('div');
+  card.className = 'poster-card' + (picked ? ' disabled' : '');
+  card.dataset.idx = index;
+  const picker = picked ? getPickerFor(movie.title, movie.year) : null;
+  const watchedTagHtml = picked ? `<div class="watched-tag">WATCHED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
+  card.innerHTML = `
+    ${watchedTagHtml}
+    <div class="poster-meta">
+      <div class="p-num">${String(index + 1).padStart(2, '0')}</div>
+      <div class="p-title-row"><div class="p-title">${escapeHtml(movie.title)}</div></div>
+      <div class="p-year">${movie.year || '—'}</div>
+      <div class="rating-row">${ratingChipsHtml(movie)}</div>
+      <div class="genre-row">${genreChipsHtml(movie)}</div>
+      <div class="meta-footer">
+        <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener" title="View on ${movieLinkLabel(movie)}">🔗 ${movieLinkLabel(movie)}</a>
+        <button class="block-card-btn" title="Block this movie">⛔</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
+  card.querySelector('.block-card-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    blockMovieFromGrid(movie);
+  });
+  if (!picked) card.addEventListener('click', () => onClick(movie));
+  return card;
+}
+
 function renderResults(){
   $('resultsTitle').textContent = `${decadeLabel(currentChoice.decade)} ${currentChoice.genre}`;
   $('resultsCount').textContent = `${currentBatch.length} movie${currentBatch.length === 1 ? '' : 's'}`;
@@ -3655,33 +3853,7 @@ function renderResults(){
   $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
 
   currentBatch.forEach((movie, i) => {
-    const picked = isPicked(movie.title, movie.year);
-    const card = document.createElement('div');
-    card.className = 'poster-card' + (picked ? ' disabled' : '');
-    card.dataset.idx = i;
-    const picker = picked ? getPickerFor(movie.title, movie.year) : null;
-    const watchedTagHtml = picked ? `<div class="watched-tag">WATCHED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
-    card.innerHTML = `
-      ${watchedTagHtml}
-      <div class="poster-meta">
-        <div class="p-num">${String(i + 1).padStart(2, '0')}</div>
-        <div class="p-title-row"><div class="p-title">${escapeHtml(movie.title)}</div></div>
-        <div class="p-year">${movie.year || '—'}</div>
-        <div class="rating-row">${ratingChipsHtml(movie)}</div>
-        <div class="genre-row">${genreChipsHtml(movie)}</div>
-        <div class="meta-footer">
-          <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener" title="View on ${movieLinkLabel(movie)}">🔗 ${movieLinkLabel(movie)}</a>
-          <button class="block-card-btn" title="Block this movie">⛔</button>
-        </div>
-      </div>
-    `;
-    card.querySelector('.tmdb-link').addEventListener('click', (e) => e.stopPropagation());
-    card.querySelector('.block-card-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      blockMovieFromGrid(movie);
-    });
-    if (!picked) card.addEventListener('click', () => openConfirm(movie));
-    grid.appendChild(card);
+    grid.appendChild(buildMovieCard(movie, i, openConfirm));
   });
 }
 
@@ -3695,7 +3867,7 @@ async function blockMovieFromGrid(movie){
   // movie just silently vanishing from the grid with no trace of what
   // happened to it.
   lastFilteredOut.push({ movie, reason: 'Blocked' });
-  renderResults();
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session — nothing to re-render
   renderFilteredOut();
   renderBlockList();
 }
@@ -3719,7 +3891,7 @@ function openConfirm(movie){
         ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from Watchmode'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
         ${posterHtml}
         <h3>${escapeHtml(movie.title)}</h3>
-        <p>${movie.year || '—'} · ${currentChoice.genre}</p>
+        <p>${movie.year || '—'} · ${currentChoice ? currentChoice.genre : 'Found via search'}</p>
         <div id="modalRatings">${ratingChipsHtml(movie)}</div>
         <div id="modalGenres">${genreChipsHtml(movie)}</div>
         <p id="modalDescription" class="modal-description" style="${movie.description ? '' : 'display:none;'}">${escapeHtml(movie.description || '')}</p>
@@ -3857,14 +4029,16 @@ window.handleNativeBackPress = function(){
 };
 
 async function confirmPick(movie, picker){
+  const decade = currentChoice ? decadeLabel(currentChoice.decade) : 'Unknown';
+  const genre = currentChoice ? currentChoice.genre : 'Found via search';
   picks.push({
     title: movie.title, year: movie.year,
-    decade: decadeLabel(currentChoice.decade), genre: currentChoice.genre,
+    decade: decade, genre: genre,
     picker: picker, pickedAt: new Date().toISOString().slice(0, 10)
   });
   closeModal();
   showTonightBanner(movie, picker);
-  renderResults();
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session — nothing to re-render
   renderHistory();
   await savePicks();
   await recordPick(picker);
@@ -4098,7 +4272,7 @@ function showTonightBanner(movie, picker){
         <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
         <h3>${escapeHtml(movie.title)}</h3>
         <div id="tonightRatings">${ratingChipsHtml(movie)}</div>
-        <p>${movie.year || '—'} · ${currentChoice.genre} · Enjoy the show</p>
+        <p>${movie.year || '—'} · ${currentChoice ? currentChoice.genre : 'Found via search'} · Enjoy the show</p>
         <a class="tmdb-link" href="${movieTmdbLink(movie)}" target="_blank" rel="noopener">🔗 Find trailer on ${movieLinkLabel(movie)}</a>
       </div>
     </div>
