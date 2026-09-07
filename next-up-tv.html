@@ -917,7 +917,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — added a new "TV Search" tab: direct title search against Watchmode, three-tier cached (local, shared Firestore, live), same architecture as Games Search. Before building, verified live whether Watchmode's search results actually use 'tv_series' as the type value for TV shows — an existing comment in this file had flagged that value as an unverified guess. Confirmed correct (Breaking Bad, Stranger Things, The Office all consistently returned tagged 'tv_series'), and also discovered a third type, 'tv_movie' (made-for-TV films), deliberately left out of scope since this app's premise is ongoing shows, not one-off films. Refactored the inline card-building logic in renderResults into a reusable buildShowCard function so Search could use the same cards as the main grid, verified zero regression on the existing spin flow afterward. Found and fixed three real, separate bugs surfaced while building this: confirmPick had no null-safe fallback for currentChoice at all (unlike Games, which already did) and would have thrown the moment anyone picked from search; renderResults was called unconditionally in both confirmPick and blockShowFromGrid, same underlying issue; and openConfirm itself, plus showTonightBanner, both had unguarded currentChoice.genre access that also would have thrown. All fixed with the same "Found via search" fallback pattern Games already used. Also found and fixed a real, already-shipped display bug in both this file and Games: the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens — meaning a pick made via search (no prior spin) would silently populate the banner's content but never actually show it. Moved the banner outside resultsArea in both files so it displays regardless of how the pick happened. // Also added endYear (confirmed live: null means still airing, a number is the year it ended — Simpsons and Breaking Bad both checked and correct) to the modal and Tonight's Pick banner, shown as a plain year range. Attempted a season count feature using Watchmode's /title/{id}/seasons/ endpoint too, confirmed live to exist and return real data — but a real, user-caught discrepancy (Simpsons showing 24 seasons from this endpoint against a real current count of 37) revealed my own verification of it had been flawed: the live test response got truncated by my own test script before I ever saw its true length, and the season counts used afterward in automated testing were fabricated mock data, not confirmed real ones. Removed entirely rather than ship something unverified as if it were reliable — endYear alone, which was properly verified with real data both times, is what's kept. // Found and fixed one more real bug, reported directly: endYear was never actually shown anywhere. yearRangeHtml() was only ever called inside appendModalExtras, which itself only runs when showStreamingLookup is true — meaning both a connected Watchmode key AND an already-resolved watchmodeId for that specific show. Even when endYear was already known from bulk enrichment during the spin itself (which happens automatically, before any click), nothing rendered it until — and unless — that separate, narrower gate also happened to pass. Fixed by rendering it in a dedicated modalYearRange container at the modal's initial open, using whatever value is already on hand, with appendModalExtras now just updating that same container if a fresher value comes in later. Verified both paths directly: displays immediately when already known (confirmed working even with zero Watchmode key connected), and still updates correctly when fetched fresh on click.
+const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — added a new "TV Search" tab: direct title search against Watchmode, three-tier cached (local, shared Firestore, live), same architecture as Games Search. Before building, verified live whether Watchmode's search results actually use 'tv_series' as the type value for TV shows — an existing comment in this file had flagged that value as an unverified guess. Confirmed correct (Breaking Bad, Stranger Things, The Office all consistently returned tagged 'tv_series'), and also discovered a third type, 'tv_movie' (made-for-TV films), deliberately left out of scope since this app's premise is ongoing shows, not one-off films. Refactored the inline card-building logic in renderResults into a reusable buildShowCard function so Search could use the same cards as the main grid, verified zero regression on the existing spin flow afterward. Found and fixed three real, separate bugs surfaced while building this: confirmPick had no null-safe fallback for currentChoice at all (unlike Games, which already did) and would have thrown the moment anyone picked from search; renderResults was called unconditionally in both confirmPick and blockShowFromGrid, same underlying issue; and openConfirm itself, plus showTonightBanner, both had unguarded currentChoice.genre access that also would have thrown. All fixed with the same "Found via search" fallback pattern Games already used. Also found and fixed a real, already-shipped display bug in both this file and Games: the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens — meaning a pick made via search (no prior spin) would silently populate the banner's content but never actually show it. Moved the banner outside resultsArea in both files so it displays regardless of how the pick happened. // Also added endYear (confirmed live: null means still airing, a number is the year it ended — Simpsons and Breaking Bad both checked and correct) to the modal and Tonight's Pick banner, shown as a plain year range. Attempted a season count feature using Watchmode's /title/{id}/seasons/ endpoint too, confirmed live to exist and return real data — but a real, user-caught discrepancy (Simpsons showing 24 seasons from this endpoint against a real current count of 37) revealed my own verification of it had been flawed: the live test response got truncated by my own test script before I ever saw its true length, and the season counts used afterward in automated testing were fabricated mock data, not confirmed real ones. Removed entirely rather than ship something unverified as if it were reliable — endYear alone, which was properly verified with real data both times, is what's kept. // Found and fixed one more real bug, reported directly: endYear was never actually shown anywhere. yearRangeHtml() was only ever called inside appendModalExtras, which itself only runs when showStreamingLookup is true — meaning both a connected Watchmode key AND an already-resolved watchmodeId for that specific show. Even when endYear was already known from bulk enrichment during the spin itself (which happens automatically, before any click), nothing rendered it until — and unless — that separate, narrower gate also happened to pass. Per feedback, integrated it directly into the existing year displays instead of a separate section: the poster card's year field and the modal's year·genre line now both show "2008" (not yet known), "1989–ongoing", or "2008–2013" via a shared yearDisplayText() helper, rather than a dedicated extra line. Both display spots update in place (via backfillGridCard and a new modalYearGenre id) if endYear becomes known later than the initial render. Verified directly: initial render shows the range immediately when already known (confirmed even with zero Watchmode key connected), and both the card and the modal correctly backfill when fetched fresh on click.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -3850,7 +3850,7 @@ function buildShowCard(show, index, onClick){
     <div class="poster-meta">
       <div class="p-num">${String(index + 1).padStart(2, '0')}</div>
       <div class="p-title-row"><div class="p-title">${escapeHtml(show.title)}</div></div>
-      <div class="p-year">${show.year || '—'}</div>
+      <div class="p-year">${yearDisplayText(show)}</div>
       <div class="rating-row">${ratingChipsHtml(show)}</div>
       <div class="genre-row">${genreChipsHtml(show)}</div>
       <div class="meta-footer">
@@ -3917,10 +3917,9 @@ function openConfirm(show){
         ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from Watchmode'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
         ${posterHtml}
         <h3>${escapeHtml(show.title)}</h3>
-        <p>${show.year || '—'} · ${currentChoice ? currentChoice.genre : 'Found via search'}</p>
+        <p id="modalYearGenre">${yearDisplayText(show)} · ${currentChoice ? currentChoice.genre : 'Found via search'}</p>
         <div id="modalRatings">${ratingChipsHtml(show)}</div>
         <div id="modalGenres">${genreChipsHtml(show)}</div>
-        <div id="modalYearRange">${yearRangeHtml(show)}</div>
         <p id="modalDescription" class="modal-description" style="${show.description ? '' : 'display:none;'}">${escapeHtml(show.description || '')}</p>
         <a class="tmdb-link" href="${showTmdbLink(show)}" target="_blank" rel="noopener" style="display:inline-block; margin: 10px 0;">🔗 View on ${showLinkLabel(show)} / find trailer</a>
         ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showStreamingLookup ? 'Checking where to stream…' : ''}</div>` : ''}
@@ -3983,8 +3982,8 @@ function appendModalExtras(extras, show){
 
   backfillGridCard(show);
 
-  const yearRangeBox = document.getElementById('modalYearRange');
-  if (yearRangeBox) yearRangeBox.innerHTML = yearRangeHtml(show);
+  const yearGenreBox = document.getElementById('modalYearGenre');
+  if (yearGenreBox) yearGenreBox.textContent = `${yearDisplayText(show)} · ${currentChoice ? currentChoice.genre : 'Found via search'}`;
 
   const container = document.getElementById('modalExtras');
   if (!container) return; // modal already closed — data above is still backfilled to the grid
@@ -4022,19 +4021,21 @@ function appendModalExtras(extras, show){
 }
 
 // "1989–ongoing" / "2008–2013" / nothing at all if endYear hasn't been
-// checked yet. endYear === null is a confirmed "still airing" (distinct
-// from undefined, "haven't checked") — see the endYear comment on
-// enrichOneShow's fresh object for where that distinction is confirmed
-// live. Deliberately doesn't show season count — Watchmode's
-// /seasons/ endpoint was tried and dropped after its count came back
-// lower than the real, current season count for at least one real show
-// checked directly (a live discrepancy, not a hypothetical one), with
-// no way to confirm from this endpoint alone whether that's a stale
-// cache, a genuinely incomplete catalog, or something else — not
-// reliable enough to show as fact.
-function yearRangeHtml(show){
-  if (show.endYear === undefined || !show.year) return '';
-  return `<div class="hint" style="margin-top:8px;">${show.year}–${show.endYear == null ? 'ongoing' : show.endYear}</div>`;
+// "2003" (endYear not yet checked) / "2003–ongoing" / "2003–2013". endYear
+// === null is a confirmed "still airing" (distinct from undefined,
+// "haven't checked") — see the endYear comment on enrichOneShow's fresh
+// object for where that distinction is confirmed live. Deliberately
+// doesn't show season count — Watchmode's /seasons/ endpoint was tried
+// and dropped after its count came back lower than the real, current
+// season count for at least one real show checked directly (a live
+// discrepancy, not a hypothetical one), with no way to confirm from
+// this endpoint alone whether that's a stale cache, a genuinely
+// incomplete catalog, or something else — not reliable enough to show
+// as fact.
+function yearDisplayText(show){
+  if (!show.year) return '—';
+  if (show.endYear === undefined) return String(show.year);
+  return `${show.year}–${show.endYear == null ? 'ongoing' : show.endYear}`;
 }
 
 // Renders one labeled row of chips (Streaming/Rent/Buy) — returns an empty
@@ -4056,6 +4057,8 @@ function backfillGridCard(show){
   if (idx === -1) return; // a new spin has replaced the batch since
   const card = document.querySelector(`.poster-card[data-idx="${idx}"]`);
   if (!card) return;
+  const yearEl = card.querySelector('.p-year');
+  if (yearEl) yearEl.textContent = yearDisplayText(show);
   const ratingRow = card.querySelector('.rating-row');
   if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(show);
   const genreRow = card.querySelector('.genre-row');
