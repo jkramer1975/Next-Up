@@ -547,10 +547,10 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn" id="tabSearchBtn">🔍 Game Search</button>
       <button class="tab-btn active" id="tabMainBtn">🎮 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Video Game Filters</button>
       <button class="tab-btn" id="tabBuiltinBtn">🎮 Built-In Video Game List</button>
+      <button class="tab-btn" id="tabSearchBtn">🔍 Game Search</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
@@ -871,7 +871,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.11.3'; // MAJOR.MINOR.PATCH — fixed a real, already-shipped display bug found while building TV Search and checking whether the same architecture had the same problem here too: the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens — meaning a pick made via Game Search (no prior spin) would silently populate the banner's content but never actually show it, even though the pick itself was recorded correctly. Moved the banner outside resultsArea so it displays regardless of how the pick happened.
+const APP_VERSION = '0.11.4'; // MAJOR.MINOR.PATCH — moved the Game Search tab button to between Built-In Video Game List and Admin, per feedback on the front-of-row placement.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
