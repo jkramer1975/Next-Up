@@ -304,7 +304,7 @@
     </div>
   </div>
 <script>
-const INDEX_VERSION = '0.2.2'; // MAJOR.MINOR.PATCH, same scheme as the individual apps — MAJOR stays 0 until told otherwise; tracked independently from each app's own version, since this is a separate file. Removed the "Beta" badge from TV Shows, Books, and Video Games — all four app cards now look consistent, no badges anywhere.
+const INDEX_VERSION = '0.2.3'; // MAJOR.MINOR.PATCH, same scheme as the individual apps — MAJOR stays 0 until told otherwise; tracked independently from each app's own version, since this is a separate file. Fixed a real, user-reported bug: Pick Stats could show numbers that didn't match Firestore at all. triggerCrewSyncOnce used a sessionStorage flag that only allowed one sync ever per browser tab session — meaning if you visited this page once, then made picks in a sub-app afterward (each correctly incrementing Firestore via an atomic FieldValue.increment), returning to this page would never re-sync for the rest of that session, silently showing stale numbers from before those picks. Replaced the one-time flag with a 15-second time-based throttle: still skips redundant fetches from quick re-renders, but actually refreshes when returning after real activity elsewhere. Verified directly: first call syncs, an immediate second call is throttled, and a call simulating 20 seconds having passed correctly re-syncs.
 document.getElementById('versionBadge').textContent = 'v' + INDEX_VERSION;
 
 function escapeHtml(s){
@@ -496,8 +496,9 @@ function renderStatsBars(){
 // so without this, navigating between this page and a sub-app within
 // the same tab session could cause a resync loop or redundant fetches.
 function triggerCrewSyncOnce(user){
-  if (sessionStorage.getItem('nextup_resynced_this_session_index')) return;
-  sessionStorage.setItem('nextup_resynced_this_session_index', '1');
+  const lastSync = Number(sessionStorage.getItem('nextup_last_stats_sync_index') || 0);
+  if (Date.now() - lastSync < 15000) return; // synced within the last 15s — skip, most likely just re-rendering the same page, not returning after real activity elsewhere
+  sessionStorage.setItem('nextup_last_stats_sync_index', String(Date.now()));
   syncCrewAndStatsOnSignIn(user);
 }
 
@@ -591,7 +592,7 @@ document.getElementById('signInBtn').addEventListener('click', signInWithGoogle)
 document.getElementById('signOutBtn').addEventListener('click', () => {
   const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signOutNative === 'function';
   if (hasNativeBridge) Android.signOutNative();
-  sessionStorage.removeItem('nextup_resynced_this_session_index'); // so signing back in this same tab/session resyncs fresh
+  sessionStorage.removeItem('nextup_last_stats_sync_index'); // so signing back in this same tab/session resyncs fresh rather than being throttled
   fbAuth.signOut();
 });
 

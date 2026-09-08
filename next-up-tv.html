@@ -916,7 +916,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.2'; // MAJOR.MINOR.PATCH — updated the tagline to better convey the actual point of the app (a little randomness to break decision paralysis, while you keep final say), and removed the "Saving to this browser's local storage" line as unfriendly technical detail most users don't need.
+const APP_VERSION = '0.3.3'; // MAJOR.MINOR.PATCH — fixed the same "sync once per session" bug found via index.html's Pick Stats mismatch: triggerSyncOnce used a sessionStorage flag allowing only one settings/data sync ever per tab session, meaning changes made on another device (or in another app in this suite) wouldn't be picked up here for the rest of a long session. Replaced with a 15-second time-based throttle, matching the same fix applied everywhere else in the suite.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1375,8 +1375,9 @@ async function syncKeyToCloud(key, value){
 // path) so an explicit sign-in and the auth-state listener firing for
 // that same event can't both trigger a sync.
 function triggerSyncOnce(user){
-  if (sessionStorage.getItem('nextup_resynced_this_session_tv')) return;
-  sessionStorage.setItem('nextup_resynced_this_session_tv', '1');
+  const lastSync = Number(sessionStorage.getItem('nextup_last_sync_tv') || 0);
+  if (Date.now() - lastSync < 15000) return; // synced within the last 15s — skip, most likely just re-rendering the same page, not returning after real activity elsewhere
+  sessionStorage.setItem('nextup_last_sync_tv', String(Date.now()));
   syncOnSignIn(user);
 }
 
@@ -1492,7 +1493,7 @@ async function signOutOfGoogle(){
   if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
     Android.signOutNative();
   }
-  sessionStorage.removeItem('nextup_resynced_this_session_tv'); // so signing back in this same tab/session resyncs fresh rather than being blocked by the old flag
+  sessionStorage.removeItem('nextup_last_sync_tv'); // so signing back in this same tab/session resyncs fresh rather than being throttled
   showAuthStatus('Signed out — resetting to defaults…');
   await resetLocalStateToDefaults();
   location.reload(); // same pattern as sign-in — the reliable way to get every part of the app to re-read the reset state
