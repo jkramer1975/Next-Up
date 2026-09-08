@@ -862,7 +862,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.5.5'; // MAJOR.MINOR.PATCH — fixed the same "sync once per session" bug found via index.html's Pick Stats mismatch: triggerSyncOnce used a sessionStorage flag allowing only one settings/data sync ever per tab session, meaning changes made on another device (or in another app in this suite) wouldn't be picked up here for the rest of a long session. Replaced with a 15-second time-based throttle, matching the same fix applied everywhere else in the suite.
+const APP_VERSION = '0.5.6'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: "Animal Farm and 1984" (a 2003 anniversary omnibus) showed up in a 2000s Science Fiction spin with its displayed year at 1949. Root cause: search-books (discovery) doesn't return a publish year for any result at all, so decade filtering at discovery time relies entirely on Big Book API's own earliest/latest-publish-year parameters, with no way to cross-check them. The actual year only gets known later, from a separate Get Book Information call during enrichment — and for this title, that second endpoint apparently resolved to the original 1949 novel's year rather than the 2003 omnibus edition that was actually discovered, meaning Big Book API's own two endpoints disagreed with each other. Fixed by validating the year once enrichment actually resolves one: computeFilteredSurvivors now takes the requested decade and excludes anything whose real year turns out not to match after all, with a clear reason shown in Filtered Out, same as any other exclusion. A still-unknown year isn't punished — nothing to validate yet. Verified directly: the exact reported title is now correctly excluded from a 2000s pool with a clear reason, a correctly-dated 2000s title still survives, an unenriched title with no year yet isn't penalized, and passing no decade (the search context, which doesn't call this function at all) skips the check entirely.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2437,12 +2437,32 @@ async function spin(){
 // raw pool down to Max Results, returning both the survivors and a record
 // of everything excluded and why. Shared by the initial spin, the pool
 // growth loop below, and the Re-run Filters button.
-function computeFilteredSurvivors(pool){
+function computeFilteredSurvivors(pool, decade){
   const survivors = [];
   const filteredOut = [];
   pool.forEach(m => {
     if (isBlocked(m.title, m.year)){
       filteredOut.push({ book: m, reason: 'Blocked' });
+      return;
+    }
+    // A real, confirmed case (not hypothetical): "Animal Farm and 1984",
+    // a 2003 anniversary omnibus, showed up in a 2000s search — but
+    // search-books doesn't return a year for any result at all (see the
+    // comment on fetchBigBookPage), so discovery can only trust Big Book
+    // API's own earliest/latest-publish-year filtering, with nothing to
+    // cross-check it against until enrichment resolves a real year
+    // later. That later, separate call apparently resolved this specific
+    // title to 1949 — the original novel's year, not the omnibus
+    // edition's — meaning the two Big Book API endpoints disagreed with
+    // each other about the same title. Once a year is actually known,
+    // it's treated as the source of truth: a title whose enriched year
+    // turns out not to match the requested decade after all is excluded
+    // here, same as any other filtered-out reason, rather than shown
+    // with a year that visibly contradicts the section it's sorted into.
+    // A still-unknown year (enrichment hasn't run yet) isn't punished —
+    // there's nothing to validate against yet.
+    if (decade && m.year != null && yearToDecadeKey(m.year) !== decade){
+      filteredOut.push({ book: m, reason: `Year ${m.year} doesn't actually match this decade — Big Book API's search and detail lookups disagreed about when this was published` });
       return;
     }
     if (!matchesExplicitContentFilter(m)){
@@ -2478,7 +2498,7 @@ function computeFilteredSurvivors(pool){
 }
 
 function applyFiltersAndRender(){
-  const { survivors, filteredOut } = computeFilteredSurvivors(lastFullPool);
+  const { survivors, filteredOut } = computeFilteredSurvivors(lastFullPool, currentChoice ? currentChoice.decade : null);
   currentBatch = survivors;
   lastFilteredOut = filteredOut;
   renderFilteredOut();
@@ -3287,7 +3307,7 @@ async function buildBigBookPool(decade, genre){
     }
   }
 
-  let { survivors, allQualified } = computeFilteredSurvivors(pool);
+  let { survivors, allQualified } = computeFilteredSurvivors(pool, decade);
 
   // Now that filtering has actually run, commit to local storage only the
   // shared candidates that genuinely qualified — not everything that was
@@ -3325,7 +3345,7 @@ async function buildBigBookPool(decade, genre){
     fresh.forEach(m => seenIds.add(m.bigBookId));
     pool = pool.concat(fresh);
     await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)));
-    ({ survivors } = computeFilteredSurvivors(pool));
+    ({ survivors } = computeFilteredSurvivors(pool, decade));
   }
 
   const allCached = (list) => list.length > 0 &&
@@ -3347,7 +3367,7 @@ async function buildBigBookPool(decade, genre){
         await enrichBatchWithRatings(fresh.filter(m => !isBlocked(m.title, m.year)), { silent: true });
       }
     }
-    ({ survivors } = computeFilteredSurvivors(pool));
+    ({ survivors } = computeFilteredSurvivors(pool, decade));
   }
 
   return pool;
