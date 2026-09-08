@@ -543,8 +543,7 @@
     <div class="marquee">
       <div class="sprockets"></div>
       <h1>📺 NEXT UP - TV SHOWS</h1>
-      <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
-      <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
+      <div class="tagline">We spin up a random decade + genre to break the scrolling — you still pick whatever actually gets watched.</div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
       <div class="version-badge" id="versionBadge"></div>
     </div>
@@ -917,7 +916,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.1'; // MAJOR.MINOR.PATCH — moved the TV Search tab button to between Built-In Show List and Admin, per feedback on the front-of-row placement.
+const APP_VERSION = '0.3.2'; // MAJOR.MINOR.PATCH — updated the tagline to better convey the actual point of the app (a little randomness to break decision paralysis, while you keep final say), and removed the "Saving to this browser's local storage" line as unfriendly technical detail most users don't need.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1843,15 +1842,6 @@ async function init(){
   renderHistory();
   renderAdmin();
   updateSourceNote();
-  updateStorageNote();
-}
-
-function updateStorageNote(){
-  const el = $('storageNote');
-  if (!el) return;
-  el.textContent = HAS_CLAUDE_STORAGE
-    ? 'Saving via Claude artifact storage'
-    : 'Saving to this browser\'s local storage (data stays on this device/browser only)';
 }
 
 /* ==================================================================

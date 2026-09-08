@@ -543,8 +543,7 @@
     <div class="marquee">
       <div class="sprockets"></div>
       <h1>🎬 NEXT UP - MOVIES</h1>
-      <div class="tagline">Spin for a random decade + genre, then pick from the list.</div>
-      <div class="tagline" id="storageNote" style="margin-top:4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing:0.5px;"></div>
+      <div class="tagline">We spin up a random decade + genre to break the scrolling — you still pick whatever actually wins movie night.</div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
       <div class="version-badge" id="versionBadge"></div>
     </div>
@@ -917,7 +916,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — added a new "Movie Search" tab, positioned between Built-In Movie List and Admin from the start: direct title search against Watchmode, three-tier cached (local, shared Firestore, live), same architecture as TV/Games Search. Type filter (=== 'movie') was already confirmed live during TV Search's verification pass, not assumed here. Refactored the inline card-building logic in renderResults into a reusable buildMovieCard function so Search could use the same cards as the main grid, verified zero regression on the existing spin flow afterward. Found and fixed the exact same five bugs TV had before its own Search feature shipped, all present here too: confirmPick had no null-safe fallback for currentChoice at all; openConfirm and showTonightBanner both had unguarded currentChoice.genre access; blockMovieFromGrid called renderResults unconditionally; and the Tonight's Pick banner was nested inside resultsArea, which stays hidden until a spin happens, so a pick made via search would silently populate the banner's content but never show it. All fixed with the same patterns already established fixing TV. Verified end-to-end: search -> results grid -> modal -> confirmed pick recorded with a "Found via search" genre -> Tonight's Pick banner correctly displays, plus blocking a search result and the explicit content filter both confirmed working on search results specifically.
+const APP_VERSION = '0.3.1'; // MAJOR.MINOR.PATCH — updated the tagline to better convey the actual point of the app (a little randomness to break decision paralysis, while you keep final say), and removed the "Saving to this browser's local storage" line as unfriendly technical detail most users don't need.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1834,15 +1833,6 @@ async function init(){
   renderHistory();
   renderAdmin();
   updateSourceNote();
-  updateStorageNote();
-}
-
-function updateStorageNote(){
-  const el = $('storageNote');
-  if (!el) return;
-  el.textContent = HAS_CLAUDE_STORAGE
-    ? 'Saving via Claude artifact storage'
-    : 'Saving to this browser\'s local storage (data stays on this device/browser only)';
 }
 
 /* ==================================================================
