@@ -725,6 +725,86 @@
       </div>
 
       <div class="card">
+        <h2>Playtime</h2>
+        <p class="desc">Only shows games within this playtime range, in minutes. Games with no playtime data (including the built-in list, until enriched) are never excluded by this.</p>
+        <div class="row">
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Minimum</div>
+            <select id="minPlaytimeSelect">
+              <option value="0">No minimum</option>
+              <option value="15">15+ min</option>
+              <option value="30">30+ min</option>
+              <option value="45">45+ min</option>
+              <option value="60">60+ min</option>
+              <option value="90">90+ min</option>
+              <option value="120">120+ min</option>
+            </select>
+          </div>
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Maximum</div>
+            <select id="maxPlaytimeSelect">
+              <option value="999">No maximum</option>
+              <option value="30">Up to 30 min</option>
+              <option value="45">Up to 45 min</option>
+              <option value="60">Up to 60 min</option>
+              <option value="90">Up to 90 min</option>
+              <option value="120">Up to 120 min</option>
+              <option value="180">Up to 180 min</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Complexity</h2>
+        <p class="desc">Only shows games within this range on BGG's community-rated complexity/weight scale (1 = light, 5 = heavy). Games with no weight data are never excluded by this.</p>
+        <div class="row">
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Minimum</div>
+            <select id="minComplexitySelect">
+              <option value="0">No minimum</option>
+              <option value="1">1.0+</option>
+              <option value="1.5">1.5+</option>
+              <option value="2">2.0+</option>
+              <option value="2.5">2.5+</option>
+              <option value="3">3.0+</option>
+              <option value="3.5">3.5+</option>
+              <option value="4">4.0+</option>
+              <option value="4.5">4.5+</option>
+            </select>
+          </div>
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Maximum</div>
+            <select id="maxComplexitySelect">
+              <option value="5">No maximum</option>
+              <option value="1.5">Up to 1.5</option>
+              <option value="2">Up to 2.0</option>
+              <option value="2.5">Up to 2.5</option>
+              <option value="3">Up to 3.0</option>
+              <option value="3.5">Up to 3.5</option>
+              <option value="4">Up to 4.0</option>
+              <option value="4.5">Up to 4.5</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Age Recommendation</h2>
+        <p class="desc">Only shows games recommended for this age or younger — useful for keeping the spin appropriate for the youngest player in the group. Games with no age data are never excluded by this.</p>
+        <select id="maxAgeSelect">
+          <option value="99">No maximum</option>
+          <option value="6">Up to age 6+</option>
+          <option value="8">Up to age 8+</option>
+          <option value="10">Up to age 10+</option>
+          <option value="12">Up to age 12+</option>
+          <option value="14">Up to age 14+</option>
+          <option value="16">Up to age 16+</option>
+          <option value="18">Up to age 18+</option>
+        </select>
+      </div>
+
+      <div class="card">
         <h2>Explicit Content Filter</h2>
         <p class="desc">Also excludes any game IGDB itself tags with the "Erotic" theme — real, structured data, not a guess, so these never appear anywhere, including the Filtered Out list below. Beyond that, this is best-effort: a keyword match on title and description, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
         <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
@@ -814,14 +894,14 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — populated the pick modal with real BGG data that was already being fetched and stored but never actually displayed: player count range (byline), min age + playtime (meta line), complexity/weight as its own rating chip alongside user rating, and mechanics as a distinct chip row from categories. While doing this, found and fixed a much wider set of leftover video-game-template references than initially expected, spanning several separate code paths: gameDetailLink/gameLinkLabel checked game.igdbUrl (never set — game.bggUrl is), so every detail link silently fell back to a generic Google search instead of linking to BGG; mergeFreshestTiers (the shared-cache merge) still only propagated platforms/themes/igdbUrl/esrbRating from a fresher shared record, meaning minPlayers/maxPlayers/playtime/complexity/minAge/mechanics/bggUrl never actually benefited from someone else's fresher enrichment; fetchGameExtras, appendModalExtras, and appendTonightExtras (the on-click "extras" flow, a separate path from the main spin-time enrichment) all still read/wrote the same old fields instead of the new ones; confirmPick had a dead fallback referencing game.platforms; updateCacheStats' Admin diagnostic compared entry.platforms.includes(...) against a value that was never an array to begin with (player count is a min-max range, not a discrete list); and the explicit-content filter checked game.themes (never set) instead of genresOverride (the field BGG categories actually populate), silently disabling that protection entirely. Also fixed the modal/tonight-banner fallback icon (was still the video-game controller emoji, now a die). All confirmed fixed via live tests: a rendered modal with full mocked data covering every new field, and a complete spin -> modal -> confirm -> tonight-banner flow showing real player count, age, playtime, weight, and a working BGG link end to end.
+const APP_VERSION = '0.4.0'; // MAJOR.MINOR.PATCH — added the three secondary filters from the original build request that had been outstanding since the first prototype: Playtime, Complexity (BGG's community-rated 1-5 weight scale), and Age Recommendation, each with its own Admin card matching the existing User Rating filter's pattern (min/max dropdowns for playtime and complexity, a single "up to this age" ceiling for age, since excluding overly-simple games isn't a real use case the way excluding overly-mature ones is). Games with no data for a given field are never excluded by it, same convention as the existing rating filter. Verified directly: all three correctly include/exclude/skip-unrated-data in isolation, and a full spin with a deliberately restrictive age cap (max 8, against real mocked BGG data returning minAge 10) correctly excludes every matching game with a clear, specific reason in Filtered Out — not just a plausible-looking pass in isolation.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
   'game_picks', 'blocked_games',
   'custom_game_additions', 'custom_game_removals',
   'enabled_genres', 'enabled_platforms',
-  'min_rating', 'max_rating_ceiling',
+  'min_rating', 'max_rating_ceiling', 'min_playtime', 'max_playtime', 'min_complexity', 'max_complexity', 'max_age_allowed',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
   'data_source_pref', 'color_theme'
 ]);
@@ -1231,6 +1311,11 @@ let currentSource = 'builtin'; // 'builtin' | 'igdb'
 
 let minRating = 0;
 let maxRating = 10; // top of the 0-10 scale — "Any rating" was removed as a selectable option, matching Movies/TV/Books
+let minPlaytime = 0;
+let maxPlaytime = 999; // effectively no ceiling — "no games run longer than this" isn't a real-world constraint the way a floor is
+let minComplexity = 0; // BGG's averageweight scale is 1-5, but 0 here means "no floor" — matches minRating/minPlayers' own "0 = no constraint" convention
+let maxComplexity = 5; // top of BGG's 1-5 weight scale
+let maxAgeAllowed = 99; // effectively no ceiling — "don't show me anything recommended above this age" is the one real-world use case (playing with kids); no one needs a floor ("nothing too simple")
 
 const WM_DISCOVERY_STALE_MS = 20 * 24 * 60 * 60 * 1000;
 const WM_ENRICHMENT_STALE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -1505,6 +1590,11 @@ const SYNCED_KEY_DEFAULTS = {
   enabled_platforms: () => PLATFORM_KEYS.slice(),
   min_rating: () => 0,
   max_rating_ceiling: () => 10,
+  min_playtime: () => 0,
+  max_playtime: () => 999,
+  min_complexity: () => 0,
+  max_complexity: () => 5,
+  max_age_allowed: () => 99,
   filter_explicit_content: () => true,
   custom_explicit_keywords: () => [],
   max_results: () => MAX_RESULTS_DEFAULT,
@@ -1626,6 +1716,11 @@ function renderAuthUI(){
 async function savePicks(){ await saveJSON('game_picks', picks); }
 async function saveMinRating(){ await saveJSON('min_rating', minRating); }
 async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
+async function saveMinPlaytime(){ await saveJSON('min_playtime', minPlaytime); }
+async function saveMaxPlaytime(){ await saveJSON('max_playtime', maxPlaytime); }
+async function saveMinComplexity(){ await saveJSON('min_complexity', minComplexity); }
+async function saveMaxComplexity(){ await saveJSON('max_complexity', maxComplexity); }
+async function saveMaxAgeAllowed(){ await saveJSON('max_age_allowed', maxAgeAllowed); }
 async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
 async function saveEnabledPlatforms(){ await saveJSON('enabled_platforms', enabledPlatforms); }
 
@@ -1697,6 +1792,11 @@ async function init(){
   loadSharedCrew();
   minRating = await loadJSON('min_rating', 0);
   maxRating = await loadJSON('max_rating_ceiling', 10);
+  minPlaytime = await loadJSON('min_playtime', 0);
+  maxPlaytime = await loadJSON('max_playtime', 999);
+  minComplexity = await loadJSON('min_complexity', 0);
+  maxComplexity = await loadJSON('max_complexity', 5);
+  maxAgeAllowed = await loadJSON('max_age_allowed', 99);
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
   enabledPlatforms = await loadJSON('enabled_platforms', PLATFORM_KEYS.slice());
   // Migration: a genre added to the app after someone already saved their
@@ -1981,6 +2081,11 @@ function renderAdmin(){
 
   $('minRatingSelect').value = String(minRating);
   $('maxRatingSelect').value = String(maxRating);
+  $('minPlaytimeSelect').value = String(minPlaytime);
+  $('maxPlaytimeSelect').value = String(maxPlaytime);
+  $('minComplexitySelect').value = String(minComplexity);
+  $('maxComplexitySelect').value = String(maxComplexity);
+  $('maxAgeSelect').value = String(maxAgeAllowed);
 
   $('genreToggles').innerHTML = GENRES.map(g => `
     <label class="toggle-chip ${enabledGenres.includes(g) ? '' : 'off'}">
@@ -2205,6 +2310,27 @@ $('maxRatingSelect').addEventListener('change', async (e) => {
     showRatingRangeNote(`Minimum adjusted to keep at least a ${RATING_GAP}-point gap from the maximum.`);
   }
   await saveMaxRating();
+});
+
+$('minPlaytimeSelect').addEventListener('change', async (e) => {
+  minPlaytime = Number(e.target.value);
+  await saveMinPlaytime();
+});
+$('maxPlaytimeSelect').addEventListener('change', async (e) => {
+  maxPlaytime = Number(e.target.value);
+  await saveMaxPlaytime();
+});
+$('minComplexitySelect').addEventListener('change', async (e) => {
+  minComplexity = Number(e.target.value);
+  await saveMinComplexity();
+});
+$('maxComplexitySelect').addEventListener('change', async (e) => {
+  maxComplexity = Number(e.target.value);
+  await saveMaxComplexity();
+});
+$('maxAgeSelect').addEventListener('change', async (e) => {
+  maxAgeAllowed = Number(e.target.value);
+  await saveMaxAgeAllowed();
 });
 
 $('signInBtn').addEventListener('click', signInWithGoogle);
@@ -2447,6 +2573,26 @@ function computeFilteredSurvivors(pool){
     }
     if (!matchesMaxRating(m)){
       filteredOut.push({ game: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
+      return;
+    }
+    if (!matchesMinPlaytime(m)){
+      filteredOut.push({ game: m, reason: `Playtime ${m.playtime} min below your ${minPlaytime} min minimum` });
+      return;
+    }
+    if (!matchesMaxPlaytime(m)){
+      filteredOut.push({ game: m, reason: `Playtime ${m.playtime} min above your ${maxPlaytime} min maximum` });
+      return;
+    }
+    if (!matchesMinComplexity(m)){
+      filteredOut.push({ game: m, reason: `Weight ${m.complexity.toFixed(1)} below your ${minComplexity.toFixed(1)}+ minimum` });
+      return;
+    }
+    if (!matchesMaxComplexity(m)){
+      filteredOut.push({ game: m, reason: `Weight ${m.complexity.toFixed(1)} above your ${maxComplexity.toFixed(1)} maximum` });
+      return;
+    }
+    if (!matchesMaxAge(m)){
+      filteredOut.push({ game: m, reason: `Recommended age ${m.minAge}+ above your ${maxAgeAllowed} maximum` });
       return;
     }
     survivors.push(m);
@@ -2852,6 +2998,36 @@ function matchesMaxRating(game){
   if (!maxRating) return true;
   if (game.userRating == null) return true; // no data — don't punish it
   return game.userRating <= maxRating;
+}
+
+function matchesMinPlaytime(game){
+  if (!minPlaytime) return true;
+  if (game.playtime == null) return true; // no data — don't punish it
+  return game.playtime >= minPlaytime;
+}
+
+function matchesMaxPlaytime(game){
+  if (maxPlaytime >= 999) return true;
+  if (game.playtime == null) return true;
+  return game.playtime <= maxPlaytime;
+}
+
+function matchesMinComplexity(game){
+  if (!minComplexity) return true;
+  if (game.complexity == null) return true;
+  return game.complexity >= minComplexity;
+}
+
+function matchesMaxComplexity(game){
+  if (maxComplexity >= 5) return true;
+  if (game.complexity == null) return true;
+  return game.complexity <= maxComplexity;
+}
+
+function matchesMaxAge(game){
+  if (maxAgeAllowed >= 99) return true;
+  if (game.minAge == null) return true; // no data — don't punish it
+  return game.minAge <= maxAgeAllowed;
 }
 
 // ARCHITECTURE NOTE: unlike every other app in this suite, there is no
