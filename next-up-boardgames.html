@@ -540,7 +540,7 @@
     <div class="marquee">
       <div class="sprockets"></div>
       <h1>🎲 NEXT UP - BOARD GAMES</h1>
-      <div class="tagline">We spin up a random category + player count to break the shelf paralysis — you still pick whatever actually hits the table.</div>
+      <div class="tagline">We spin up a random category + time to play to break the shelf paralysis — you still pick whatever actually hits the table.</div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
       <div class="version-badge" id="versionBadge"></div>
     </div>
@@ -667,8 +667,8 @@
       </div>
 
       <div class="card">
-        <h2>Player Count</h2>
-        <p class="desc">Check which player counts you want included — a spin picks one of these plus a category. A game matches if its real min–max player range from BGG includes the spun number, not just if it's labeled exactly that count.</p>
+        <h2>Time to Play</h2>
+        <p class="desc">Check which time-to-play buckets you want included — a spin picks one of these plus a category. Buckets are verified against real BGG playtime data: Flash (up to 15 min), Quick (16-30), Short (31-60), Medium (61-90), Long (91-120), Epic (121+).</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="platformsAllBtn">Select All</button>
           <button class="btn-ghost" id="platformsNoneBtn">Select None</button>
@@ -725,34 +725,13 @@
       </div>
 
       <div class="card">
-        <h2>Playtime</h2>
-        <p class="desc">Only shows games within this playtime range, in minutes. Games with no playtime data (including the built-in list, until enriched) are never excluded by this.</p>
-        <div class="row">
-          <div>
-            <div class="hint" style="margin:0 0 4px;">Minimum</div>
-            <select id="minPlaytimeSelect">
-              <option value="0">No minimum</option>
-              <option value="15">15+ min</option>
-              <option value="30">30+ min</option>
-              <option value="45">45+ min</option>
-              <option value="60">60+ min</option>
-              <option value="90">90+ min</option>
-              <option value="120">120+ min</option>
-            </select>
-          </div>
-          <div>
-            <div class="hint" style="margin:0 0 4px;">Maximum</div>
-            <select id="maxPlaytimeSelect">
-              <option value="999">No maximum</option>
-              <option value="30">Up to 30 min</option>
-              <option value="45">Up to 45 min</option>
-              <option value="60">Up to 60 min</option>
-              <option value="90">Up to 90 min</option>
-              <option value="120">Up to 120 min</option>
-              <option value="180">Up to 180 min</option>
-            </select>
-          </div>
+        <h2>Player Count</h2>
+        <p class="desc">Check which player counts you want included. A game matches if its real min–max player range from BGG includes any checked count, not just if it's labeled exactly that count.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="playerCountsAllBtn">Select All</button>
+          <button class="btn-ghost" id="playerCountsNoneBtn">Select None</button>
         </div>
+        <div id="playerCountToggles" class="toggle-grid"></div>
       </div>
 
       <div class="card">
@@ -894,14 +873,14 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.4.0'; // MAJOR.MINOR.PATCH — added the three secondary filters from the original build request that had been outstanding since the first prototype: Playtime, Complexity (BGG's community-rated 1-5 weight scale), and Age Recommendation, each with its own Admin card matching the existing User Rating filter's pattern (min/max dropdowns for playtime and complexity, a single "up to this age" ceiling for age, since excluding overly-simple games isn't a real use case the way excluding overly-mature ones is). Games with no data for a given field are never excluded by it, same convention as the existing rating filter. Verified directly: all three correctly include/exclude/skip-unrated-data in isolation, and a full spin with a deliberately restrictive age cap (max 8, against real mocked BGG data returning minAge 10) correctly excludes every matching game with a clear, specific reason in Filtered Out — not just a plausible-looking pass in isolation.
+const APP_VERSION = '0.5.1'; // MAJOR.MINOR.PATCH — adjusted time-to-play boundaries per feedback: Flash (up to 15 min), Quick (16-30), Short (31-60), Medium (61-90), Long (91-120), Epic (121+) — inclusive on both ends now, instead of the previous exclusive-upper-bound scheme. This reclassified 13 of the 30 built-in titles, since many real playtimes land exactly on the round boundary numbers (15/30/60/90/120) that used to sort into the tier above rather than the one at that number: Flash goes from empty to its first 3 real entries (Sushi Go!, Codenames, Coup, all exactly 15 min); Root moves Long -> Medium; five 30-minute games (Splendor, Patchwork, King of Tokyo, 7 Wonders, Dixit, The Resistance) move Short -> Quick; three 60-minute games (Ticket to Ride, Betrayal at House on the Hill, Just One) move Medium -> Short. Verified live: spins against Flash+Card Game, Medium+Wargame, and Short+Trains each correctly return exactly the expected reclassified titles (Sushi Go!/Codenames/Coup, Root, and Ticket to Ride respectively).
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
   'game_picks', 'blocked_games',
   'custom_game_additions', 'custom_game_removals',
-  'enabled_genres', 'enabled_platforms',
-  'min_rating', 'max_rating_ceiling', 'min_playtime', 'max_playtime', 'min_complexity', 'max_complexity', 'max_age_allowed',
+  'enabled_genres', 'enabled_platforms', 'enabled_player_counts',
+  'min_rating', 'max_rating_ceiling', 'min_complexity', 'max_complexity', 'max_age_allowed',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
   'data_source_pref', 'color_theme'
 ]);
@@ -923,228 +902,111 @@ const SYNCED_KEYS = new Set([
    which had no honest fit anywhere and was dropped rather than
    force-placed.
    ================================================================== */
-// VERIFIED against real, live BGG data (confirmed via a full batch check
-// run against the actual app + real BGG proxy, not assumed) — every
-// entry now carries its real bggId directly, so enrichment never needs a
-// live search to resolve one for these 30 titles, and every real
-// category BGG actually lists is tagged, not just one guessed one. Player
-// count ranges are NOT part of this verification pass (it checked
-// categories only) — still the original, unverified estimates from the
-// first build, carried forward unchanged pending a future check.
+// Restructured around genre + time-to-play as the main spin axes (player
+// count moved to a separate filter, matching the app's own real spin
+// mechanic now). Time-to-play buckets and every category here are VERIFIED
+// against real, live BGG data (two separate batch runs against the actual
+// app + proxy: categories first, then playtime). bggId is real and
+// confirmed for every entry. minPlayers/maxPlayers are carried forward
+// UNCHANGED from the original, unverified estimates in the very first
+// build -- neither verification pass has checked these yet; they're only
+// filter material now, not what drives discovery, but still flagged as a
+// real follow-up.
+// Bucket boundaries are inclusive on both ends per user preference:
+// Flash <=15, Quick 16-30, Short 31-60, Medium 61-90, Long 91-120, Epic
+// 121+. A game whose real playtime lands exactly on a round boundary
+// number (15/30/60/90/120 -- common, and hit exactly by many real games)
+// sorts into the LOWER bucket, not the upper one -- e.g. a 30-minute game
+// is Quick, not Short.
 const GAME_DB = {
-"1":{
-"Animals":[{title:"Wingspan",year:2019,bggId:266192}],
-"Card Game":[{title:"Wingspan",year:2019,bggId:266192}],
-"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
-"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561}],
-"Dice":[{title:"Sagrada",year:2017,bggId:199561}],
-"Puzzle":[{title:"Sagrada",year:2017,bggId:199561}]
+"Flash":{
+"Card Game":[{title:"Sushi Go!",year:2013,bggId:133473,minPlayers:2,maxPlayers:5},{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7},{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
+"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473,minPlayers:2,maxPlayers:5},{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7},{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
+"Deduction":[{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7},{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
+"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7}],
+"Word Game":[{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7}],
+"Bluffing":[{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
+"Political":[{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}]
 },
-"2":{
-"Animals":[{title:"Wingspan",year:2019,bggId:266192},{title:"Hive",year:2001,bggId:2655},{title:"Root",year:2018,bggId:237182}],
-"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Splendor",year:2014,bggId:148228},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622}],
-"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
-"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Splendor",year:2014,bggId:148228},{title:"Patchwork",year:2014,bggId:163412},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Root",year:2018,bggId:237182}],
-"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Root",year:2018,bggId:237182}],
-"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561},{title:"Azul",year:2017,bggId:230802},{title:"Patchwork",year:2014,bggId:163412},{title:"Kingdomino",year:2016,bggId:204583},{title:"Onitama",year:2014,bggId:160477},{title:"Hive",year:2001,bggId:2655}],
-"Dice":[{title:"Sagrada",year:2017,bggId:199561},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Puzzle":[{title:"Sagrada",year:2017,bggId:199561},{title:"Patchwork",year:2014,bggId:163412},{title:"Kingdomino",year:2016,bggId:204583}],
-"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209},{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Renaissance":[{title:"Splendor",year:2014,bggId:148228},{title:"Azul",year:2017,bggId:230802},{title:"Love Letter",year:2012,bggId:129622}],
-"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Century: Spice Road",year:2017,bggId:209685}],
-"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357}],
-"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Medical":[{title:"Pandemic",year:2008,bggId:30549}],
-"Travel":[{title:"Pandemic",year:2008,bggId:30549}],
-"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622}],
-"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900}],
-"Word Game":[{title:"Codenames",year:2015,bggId:178900}],
-"Bluffing":[{title:"Coup",year:2012,bggId:131357}],
-"Political":[{title:"Coup",year:2012,bggId:131357},{title:"Twilight Struggle",year:2005,bggId:12333}],
-"Modern Warfare":[{title:"Twilight Struggle",year:2005,bggId:12333}],
-"Wargame":[{title:"Twilight Struggle",year:2005,bggId:12333},{title:"Root",year:2018,bggId:237182}],
-"Negotiation":[{title:"Root",year:2018,bggId:237182}],
-"Ancient":[{title:"Concordia",year:2013,bggId:124361}],
-"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
-"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517}]
+"Quick":{
+"Card Game":[{title:"Splendor",year:2014,bggId:148228,minPlayers:2,maxPlayers:4},{title:"Love Letter",year:2012,bggId:129622,minPlayers:2,maxPlayers:4},{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7},{title:"Dixit",year:2008,bggId:39856,minPlayers:3,maxPlayers:6},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
+"Economic":[{title:"Splendor",year:2014,bggId:148228,minPlayers:2,maxPlayers:4},{title:"Patchwork",year:2014,bggId:163412,minPlayers:2,maxPlayers:2},{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
+"Renaissance":[{title:"Splendor",year:2014,bggId:148228,minPlayers:2,maxPlayers:4},{title:"Love Letter",year:2012,bggId:129622,minPlayers:2,maxPlayers:4}],
+"Dice":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6}],
+"Fighting":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6}],
+"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6}],
+"Science Fiction":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
+"Abstract Strategy":[{title:"Patchwork",year:2014,bggId:163412,minPlayers:2,maxPlayers:2},{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4},{title:"Onitama",year:2014,bggId:160477,minPlayers:2,maxPlayers:2},{title:"Hive",year:2001,bggId:2655,minPlayers:2,maxPlayers:2}],
+"Puzzle":[{title:"Patchwork",year:2014,bggId:163412,minPlayers:2,maxPlayers:2},{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4}],
+"Medieval":[{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4}],
+"Territory Building":[{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4}],
+"Animals":[{title:"Hive",year:2001,bggId:2655,minPlayers:2,maxPlayers:2}],
+"Deduction":[{title:"Love Letter",year:2012,bggId:129622,minPlayers:2,maxPlayers:4},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
+"Ancient":[{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
+"City Building":[{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
+"Civilization":[{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
+"Humor":[{title:"Dixit",year:2008,bggId:39856,minPlayers:3,maxPlayers:6}],
+"Party Game":[{title:"Dixit",year:2008,bggId:39856,minPlayers:3,maxPlayers:6},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
+"Bluffing":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
+"Negotiation":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
+"Print & Play":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
+"Spies / Secret Agents":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}]
 },
-"3":{
-"Animals":[{title:"Wingspan",year:2019,bggId:266192},{title:"Root",year:2018,bggId:237182}],
-"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Splendor",year:2014,bggId:148228},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415}],
-"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
-"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"7 Wonders",year:2010,bggId:68448}],
-"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Splendor",year:2014,bggId:148228},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"Brass: Birmingham",year:2018,bggId:224517},{title:"Catan",year:1995,bggId:13},{title:"7 Wonders",year:2010,bggId:68448}],
-"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Root",year:2018,bggId:237182}],
-"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Root",year:2018,bggId:237182}],
-"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561},{title:"Azul",year:2017,bggId:230802},{title:"Kingdomino",year:2016,bggId:204583}],
-"Dice":[{title:"Sagrada",year:2017,bggId:199561},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Puzzle":[{title:"Sagrada",year:2017,bggId:199561},{title:"Kingdomino",year:2016,bggId:204583}],
-"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209},{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Renaissance":[{title:"Splendor",year:2014,bggId:148228},{title:"Azul",year:2017,bggId:230802},{title:"Love Letter",year:2012,bggId:129622}],
-"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Century: Spice Road",year:2017,bggId:209685}],
-"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415}],
-"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Medical":[{title:"Pandemic",year:2008,bggId:30549}],
-"Travel":[{title:"Pandemic",year:2008,bggId:30549}],
-"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"Just One",year:2018,bggId:254640}],
-"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900}],
-"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
-"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415}],
-"Political":[{title:"Coup",year:2012,bggId:131357}],
-"Negotiation":[{title:"Root",year:2018,bggId:237182},{title:"Catan",year:1995,bggId:13}],
-"Wargame":[{title:"Root",year:2018,bggId:237182}],
-"Ancient":[{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
-"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
-"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Humor":[{title:"Dixit",year:2008,bggId:39856}]
+"Short":{
+"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561,minPlayers:1,maxPlayers:4},{title:"Azul",year:2017,bggId:230802,minPlayers:2,maxPlayers:4}],
+"Dice":[{title:"Sagrada",year:2017,bggId:199561,minPlayers:1,maxPlayers:4}],
+"Puzzle":[{title:"Sagrada",year:2017,bggId:199561,minPlayers:1,maxPlayers:4}],
+"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209,minPlayers:2,maxPlayers:5}],
+"Renaissance":[{title:"Azul",year:2017,bggId:230802,minPlayers:2,maxPlayers:4}],
+"Medieval":[{title:"Carcassonne",year:2000,bggId:822,minPlayers:2,maxPlayers:5},{title:"Century: Spice Road",year:2017,bggId:209685,minPlayers:2,maxPlayers:5}],
+"Territory Building":[{title:"Carcassonne",year:2000,bggId:822,minPlayers:2,maxPlayers:5}],
+"Card Game":[{title:"Century: Spice Road",year:2017,bggId:209685,minPlayers:2,maxPlayers:5},{title:"Skull",year:2011,bggId:92415,minPlayers:3,maxPlayers:6}],
+"Economic":[{title:"Century: Spice Road",year:2017,bggId:209685,minPlayers:2,maxPlayers:5}],
+"Medical":[{title:"Pandemic",year:2008,bggId:30549,minPlayers:2,maxPlayers:4}],
+"Travel":[{title:"Pandemic",year:2008,bggId:30549,minPlayers:2,maxPlayers:4}],
+"Adventure":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547,minPlayers:3,maxPlayers:6}],
+"Exploration":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547,minPlayers:3,maxPlayers:6}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547,minPlayers:3,maxPlayers:6}],
+"Deduction":[{title:"Just One",year:2018,bggId:254640,minPlayers:3,maxPlayers:7}],
+"Party Game":[{title:"Just One",year:2018,bggId:254640,minPlayers:3,maxPlayers:7},{title:"Skull",year:2011,bggId:92415,minPlayers:3,maxPlayers:6}],
+"Word Game":[{title:"Just One",year:2018,bggId:254640,minPlayers:3,maxPlayers:7}],
+"Bluffing":[{title:"Skull",year:2011,bggId:92415,minPlayers:3,maxPlayers:6}]
 },
-"4":{
-"Animals":[{title:"Wingspan",year:2019,bggId:266192},{title:"Root",year:2018,bggId:237182}],
-"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Splendor",year:2014,bggId:148228},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415}],
-"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
-"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"7 Wonders",year:2010,bggId:68448}],
-"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Splendor",year:2014,bggId:148228},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"Brass: Birmingham",year:2018,bggId:224517},{title:"Catan",year:1995,bggId:13},{title:"7 Wonders",year:2010,bggId:68448}],
-"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Root",year:2018,bggId:237182}],
-"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Root",year:2018,bggId:237182}],
-"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
-"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561},{title:"Azul",year:2017,bggId:230802},{title:"Kingdomino",year:2016,bggId:204583}],
-"Dice":[{title:"Sagrada",year:2017,bggId:199561},{title:"King of Tokyo",year:2011,bggId:70323}],
-"Puzzle":[{title:"Sagrada",year:2017,bggId:199561},{title:"Kingdomino",year:2016,bggId:204583}],
-"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209},{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Renaissance":[{title:"Splendor",year:2014,bggId:148228},{title:"Azul",year:2017,bggId:230802},{title:"Love Letter",year:2012,bggId:129622}],
-"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Century: Spice Road",year:2017,bggId:209685}],
-"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415}],
-"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Medical":[{title:"Pandemic",year:2008,bggId:30549}],
-"Travel":[{title:"Pandemic",year:2008,bggId:30549}],
-"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"Just One",year:2018,bggId:254640}],
-"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900}],
-"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
-"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415}],
-"Political":[{title:"Coup",year:2012,bggId:131357}],
-"Negotiation":[{title:"Root",year:2018,bggId:237182},{title:"Catan",year:1995,bggId:13}],
-"Wargame":[{title:"Root",year:2018,bggId:237182}],
-"Ancient":[{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
-"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
-"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
-"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Humor":[{title:"Dixit",year:2008,bggId:39856}]
+"Medium":{
+"Animals":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5},{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
+"Card Game":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5}],
+"Educational":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5}],
+"Environmental":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5}],
+"Fantasy":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
+"Negotiation":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
+"Territory Building":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
+"Wargame":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}]
 },
-"5":{
-"Animals":[{title:"Wingspan",year:2019,bggId:266192}],
-"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
-"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
-"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"7 Wonders",year:2010,bggId:68448}],
-"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
-"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323},{title:"The Resistance",year:2009,bggId:41114}],
-"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
-"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822}],
-"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209}],
-"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Century: Spice Road",year:2017,bggId:209685}],
-"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
-"Dice":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Fighting":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
-"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900},{title:"The Resistance",year:2009,bggId:41114}],
-"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
-"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
-"Political":[{title:"Coup",year:2012,bggId:131357}],
-"Ancient":[{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
-"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
-"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Adventure":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Exploration":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Humor":[{title:"Dixit",year:2008,bggId:39856}],
-"Negotiation":[{title:"The Resistance",year:2009,bggId:41114}],
-"Print & Play":[{title:"The Resistance",year:2009,bggId:41114}]
+"Long":{
+"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
+"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5},{title:"Concordia",year:2013,bggId:124361,minPlayers:2,maxPlayers:5},{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4},{title:"Catan",year:1995,bggId:13,minPlayers:3,maxPlayers:4}],
+"Environmental":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
+"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5},{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
+"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
+"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
+"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
+"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
+"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
+"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
+"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
+"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
+"Ancient":[{title:"Concordia",year:2013,bggId:124361,minPlayers:2,maxPlayers:5}],
+"Nautical":[{title:"Concordia",year:2013,bggId:124361,minPlayers:2,maxPlayers:5}],
+"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
+"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
+"Trains":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
+"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
+"Negotiation":[{title:"Catan",year:1995,bggId:13,minPlayers:3,maxPlayers:4}]
 },
-"6":{
-"Dice":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Fighting":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
-"Science Fiction":[{title:"King of Tokyo",year:2011,bggId:70323},{title:"The Resistance",year:2009,bggId:41114}],
-"Card Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
-"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
-"Party Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
-"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900},{title:"The Resistance",year:2009,bggId:41114}],
-"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
-"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
-"Political":[{title:"Coup",year:2012,bggId:131357}],
-"Ancient":[{title:"7 Wonders",year:2010,bggId:68448}],
-"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Civilization":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Economic":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Adventure":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Exploration":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
-"Humor":[{title:"Dixit",year:2008,bggId:39856}],
-"Negotiation":[{title:"The Resistance",year:2009,bggId:41114}],
-"Print & Play":[{title:"The Resistance",year:2009,bggId:41114}]
-},
-"7+":{
-"Card Game":[{title:"Codenames",year:2015,bggId:178900},{title:"7 Wonders",year:2010,bggId:68448},{title:"The Resistance",year:2009,bggId:41114}],
-"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
-"Party Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
-"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900},{title:"The Resistance",year:2009,bggId:41114}],
-"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
-"Ancient":[{title:"7 Wonders",year:2010,bggId:68448}],
-"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Civilization":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Economic":[{title:"7 Wonders",year:2010,bggId:68448}],
-"Bluffing":[{title:"The Resistance",year:2009,bggId:41114}],
-"Negotiation":[{title:"The Resistance",year:2009,bggId:41114}],
-"Print & Play":[{title:"The Resistance",year:2009,bggId:41114}],
-"Science Fiction":[{title:"The Resistance",year:2009,bggId:41114}]
+"Epic":{
+"Modern Warfare":[{title:"Twilight Struggle",year:2005,bggId:12333,minPlayers:2,maxPlayers:2}],
+"Political":[{title:"Twilight Struggle",year:2005,bggId:12333,minPlayers:2,maxPlayers:2}],
+"Wargame":[{title:"Twilight Struggle",year:2005,bggId:12333,minPlayers:2,maxPlayers:2}]
 },
 };
 
@@ -1198,11 +1060,29 @@ const BG_CATEGORIES = [
   "Word Game",
 ];
 
-// A specific number, not a range — the spin picks one count and matches
-// it against each game's real minplayers–maxplayers range from BGG (a
-// game supporting 2–5 players matches a spin of 3, 4, or 5, not just a
-// game explicitly labeled "3 players"). "7+" catches anything whose max
-// genuinely goes that high, not just games specifically designed for 7.
+// The spin's second axis, alongside category — replaces player count,
+// which moved to its own separate filter (see enabledPlayerCounts
+// below). Boundaries and every game's placement are VERIFIED against
+// real, live BGG playtime data for all 30 built-in titles (a full batch
+// run against the actual app + proxy), not guessed. Every tier's bound
+// is inclusive on both ends, per explicit preference: a game landing
+// exactly on a round boundary number (15/30/60/90/120 — common, and hit
+// exactly by many real games) sorts into the LOWER tier, not the upper
+// one — e.g. a 30-minute game is Quick, not Short; a 15-minute game is
+// Flash, not Quick.
+const TIME_TO_PLAY_OPTIONS = ['Flash', 'Quick', 'Short', 'Medium', 'Long', 'Epic'];
+// Flash (up to 15 min), Quick (16-30), Short (31-60), Medium (61-90),
+// Long (91-120), Epic (121+) — three of the 30 built-in titles (Sushi
+// Go!, Codenames, Coup) land exactly at 15 minutes, giving Flash its
+// first real entries.
+
+// A specific number, not a range — matches against each game's real
+// minplayers–maxplayers range from BGG (a game supporting 2–5 players
+// matches a spin of 3, 4, or 5, not just a game explicitly labeled "3
+// players"). "7+" catches anything whose max genuinely goes that high,
+// not just games specifically designed for 7. No longer the spin axis
+// itself — now a standalone filter, same role Playtime/Complexity/Age
+// already have.
 const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '5', '6', '7+'];
 
 
@@ -1227,7 +1107,7 @@ const ESRB_RATINGS = {
 // this list IS the complete, authoritative set of what's toggle-able,
 // not just a convenience derived from something more authoritative.
 const GENRES = BG_CATEGORIES.slice();
-const PLATFORM_KEYS = PLAYER_COUNT_OPTIONS.slice();
+const PLATFORM_KEYS = TIME_TO_PLAY_OPTIONS.slice();
 
 function comboKey(platform, genre){ return `${platform}|${genre}`; }
 
@@ -1311,8 +1191,6 @@ let currentSource = 'builtin'; // 'builtin' | 'igdb'
 
 let minRating = 0;
 let maxRating = 10; // top of the 0-10 scale — "Any rating" was removed as a selectable option, matching Movies/TV/Books
-let minPlaytime = 0;
-let maxPlaytime = 999; // effectively no ceiling — "no games run longer than this" isn't a real-world constraint the way a floor is
 let minComplexity = 0; // BGG's averageweight scale is 1-5, but 0 here means "no floor" — matches minRating/minPlayers' own "0 = no constraint" convention
 let maxComplexity = 5; // top of BGG's 1-5 weight scale
 let maxAgeAllowed = 99; // effectively no ceiling — "don't show me anything recommended above this age" is the one real-world use case (playing with kids); no one needs a floor ("nothing too simple")
@@ -1401,6 +1279,7 @@ const wmRatingsCache = new Map(); // gameId -> {title, year, genres, posterUrl, 
 const wmSearchCache = new Map(); // "title|year" -> gameId (or null for a confirmed no-match), used to enrich the built-in list
 let enabledGenres = GENRES.slice();
 let enabledPlatforms = PLATFORM_KEYS.slice();
+let enabledPlayerCounts = PLAYER_COUNT_OPTIONS.slice();
 
 // Color themes — each swaps the accent + base palette; danger (velvet) and
 // success (green) colors stay fixed across all of them so status colors
@@ -1588,10 +1467,9 @@ const SYNCED_KEY_DEFAULTS = {
   custom_game_removals: () => ({}),
   enabled_genres: () => GENRES.slice(),
   enabled_platforms: () => PLATFORM_KEYS.slice(),
+  enabled_player_counts: () => PLAYER_COUNT_OPTIONS.slice(),
   min_rating: () => 0,
   max_rating_ceiling: () => 10,
-  min_playtime: () => 0,
-  max_playtime: () => 999,
   min_complexity: () => 0,
   max_complexity: () => 5,
   max_age_allowed: () => 99,
@@ -1716,13 +1594,12 @@ function renderAuthUI(){
 async function savePicks(){ await saveJSON('game_picks', picks); }
 async function saveMinRating(){ await saveJSON('min_rating', minRating); }
 async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
-async function saveMinPlaytime(){ await saveJSON('min_playtime', minPlaytime); }
-async function saveMaxPlaytime(){ await saveJSON('max_playtime', maxPlaytime); }
 async function saveMinComplexity(){ await saveJSON('min_complexity', minComplexity); }
 async function saveMaxComplexity(){ await saveJSON('max_complexity', maxComplexity); }
 async function saveMaxAgeAllowed(){ await saveJSON('max_age_allowed', maxAgeAllowed); }
 async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
 async function saveEnabledPlatforms(){ await saveJSON('enabled_platforms', enabledPlatforms); }
+async function saveEnabledPlayerCounts(){ await saveJSON('enabled_player_counts', enabledPlayerCounts); }
 
 function applyColorTheme(name){
   const theme = COLOR_THEMES[name] || COLOR_THEMES.amber;
@@ -1792,13 +1669,12 @@ async function init(){
   loadSharedCrew();
   minRating = await loadJSON('min_rating', 0);
   maxRating = await loadJSON('max_rating_ceiling', 10);
-  minPlaytime = await loadJSON('min_playtime', 0);
-  maxPlaytime = await loadJSON('max_playtime', 999);
   minComplexity = await loadJSON('min_complexity', 0);
   maxComplexity = await loadJSON('max_complexity', 5);
   maxAgeAllowed = await loadJSON('max_age_allowed', 99);
   enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
   enabledPlatforms = await loadJSON('enabled_platforms', PLATFORM_KEYS.slice());
+  enabledPlayerCounts = await loadJSON('enabled_player_counts', PLAYER_COUNT_OPTIONS.slice());
   // Migration: a genre added to the app after someone already saved their
   // filter selection (e.g. Fantasy/Western) should default to enabled for
   // them too, not silently vanish from their spin pool — but a genre the
@@ -2081,8 +1957,6 @@ function renderAdmin(){
 
   $('minRatingSelect').value = String(minRating);
   $('maxRatingSelect').value = String(maxRating);
-  $('minPlaytimeSelect').value = String(minPlaytime);
-  $('maxPlaytimeSelect').value = String(maxPlaytime);
   $('minComplexitySelect').value = String(minComplexity);
   $('maxComplexitySelect').value = String(maxComplexity);
   $('maxAgeSelect').value = String(maxAgeAllowed);
@@ -2114,6 +1988,21 @@ function renderAdmin(){
       else { enabledPlatforms = enabledPlatforms.filter(x => x !== p); }
       renderAdmin();
       await saveEnabledPlatforms();
+    });
+  });
+
+  $('playerCountToggles').innerHTML = PLAYER_COUNT_OPTIONS.map(p => `
+    <label class="toggle-chip ${enabledPlayerCounts.includes(p) ? '' : 'off'}">
+      <input type="checkbox" data-playercount="${escapeHtml(p)}" ${enabledPlayerCounts.includes(p) ? 'checked' : ''}> ${escapeHtml(p)}
+    </label>
+  `).join('');
+  $('playerCountToggles').querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const p = cb.dataset.playercount;
+      if (cb.checked) { if (!enabledPlayerCounts.includes(p)) enabledPlayerCounts.push(p); }
+      else { enabledPlayerCounts = enabledPlayerCounts.filter(x => x !== p); }
+      renderAdmin();
+      await saveEnabledPlayerCounts();
     });
   });
 
@@ -2267,6 +2156,8 @@ $('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES
 $('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
 $('platformsAllBtn').addEventListener('click', async () => { enabledPlatforms = PLATFORM_KEYS.slice(); renderAdmin(); await saveEnabledPlatforms(); });
 $('platformsNoneBtn').addEventListener('click', async () => { enabledPlatforms = []; renderAdmin(); await saveEnabledPlatforms(); });
+$('playerCountsAllBtn').addEventListener('click', async () => { enabledPlayerCounts = PLAYER_COUNT_OPTIONS.slice(); renderAdmin(); await saveEnabledPlayerCounts(); });
+$('playerCountsNoneBtn').addEventListener('click', async () => { enabledPlayerCounts = []; renderAdmin(); await saveEnabledPlayerCounts(); });
 
 function showRatingRangeNote(text){
   const el = $('ratingRangeNote');
@@ -2312,14 +2203,6 @@ $('maxRatingSelect').addEventListener('change', async (e) => {
   await saveMaxRating();
 });
 
-$('minPlaytimeSelect').addEventListener('change', async (e) => {
-  minPlaytime = Number(e.target.value);
-  await saveMinPlaytime();
-});
-$('maxPlaytimeSelect').addEventListener('change', async (e) => {
-  maxPlaytime = Number(e.target.value);
-  await saveMaxPlaytime();
-});
 $('minComplexitySelect').addEventListener('change', async (e) => {
   minComplexity = Number(e.target.value);
   await saveMinComplexity();
@@ -2575,14 +2458,6 @@ function computeFilteredSurvivors(pool){
       filteredOut.push({ game: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
       return;
     }
-    if (!matchesMinPlaytime(m)){
-      filteredOut.push({ game: m, reason: `Playtime ${m.playtime} min below your ${minPlaytime} min minimum` });
-      return;
-    }
-    if (!matchesMaxPlaytime(m)){
-      filteredOut.push({ game: m, reason: `Playtime ${m.playtime} min above your ${maxPlaytime} min maximum` });
-      return;
-    }
     if (!matchesMinComplexity(m)){
       filteredOut.push({ game: m, reason: `Weight ${m.complexity.toFixed(1)} below your ${minComplexity.toFixed(1)}+ minimum` });
       return;
@@ -2593,6 +2468,10 @@ function computeFilteredSurvivors(pool){
     }
     if (!matchesMaxAge(m)){
       filteredOut.push({ game: m, reason: `Recommended age ${m.minAge}+ above your ${maxAgeAllowed} maximum` });
+      return;
+    }
+    if (!matchesPlayerCount(m)){
+      filteredOut.push({ game: m, reason: `${m.minPlayers}-${m.maxPlayers} players doesn't include any of your enabled player counts` });
       return;
     }
     survivors.push(m);
@@ -3000,18 +2879,6 @@ function matchesMaxRating(game){
   return game.userRating <= maxRating;
 }
 
-function matchesMinPlaytime(game){
-  if (!minPlaytime) return true;
-  if (game.playtime == null) return true; // no data — don't punish it
-  return game.playtime >= minPlaytime;
-}
-
-function matchesMaxPlaytime(game){
-  if (maxPlaytime >= 999) return true;
-  if (game.playtime == null) return true;
-  return game.playtime <= maxPlaytime;
-}
-
 function matchesMinComplexity(game){
   if (!minComplexity) return true;
   if (game.complexity == null) return true;
@@ -3030,6 +2897,20 @@ function matchesMaxAge(game){
   return game.minAge <= maxAgeAllowed;
 }
 
+// A game matches if ANY enabled count falls within its real min-max
+// player range — a game supporting 2-5 matches an enabled "3" the same
+// way it would match a spin of 3 back when player count was the spin
+// axis itself; this filter just checks the same range logic against a
+// whole set of allowed counts instead of one spun number.
+function matchesPlayerCount(game){
+  if (enabledPlayerCounts.length === PLAYER_COUNT_OPTIONS.length) return true; // every count enabled — no real constraint
+  if (game.minPlayers == null || game.maxPlayers == null) return true; // no data — don't punish it
+  return enabledPlayerCounts.some(pc => {
+    const n = pc === '7+' ? 7 : Number(pc);
+    return pc === '7+' ? game.maxPlayers >= 7 : (game.minPlayers <= n && game.maxPlayers >= n);
+  });
+}
+
 // ARCHITECTURE NOTE: unlike every other app in this suite, there is no
 // live "discover games matching category X and player count Y" query to
 // fall back on here. BGG's XML API2 was checked directly against its
@@ -3044,9 +2925,9 @@ function matchesMaxAge(game){
 // confirmed design choice, not a placeholder for a live query to be
 // added later — see the conversation that led to this build for the
 // full reasoning.
-async function buildGamePool(playerCount, category){
+async function buildGamePool(timeToPlay, category){
   setSpinStatus('Checking the built-in list…');
-  const pool = getEffectiveGameList(playerCount, category).map(entry => {
+  const pool = getEffectiveGameList(timeToPlay, category).map(entry => {
     const cached = wmRatingsCache.get(entry.bggId);
     return {
       title: entry.title,
@@ -3058,6 +2939,12 @@ async function buildGamePool(playerCount, category){
       playtime: cached ? cached.playtime : null, // minutes, from BGG's maxplaytime
       complexity: cached ? cached.complexity : null, // BGG's averageweight, 1-5 scale
       minAge: cached ? cached.minAge : null,
+      // Available immediately from the built-in list itself, unlike the
+      // fields above — real enrichment (once it runs) still takes
+      // precedence if it disagrees, same "cached wins once known"
+      // pattern as everything else here.
+      minPlayers: (cached && cached.minPlayers != null) ? cached.minPlayers : (entry.minPlayers ?? null),
+      maxPlayers: (cached && cached.maxPlayers != null) ? cached.maxPlayers : (entry.maxPlayers ?? null),
       description: cached ? cached.description : null,
       bggUrl: entry.bggId ? `https://boardgamegeek.com/boardgame/${entry.bggId}` : null
     };
