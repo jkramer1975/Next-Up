@@ -814,7 +814,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — rebuilt GAME_DB and BG_CATEGORIES from a full, real batch verification run against live BGG data for all 30 built-in titles (search + thing lookups for every one, via the actual app + proxy, not mocked or guessed). The scale of the correction was much larger than the two spot-checks already found: many guessed categories had zero overlap with reality at all (Ticket to Ride: guessed "Family Game", real category is just "Trains"; Wingspan: guessed "Strategy Game", real is Animals/Card Game/Educational/Environmental). BG_CATEGORIES grew from 19 guessed values to 42 real ones, each confirmed as something at least one built-in title is actually tagged with by BGG. Every GAME_DB entry now also carries its real, confirmed bggId directly — enrichment for these 30 titles no longer needs a live search to resolve one first, confirmed live: a spin against a known title now makes exactly one BGG call (thing), not two (search then thing). Player-count ranges were NOT part of this verification pass (it checked categories/ids only) — still the original estimates from the first build, flagged as a follow-up.
+const APP_VERSION = '0.3.0'; // MAJOR.MINOR.PATCH — populated the pick modal with real BGG data that was already being fetched and stored but never actually displayed: player count range (byline), min age + playtime (meta line), complexity/weight as its own rating chip alongside user rating, and mechanics as a distinct chip row from categories. While doing this, found and fixed a much wider set of leftover video-game-template references than initially expected, spanning several separate code paths: gameDetailLink/gameLinkLabel checked game.igdbUrl (never set — game.bggUrl is), so every detail link silently fell back to a generic Google search instead of linking to BGG; mergeFreshestTiers (the shared-cache merge) still only propagated platforms/themes/igdbUrl/esrbRating from a fresher shared record, meaning minPlayers/maxPlayers/playtime/complexity/minAge/mechanics/bggUrl never actually benefited from someone else's fresher enrichment; fetchGameExtras, appendModalExtras, and appendTonightExtras (the on-click "extras" flow, a separate path from the main spin-time enrichment) all still read/wrote the same old fields instead of the new ones; confirmPick had a dead fallback referencing game.platforms; updateCacheStats' Admin diagnostic compared entry.platforms.includes(...) against a value that was never an array to begin with (player count is a min-max range, not a discrete list); and the explicit-content filter checked game.themes (never set) instead of genresOverride (the field BGG categories actually populate), silently disabling that protection entirely. Also fixed the modal/tonight-banner fallback icon (was still the video-game controller emoji, now a die). All confirmed fixed via live tests: a rendered modal with full mocked data covering every new field, and a complete spin -> modal -> confirm -> tonight-banner flow showing real player count, age, playtime, weight, and a working BGG link end to end.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -1266,10 +1266,13 @@ function mergeFreshestTiers(local, shared){
     merged.posterUrl = shared.posterUrl;
     merged.description = shared.description;
     merged.userRating = sanitizeUserRating(shared.userRating);
-    merged.platforms = shared.platforms;
-    merged.themes = shared.themes;
-    merged.igdbUrl = shared.igdbUrl;
-    merged.esrbRating = shared.esrbRating;
+    merged.minPlayers = shared.minPlayers;
+    merged.maxPlayers = shared.maxPlayers;
+    merged.playtime = shared.playtime;
+    merged.complexity = shared.complexity;
+    merged.minAge = shared.minAge;
+    merged.mechanics = shared.mechanics;
+    merged.bggUrl = shared.bggUrl;
     merged.enrichedAt = shared.enrichedAt;
   }
   return merged;
@@ -2277,17 +2280,19 @@ function updateCacheStats(){
   let missingPlatformData = 0;
   wmRatingsCache.forEach((entry) => {
     if (platformSel !== 'all'){
-      if (!entry.platforms || !entry.platforms.length){ missingPlatformData++; return; }
-      if (!entry.platforms.includes(platformSel)) return;
+      if (entry.minPlayers == null || entry.maxPlayers == null){ missingPlatformData++; return; }
+      const n = platformSel === '7+' ? 7 : Number(platformSel);
+      const matches = platformSel === '7+' ? entry.maxPlayers >= 7 : (entry.minPlayers <= n && entry.maxPlayers >= n);
+      if (!matches) return;
     }
     if (genreSel !== 'all'){
       if (!entry.genres || !entry.genres.includes(genreSel)) return;
     }
     count++;
   });
-  let text = `${count} game${count === 1 ? '' : 's'} cached for ${platformSel === 'all' ? 'all platforms' : platformSel} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
+  let text = `${count} game${count === 1 ? '' : 's'} cached for ${platformSel === 'all' ? 'all player counts' : platformSel + ' players'} / ${genreSel === 'all' ? 'all categories' : genreSel}.`;
   if (platformSel !== 'all' && missingPlatformData){
-    text += ` (${missingPlatformData} cached entries from before this feature can't be counted by platform until re-fetched.)`;
+    text += ` (${missingPlatformData} cached entries from before this feature can't be counted by player count until re-fetched.)`;
   }
   $('cacheStatsResult').textContent = text;
 }
@@ -2419,13 +2424,15 @@ function computeFilteredSurvivors(pool){
   const filteredOut = [];
   pool.forEach(m => {
     // Deliberately silent — unlike every other exclusion reason below,
-    // this one never shows up in the Filtered Out list at all. IGDB's
-    // "Erotic" theme is real, structured data (confirmed live), not a
-    // text-match guess, so there's no ambiguity to explain to the user
-    // the way the keyword-based explicit filter sometimes has. Only
-    // applies when the Explicit Content Filter is on; turning that off
-    // turns this off too, same as the keyword-based check below.
-    if (filterExplicitContent && m.themes && m.themes.includes('Erotic')) return;
+    // this one never shows up in the Filtered Out list at all. BGG does
+    // have a real "Erotic" category value (matching IGDB's equivalent
+    // theme concept for Games), checked against genresOverride here
+    // since that's the field this app actually populates with BGG's
+    // category data — NOT yet independently live-verified for board
+    // games specifically the way IGDB's "Erotic" theme was for Games.
+    // Only applies when the Explicit Content Filter is on; turning that
+    // off turns this off too, same as the keyword-based check below.
+    if (filterExplicitContent && m.genresOverride && m.genresOverride.includes('Erotic')) return;
     if (isBlocked(m.title, m.year)){
       filteredOut.push({ game: m, reason: 'Blocked' });
       return;
@@ -2908,12 +2915,13 @@ function gameGenres(game){
 }
 
 function gameDetailLink(game){
-  // IGDB's own url field, confirmed live — a real, curated game page,
-  // not a guess. Falls back to a general web search only for titles
-  // that haven't been enriched yet (e.g. an untouched built-in list
-  // entry), where no igdbUrl exists at all.
-  if (game.igdbUrl) return game.igdbUrl;
-  return `https://www.google.com/search?q=${encodeURIComponent(game.title + ' video game')}`;
+  // BGG's own boardgame page URL, confirmed live — a real, curated game
+  // page, not a guess. Falls back to a general web search only for
+  // titles that haven't been enriched yet (e.g. an untouched built-in
+  // list entry, or a custom addition with no resolved BGG id), where no
+  // bggUrl exists at all.
+  if (game.bggUrl) return game.bggUrl;
+  return `https://www.google.com/search?q=${encodeURIComponent(game.title + ' board game')}`;
 }
 
 function gameCoverUrl(game){
@@ -2921,7 +2929,7 @@ function gameCoverUrl(game){
 }
 
 function gameLinkLabel(game){
-  return game.igdbUrl ? 'IGDB' : 'Search';
+  return game.bggUrl ? 'BGG' : 'Search';
 }
 
 function genreChipsHtml(game){
@@ -2930,30 +2938,37 @@ function genreChipsHtml(game){
   return `<div class="genre-chips">${genres.map(g => `<span class="genre-chip">${escapeHtml(g)}</span>`).join('')}</div>`;
 }
 
-function themeChipsHtml(game){
-  if (!game.themes || !game.themes.length) return '';
-  return `<div class="genre-chips">${game.themes.map(t => `<span class="theme-chip">${escapeHtml(t)}</span>`).join('')}</div>`;
+function mechanicChipsHtml(game){
+  if (!game.mechanics || !game.mechanics.length) return '';
+  return `<div class="genre-chips">${game.mechanics.map(t => `<span class="theme-chip">${escapeHtml(t)}</span>`).join('')}</div>`;
 }
 
 function bylineHtml(game){
-  // Games don't have an "author" the way books do — showing platforms
-  // here instead, since that's real, confirmed data and tells you
-  // something genuinely useful about the game.
-  if (!game.platforms || !game.platforms.length) return '';
-  return `on ${escapeHtml(game.platforms.join(', '))}`;
+  // Board games don't have an "author" the way books do — showing the
+  // real player count range instead, since that's confirmed data (from
+  // BGG's minplayers/maxplayers) and is usually the single most
+  // practical thing to know before picking a game for a specific group.
+  if (game.minPlayers == null && game.maxPlayers == null) return '';
+  if (game.minPlayers != null && game.maxPlayers != null && game.minPlayers !== game.maxPlayers){
+    return `${game.minPlayers}–${game.maxPlayers} players`;
+  }
+  const n = game.minPlayers ?? game.maxPlayers;
+  return `${n} player${n === 1 ? '' : 's'}`;
 }
 
 function metaLineHtml(game){
   const genres = gameGenres(game);
   const bits = [game.year || '—'];
   if (genres.length) bits.push(genres.join(', '));
-  if (game.esrbRating) bits.push(`ESRB ${game.esrbRating}`);
+  if (game.minAge != null) bits.push(`Ages ${game.minAge}+`);
+  if (game.playtime != null) bits.push(`~${game.playtime} min`);
   return bits.join(' · ');
 }
 
 function ratingChipsHtml(game){
   const chips = [];
   if (game.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${game.userRating.toFixed(1)}</span>`);
+  if (game.complexity != null) chips.push(`<span class="rating-chip" title="BGG's community-rated complexity, 1 (light) to 5 (heavy)">🧠 Weight ${game.complexity.toFixed(1)}/5</span>`);
   if (!chips.length) return '';
   return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
 }
@@ -2974,7 +2989,7 @@ function buildGameCard(game, index, onClick){
       <div class="p-year">${game.year || '—'}</div>
       <div class="rating-row">${ratingChipsHtml(game)}</div>
       <div class="genre-row">${genreChipsHtml(game)}</div>
-      <div class="theme-row">${themeChipsHtml(game)}</div>
+      <div class="theme-row">${mechanicChipsHtml(game)}</div>
       <div class="meta-footer">
         <a class="detail-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" title="View on ${gameLinkLabel(game)}">🔗 ${gameLinkLabel(game)}</a>
         <button class="block-card-btn" title="Block this game">⛔</button>
@@ -3028,8 +3043,8 @@ function openConfirm(game){
   const posterUrl = gameCoverUrl(game);
   const posterHtml = posterUrl
     ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(game.title)} cover">`
-    : `<div class="m-icon" id="modalPoster">🎮</div>`;
-  const showDetailsLookup = currentSource === 'igdb' && game.gameId;
+    : `<div class="m-icon" id="modalPoster">🎲</div>`;
+  const showDetailsLookup = game.gameId != null;
   const canForceRefresh = !!game.gameId;
   const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(game.gameId);
   const showExtrasContainer = showDetailsLookup || canForceRefresh;
@@ -3043,7 +3058,7 @@ function openConfirm(game){
         <p id="modalMeta">${metaLineHtml(game)}</p>
         <div id="modalRatings">${ratingChipsHtml(game)}</div>
         <div id="modalGenres">${genreChipsHtml(game)}</div>
-        <div id="modalThemes">${themeChipsHtml(game)}</div>
+        <div id="modalThemes">${mechanicChipsHtml(game)}</div>
         <p id="modalDescription" class="modal-description" style="${game.description ? '' : 'display:none;'}">${escapeHtml(game.description || '')}</p>
         ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showDetailsLookup ? 'Loading details…' : ''}</div>` : ''}
         <div class="row">
@@ -3098,8 +3113,13 @@ function appendModalExtras(extras, game){
   if (extras.genres && extras.genres.length) game.genresOverride = extras.genres;
   if (!game.description && extras.description) game.description = extras.description;
   if (game.userRating == null && extras.userRating != null) game.userRating = extras.userRating;
-  if (extras.platforms && extras.platforms.length) game.platforms = extras.platforms;
-  if (extras.esrbRating) game.esrbRating = extras.esrbRating;
+  if (extras.minPlayers != null) game.minPlayers = extras.minPlayers;
+  if (extras.maxPlayers != null) game.maxPlayers = extras.maxPlayers;
+  if (extras.playtime != null) game.playtime = extras.playtime;
+  if (extras.complexity != null) game.complexity = extras.complexity;
+  if (extras.minAge != null) game.minAge = extras.minAge;
+  if (extras.mechanics && extras.mechanics.length) game.mechanics = extras.mechanics;
+  if (extras.bggUrl) game.bggUrl = extras.bggUrl;
 
   backfillGridCard(game);
 
@@ -3119,7 +3139,7 @@ function appendModalExtras(extras, game){
   const genresBox = document.getElementById('modalGenres');
   if (genresBox) genresBox.innerHTML = genreChipsHtml(game);
   const themesBox = document.getElementById('modalThemes');
-  if (themesBox) themesBox.innerHTML = themeChipsHtml(game);
+  if (themesBox) themesBox.innerHTML = mechanicChipsHtml(game);
   const descBox = document.getElementById('modalDescription');
   if (descBox && game.description){
     descBox.textContent = game.description;
@@ -3161,7 +3181,7 @@ function backfillGridCard(game){
   const genreRow = card.querySelector('.genre-row');
   if (genreRow) genreRow.innerHTML = genreChipsHtml(game);
   const themeRow = card.querySelector('.theme-row');
-  if (themeRow) themeRow.innerHTML = themeChipsHtml(game);
+  if (themeRow) themeRow.innerHTML = mechanicChipsHtml(game);
 }
 
 function closeModal(){ $('modalRoot').innerHTML = ''; }
@@ -3178,7 +3198,7 @@ window.handleNativeBackPress = function(){
 };
 
 async function confirmPick(game, picker){
-  const platform = currentChoice ? currentChoice.platform : ((game.platforms && game.platforms[0]) || 'Unknown');
+  const platform = currentChoice ? currentChoice.platform : (game.minPlayers != null ? String(game.minPlayers) : 'Unknown');
   const genre = currentChoice ? currentChoice.genre : 'Found via search';
   picks.push({
     title: game.title, year: game.year,
@@ -3193,7 +3213,7 @@ async function confirmPick(game, picker){
   await savePicks();
   await recordPick(picker);
 
-  if (currentSource === 'igdb' && game.gameId){
+  if (game.gameId != null){
     fetchGameExtras(game).then(extras => appendTonightExtras(extras, game));
   }
 }
@@ -3211,16 +3231,26 @@ async function fetchGameExtras(game, forceRefresh){
     genres: game.genresOverride || null,
     description: game.description || null,
     userRating: game.userRating ?? null,
-    platforms: game.platforms || null,
-    esrbRating: game.esrbRating || null
+    minPlayers: game.minPlayers ?? null,
+    maxPlayers: game.maxPlayers ?? null,
+    playtime: game.playtime ?? null,
+    complexity: game.complexity ?? null,
+    minAge: game.minAge ?? null,
+    mechanics: game.mechanics || null,
+    bggUrl: game.bggUrl || null
   };
 }
 
 function appendTonightExtras(extras, game){
   if (extras.genres && extras.genres.length) game.genresOverride = extras.genres;
   if (game.userRating == null && extras.userRating != null) game.userRating = extras.userRating;
-  if (extras.platforms && extras.platforms.length) game.platforms = extras.platforms;
-  if (extras.esrbRating) game.esrbRating = extras.esrbRating;
+  if (extras.minPlayers != null) game.minPlayers = extras.minPlayers;
+  if (extras.maxPlayers != null) game.maxPlayers = extras.maxPlayers;
+  if (extras.playtime != null) game.playtime = extras.playtime;
+  if (extras.complexity != null) game.complexity = extras.complexity;
+  if (extras.minAge != null) game.minAge = extras.minAge;
+  if (extras.mechanics && extras.mechanics.length) game.mechanics = extras.mechanics;
+  if (extras.bggUrl) game.bggUrl = extras.bggUrl;
   backfillGridCard(game);
 
   const banner = document.querySelector('#tonightBanner .tonight > div');
@@ -3238,7 +3268,7 @@ function appendTonightExtras(extras, game){
 
 function showTonightBanner(game, picker){
   const posterUrl = gameCoverUrl(game);
-  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🎮</div>';
+  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🎲</div>';
   const byline = bylineHtml(game);
   $('tonightBanner').innerHTML = `
     <div class="tonight">
