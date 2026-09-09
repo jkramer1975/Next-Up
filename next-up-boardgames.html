@@ -814,7 +814,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH — first publish of the Board Games prototype. Copied from Games as a structural template, then substantially reworked: BGG has no live "discover by category" endpoint (confirmed against its official docs before building), so the entire live-discovery architecture (fetchGamesByRating, getCachedGamesForCombo, getSharedGamesForComboBatch, the auto/builtin data-source toggle) was removed — the pool for any spin is always exactly the built-in list, with BGG's /thing endpoint used only to enrich already-known titles, never to discover new ones. Rewrote the fetch layer for BGG's GET+XML API (bggFetch, replacing IGDB's POST+JSON igdbFetch), including the Authorization Bearer token flow required since BGG's July 2025 policy change and the CORS proxy (bgg-proxy.nextupsuite.workers.dev) that fix required. Enrichment (fetchGameDetails, enrichOneGame) and built-in-list resolution (searchIGDBForGame) rewritten against BGG's confirmed real XML shape (name[type=primary], yearpublished, minplayers/maxplayers, playtime, minage, category/mechanic links, stats-gated rating/averageweight) and verified end-to-end against real data from a live Catan lookup, not just mocked assumptions. GAME_DB seeded with 30 real, well-known games, each expanded across every player count in its real range — categories are explicitly marked unverified pending correction as real titles get resolved (Catan's own hardcoded "Strategy Game" tag was already found wrong against real BGG data: Economic/Negotiation). Before this first publish, caught and fixed four real, would-have-shipped bugs from copying Games' template without adjusting its hardcoded namespacing: the shared Firestore collection (sharedGameRatings), the localStorage key prefix (nug_), a sessionStorage sync-throttle key, and the cross-app pickStats field name (.games) were all still identical to the real, live Video Games app — meaning opening both in the same browser would have silently corrupted each other's data. All four renamed to be Board-Games-specific and reverified. Secondary filters (playtime, complexity, age) still have no UI or filtering logic — next step.
+const APP_VERSION = '0.1.1'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: every enrichment attempt on the built-in list failed with "id=undefined", since buildGamePool called enrichBatchWithRatings (which assumes game.gameId is already known — true for Search results elsewhere in this suite, never true for this app's built-in list, which has no BGG id until one is resolved by title). Switched to enrichBuiltinListWithIGDB, which already correctly resolves an id via searchIGDBForGame first, then enriches — that function already existed but buildGamePool was never actually calling it. Restored the "Details loaded for X/Y" summary status this lost along the way. Verified directly against the exact reported case (7 Wonders, 7+ players): now correctly resolves to its real BGG id and enriches with real rating, categories, and player range.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -2642,18 +2642,32 @@ async function searchIGDBForGame(game){
 // Silently does nothing for a title it can't resolve — the built-in
 // list still displays exactly as before either way.
 async function enrichBuiltinListWithIGDB(games){
-  let done = 0;
+  let done = 0, missing = 0, firstError = null;
   await mapWithConcurrency(games, 1, async (game) => {
     if (!game.gameId){
       const gameId = await searchIGDBForGame(game);
       if (gameId) game.gameId = gameId;
     }
     if (game.gameId){
-      await enrichOneGame(game, 2);
+      const result = await enrichOneGame(game, 2);
+      if (!result.ok || !result.hasData){
+        missing++;
+        if (result.error && !firstError) firstError = result.error;
+      }
+    } else {
+      missing++; // never resolved to a BGG id at all — no enrichment was possible
     }
     done++;
     setSpinStatus(`Enriching built-in list… ${done}/${games.length}`);
   }, 250);
+  if (missing){
+    $('enrichStatusNote').textContent =
+      `Details loaded for ${games.length - missing}/${games.length}.` +
+      (firstError ? ` (${firstError})` : ' (BGG may simply have nothing on file for the rest, or this title couldn\'t be matched to a BGG id by name search.)') +
+      ` Anything missing fills in automatically when you click into it.`;
+  } else {
+    $('enrichStatusNote').textContent = '';
+  }
 }
 
 // Best-effort only — a text match on title/description, not a content
@@ -2717,7 +2731,7 @@ async function buildGamePool(playerCount, category){
 
   const needsEnrichment = pool.filter(m => gameNeedsEnrichment(m) && !isBlocked(m.title, m.year));
   if (needsEnrichment.length){
-    await enrichBatchWithRatings(needsEnrichment);
+    await enrichBuiltinListWithIGDB(needsEnrichment);
   }
 
   return pool;
