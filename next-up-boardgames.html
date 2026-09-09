@@ -814,7 +814,7 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.1.1'; // MAJOR.MINOR.PATCH — fixed a real, user-reported bug: every enrichment attempt on the built-in list failed with "id=undefined", since buildGamePool called enrichBatchWithRatings (which assumes game.gameId is already known — true for Search results elsewhere in this suite, never true for this app's built-in list, which has no BGG id until one is resolved by title). Switched to enrichBuiltinListWithIGDB, which already correctly resolves an id via searchIGDBForGame first, then enriches — that function already existed but buildGamePool was never actually calling it. Restored the "Details loaded for X/Y" summary status this lost along the way. Verified directly against the exact reported case (7 Wonders, 7+ players): now correctly resolves to its real BGG id and enriches with real rating, categories, and player range.
+const APP_VERSION = '0.2.0'; // MAJOR.MINOR.PATCH — rebuilt GAME_DB and BG_CATEGORIES from a full, real batch verification run against live BGG data for all 30 built-in titles (search + thing lookups for every one, via the actual app + proxy, not mocked or guessed). The scale of the correction was much larger than the two spot-checks already found: many guessed categories had zero overlap with reality at all (Ticket to Ride: guessed "Family Game", real category is just "Trains"; Wingspan: guessed "Strategy Game", real is Animals/Card Game/Educational/Environmental). BG_CATEGORIES grew from 19 guessed values to 42 real ones, each confirmed as something at least one built-in title is actually tagged with by BGG. Every GAME_DB entry now also carries its real, confirmed bggId directly — enrichment for these 30 titles no longer needs a live search to resolve one first, confirmed live: a spin against a known title now makes exactly one BGG call (thing), not two (search then thing). Player-count ranges were NOT part of this verification pass (it checked categories/ids only) — still the original estimates from the first build, flagged as a follow-up.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
@@ -843,128 +843,279 @@ const SYNCED_KEYS = new Set([
    which had no honest fit anywhere and was dropped rather than
    force-placed.
    ================================================================== */
-// STARTER LIST — NOT YET VERIFIED against live BGG data. Titles, years,
-// and player-count ranges are drawn from general familiarity with these
-// well-known games, not confirmed via a live lookup. bggId is
-// deliberately omitted from every entry — resolving it requires a
-// searchBGGForGame-style function (not yet built, pending verification
-// of BGG's /search endpoint from an actual browser context, since BGG's
-// robots.txt blocks this project's own tooling from checking directly).
-// Each game is listed under every player count within its real min-max
-// range, not just one — e.g. a 3-7 player game appears under 3, 4, 5, 6,
-// and 7+, matching how a spin should genuinely match any of those counts
-// once real BGG min/max data drives this instead of this hardcoded list.
+// VERIFIED against real, live BGG data (confirmed via a full batch check
+// run against the actual app + real BGG proxy, not assumed) — every
+// entry now carries its real bggId directly, so enrichment never needs a
+// live search to resolve one for these 30 titles, and every real
+// category BGG actually lists is tagged, not just one guessed one. Player
+// count ranges are NOT part of this verification pass (it checked
+// categories only) — still the original, unverified estimates from the
+// first build, carried forward unchanged pending a future check.
 const GAME_DB = {
 "1":{
-"Strategy Game":[{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016}],
-"Thematic":[{title:"Gloomhaven",year:2017}],
-"Economic":[{title:"Terraforming Mars",year:2016}],
-"Family Game":[{title:"Sagrada",year:2017}],
-"Puzzle":[{title:"Sagrada",year:2017}]
+"Animals":[{title:"Wingspan",year:2019,bggId:266192}],
+"Card Game":[{title:"Wingspan",year:2019,bggId:266192}],
+"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
+"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561}],
+"Dice":[{title:"Sagrada",year:2017,bggId:199561}],
+"Puzzle":[{title:"Sagrada",year:2017,bggId:199561}]
 },
 "2":{
-"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Splendor",year:2014},{title:"Azul",year:2017},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Patchwork",year:2014},{title:"Sagrada",year:2017},{title:"Kingdomino",year:2016},{title:"Century: Spice Road",year:2017}],
-"Thematic":[{title:"Pandemic",year:2008},{title:"Gloomhaven",year:2017}],
-"Party Game":[{title:"Codenames",year:2015},{title:"Coup",year:2012}],
-"Abstract Strategy":[{title:"Azul",year:2017},{title:"Onitama",year:2014},{title:"Hive",year:2001}],
-"Strategy Game":[{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Twilight Struggle",year:2005},{title:"Root",year:2018},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
-"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
-"Card Game":[{title:"Coup",year:2012},{title:"Sushi Go!",year:2013},{title:"Love Letter",year:2012}],
-"Wargame":[{title:"Twilight Struggle",year:2005},{title:"Root",year:2018}],
-"Puzzle":[{title:"Sagrada",year:2017}]
+"Animals":[{title:"Wingspan",year:2019,bggId:266192},{title:"Hive",year:2001,bggId:2655},{title:"Root",year:2018,bggId:237182}],
+"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Splendor",year:2014,bggId:148228},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622}],
+"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
+"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Splendor",year:2014,bggId:148228},{title:"Patchwork",year:2014,bggId:163412},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Root",year:2018,bggId:237182}],
+"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Root",year:2018,bggId:237182}],
+"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561},{title:"Azul",year:2017,bggId:230802},{title:"Patchwork",year:2014,bggId:163412},{title:"Kingdomino",year:2016,bggId:204583},{title:"Onitama",year:2014,bggId:160477},{title:"Hive",year:2001,bggId:2655}],
+"Dice":[{title:"Sagrada",year:2017,bggId:199561},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Puzzle":[{title:"Sagrada",year:2017,bggId:199561},{title:"Patchwork",year:2014,bggId:163412},{title:"Kingdomino",year:2016,bggId:204583}],
+"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209},{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Renaissance":[{title:"Splendor",year:2014,bggId:148228},{title:"Azul",year:2017,bggId:230802},{title:"Love Letter",year:2012,bggId:129622}],
+"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Century: Spice Road",year:2017,bggId:209685}],
+"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357}],
+"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Medical":[{title:"Pandemic",year:2008,bggId:30549}],
+"Travel":[{title:"Pandemic",year:2008,bggId:30549}],
+"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622}],
+"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900}],
+"Word Game":[{title:"Codenames",year:2015,bggId:178900}],
+"Bluffing":[{title:"Coup",year:2012,bggId:131357}],
+"Political":[{title:"Coup",year:2012,bggId:131357},{title:"Twilight Struggle",year:2005,bggId:12333}],
+"Modern Warfare":[{title:"Twilight Struggle",year:2005,bggId:12333}],
+"Wargame":[{title:"Twilight Struggle",year:2005,bggId:12333},{title:"Root",year:2018,bggId:237182}],
+"Negotiation":[{title:"Root",year:2018,bggId:237182}],
+"Ancient":[{title:"Concordia",year:2013,bggId:124361}],
+"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
+"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517}]
 },
 "3":{
-"Strategy Game":[{title:"Catan",year:1995},{title:"7 Wonders",year:2010},{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Root",year:2018},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
-"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Splendor",year:2014},{title:"Azul",year:2017},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Sagrada",year:2017},{title:"Kingdomino",year:2016},{title:"Century: Spice Road",year:2017}],
-"Thematic":[{title:"Pandemic",year:2008},{title:"Gloomhaven",year:2017},{title:"Betrayal at House on the Hill",year:2004}],
-"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
-"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012},{title:"Sushi Go!",year:2013},{title:"Love Letter",year:2012}],
-"Abstract Strategy":[{title:"Azul",year:2017}],
-"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
-"Wargame":[{title:"Root",year:2018}],
-"Puzzle":[{title:"Sagrada",year:2017}],
-"Deduction":[{title:"Skull",year:2011}]
+"Animals":[{title:"Wingspan",year:2019,bggId:266192},{title:"Root",year:2018,bggId:237182}],
+"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Splendor",year:2014,bggId:148228},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415}],
+"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
+"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"7 Wonders",year:2010,bggId:68448}],
+"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Splendor",year:2014,bggId:148228},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"Brass: Birmingham",year:2018,bggId:224517},{title:"Catan",year:1995,bggId:13},{title:"7 Wonders",year:2010,bggId:68448}],
+"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Root",year:2018,bggId:237182}],
+"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Root",year:2018,bggId:237182}],
+"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561},{title:"Azul",year:2017,bggId:230802},{title:"Kingdomino",year:2016,bggId:204583}],
+"Dice":[{title:"Sagrada",year:2017,bggId:199561},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Puzzle":[{title:"Sagrada",year:2017,bggId:199561},{title:"Kingdomino",year:2016,bggId:204583}],
+"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209},{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Renaissance":[{title:"Splendor",year:2014,bggId:148228},{title:"Azul",year:2017,bggId:230802},{title:"Love Letter",year:2012,bggId:129622}],
+"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Century: Spice Road",year:2017,bggId:209685}],
+"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415}],
+"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Medical":[{title:"Pandemic",year:2008,bggId:30549}],
+"Travel":[{title:"Pandemic",year:2008,bggId:30549}],
+"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"Just One",year:2018,bggId:254640}],
+"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900}],
+"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
+"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415}],
+"Political":[{title:"Coup",year:2012,bggId:131357}],
+"Negotiation":[{title:"Root",year:2018,bggId:237182},{title:"Catan",year:1995,bggId:13}],
+"Wargame":[{title:"Root",year:2018,bggId:237182}],
+"Ancient":[{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
+"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
+"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Humor":[{title:"Dixit",year:2008,bggId:39856}]
 },
 "4":{
-"Strategy Game":[{title:"Catan",year:1995},{title:"7 Wonders",year:2010},{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Root",year:2018},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
-"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Splendor",year:2014},{title:"Azul",year:2017},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Sagrada",year:2017},{title:"Kingdomino",year:2016},{title:"Century: Spice Road",year:2017}],
-"Thematic":[{title:"Pandemic",year:2008},{title:"Gloomhaven",year:2017},{title:"Betrayal at House on the Hill",year:2004}],
-"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
-"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012},{title:"Sushi Go!",year:2013},{title:"Love Letter",year:2012}],
-"Abstract Strategy":[{title:"Azul",year:2017}],
-"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
-"Wargame":[{title:"Root",year:2018}],
-"Puzzle":[{title:"Sagrada",year:2017}],
-"Deduction":[{title:"Skull",year:2011}]
+"Animals":[{title:"Wingspan",year:2019,bggId:266192},{title:"Root",year:2018,bggId:237182}],
+"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Splendor",year:2014,bggId:148228},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415}],
+"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
+"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"7 Wonders",year:2010,bggId:68448}],
+"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Splendor",year:2014,bggId:148228},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"Brass: Birmingham",year:2018,bggId:224517},{title:"Catan",year:1995,bggId:13},{title:"7 Wonders",year:2010,bggId:68448}],
+"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Root",year:2018,bggId:237182}],
+"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"Root",year:2018,bggId:237182}],
+"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430}],
+"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561},{title:"Azul",year:2017,bggId:230802},{title:"Kingdomino",year:2016,bggId:204583}],
+"Dice":[{title:"Sagrada",year:2017,bggId:199561},{title:"King of Tokyo",year:2011,bggId:70323}],
+"Puzzle":[{title:"Sagrada",year:2017,bggId:199561},{title:"Kingdomino",year:2016,bggId:204583}],
+"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209},{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Renaissance":[{title:"Splendor",year:2014,bggId:148228},{title:"Azul",year:2017,bggId:230802},{title:"Love Letter",year:2012,bggId:129622}],
+"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Kingdomino",year:2016,bggId:204583},{title:"Century: Spice Road",year:2017,bggId:209685}],
+"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415}],
+"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Medical":[{title:"Pandemic",year:2008,bggId:30549}],
+"Travel":[{title:"Pandemic",year:2008,bggId:30549}],
+"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Love Letter",year:2012,bggId:129622},{title:"Just One",year:2018,bggId:254640}],
+"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900}],
+"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
+"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415}],
+"Political":[{title:"Coup",year:2012,bggId:131357}],
+"Negotiation":[{title:"Root",year:2018,bggId:237182},{title:"Catan",year:1995,bggId:13}],
+"Wargame":[{title:"Root",year:2018,bggId:237182}],
+"Ancient":[{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
+"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
+"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517}],
+"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Humor":[{title:"Dixit",year:2008,bggId:39856}]
 },
 "5":{
-"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Century: Spice Road",year:2017}],
-"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"The Resistance",year:2009},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
-"Strategy Game":[{title:"7 Wonders",year:2010},{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Concordia",year:2013}],
-"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012},{title:"Sushi Go!",year:2013}],
-"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013}],
-"Deduction":[{title:"The Resistance",year:2009},{title:"Skull",year:2011}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
-"Thematic":[{title:"Betrayal at House on the Hill",year:2004}]
+"Animals":[{title:"Wingspan",year:2019,bggId:266192}],
+"Card Game":[{title:"Wingspan",year:2019,bggId:266192},{title:"Sushi Go!",year:2013,bggId:133473},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
+"Educational":[{title:"Wingspan",year:2019,bggId:266192}],
+"Environmental":[{title:"Wingspan",year:2019,bggId:266192},{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"7 Wonders",year:2010,bggId:68448}],
+"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Century: Spice Road",year:2017,bggId:209685},{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
+"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"King of Tokyo",year:2011,bggId:70323},{title:"The Resistance",year:2009,bggId:41114}],
+"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791}],
+"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791},{title:"Carcassonne",year:2000,bggId:822}],
+"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209}],
+"Medieval":[{title:"Carcassonne",year:2000,bggId:822},{title:"Century: Spice Road",year:2017,bggId:209685}],
+"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473},{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
+"Dice":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Fighting":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
+"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900},{title:"The Resistance",year:2009,bggId:41114}],
+"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
+"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
+"Political":[{title:"Coup",year:2012,bggId:131357}],
+"Ancient":[{title:"Concordia",year:2013,bggId:124361},{title:"7 Wonders",year:2010,bggId:68448}],
+"Nautical":[{title:"Concordia",year:2013,bggId:124361}],
+"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Adventure":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Exploration":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Humor":[{title:"Dixit",year:2008,bggId:39856}],
+"Negotiation":[{title:"The Resistance",year:2009,bggId:41114}],
+"Print & Play":[{title:"The Resistance",year:2009,bggId:41114}]
 },
 "6":{
-"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"The Resistance",year:2009},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
-"Strategy Game":[{title:"7 Wonders",year:2010}],
-"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012}],
-"Deduction":[{title:"The Resistance",year:2009},{title:"Skull",year:2011}],
-"Family Game":[{title:"King of Tokyo",year:2011}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
-"Thematic":[{title:"Betrayal at House on the Hill",year:2004}]
+"Dice":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Fighting":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323}],
+"Science Fiction":[{title:"King of Tokyo",year:2011,bggId:70323},{title:"The Resistance",year:2009,bggId:41114}],
+"Card Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"7 Wonders",year:2010,bggId:68448},{title:"Dixit",year:2008,bggId:39856},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
+"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
+"Party Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Coup",year:2012,bggId:131357},{title:"Dixit",year:2008,bggId:39856},{title:"Just One",year:2018,bggId:254640},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
+"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900},{title:"The Resistance",year:2009,bggId:41114}],
+"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
+"Bluffing":[{title:"Coup",year:2012,bggId:131357},{title:"Skull",year:2011,bggId:92415},{title:"The Resistance",year:2009,bggId:41114}],
+"Political":[{title:"Coup",year:2012,bggId:131357}],
+"Ancient":[{title:"7 Wonders",year:2010,bggId:68448}],
+"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Civilization":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Economic":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Adventure":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Exploration":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547}],
+"Humor":[{title:"Dixit",year:2008,bggId:39856}],
+"Negotiation":[{title:"The Resistance",year:2009,bggId:41114}],
+"Print & Play":[{title:"The Resistance",year:2009,bggId:41114}]
 },
 "7+":{
-"Party Game":[{title:"Codenames",year:2015},{title:"The Resistance",year:2009},{title:"Just One",year:2018}],
-"Strategy Game":[{title:"7 Wonders",year:2010}],
-"Card Game":[{title:"7 Wonders",year:2010}],
-"Deduction":[{title:"The Resistance",year:2009}]
+"Card Game":[{title:"Codenames",year:2015,bggId:178900},{title:"7 Wonders",year:2010,bggId:68448},{title:"The Resistance",year:2009,bggId:41114}],
+"Deduction":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
+"Party Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640},{title:"The Resistance",year:2009,bggId:41114}],
+"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900},{title:"The Resistance",year:2009,bggId:41114}],
+"Word Game":[{title:"Codenames",year:2015,bggId:178900},{title:"Just One",year:2018,bggId:254640}],
+"Ancient":[{title:"7 Wonders",year:2010,bggId:68448}],
+"City Building":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Civilization":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Economic":[{title:"7 Wonders",year:2010,bggId:68448}],
+"Bluffing":[{title:"The Resistance",year:2009,bggId:41114}],
+"Negotiation":[{title:"The Resistance",year:2009,bggId:41114}],
+"Print & Play":[{title:"The Resistance",year:2009,bggId:41114}],
+"Science Fiction":[{title:"The Resistance",year:2009,bggId:41114}]
 },
 };
 
-// All 23 genres IGDB actually returns (confirmed live against the real
-// /genres endpoint, not assumed from docs) — every one is a reasonable
-// "pick something to play" category, so unlike IGDB's 89-genre
-// list, no real curation was needed. Keys match GAME_DB's genre names
-// above exactly, so the same GENRES list drives both the built-in list
-// and live IGDB discovery.
-// NOT YET VERIFIED LIVE — this list is based on general familiarity with
-// BGG's well-known category names, not a confirmed live query (BGG's API
-// has no endpoint to list all valid categories the way IGDB's /genres
-// did, and BGG's robots.txt blocks this project's own tooling from
-// fetching it directly to check). Needs spot-checking against a few real
-// games' actual <link type="boardgamecategory"> values before this is
-// trusted the way every other app's category/genre list has been.
-// Stored as plain names, not IDs — unlike IGDB_GENRES/IGDB_PLATFORMS,
-// there's no live "discover by category ID" query to build against (see
-// the architecture note on GAME_DB below), so a numeric ID buys nothing
-// here; the built-in list just needs a name to tag each entry with, and
-// enrichment can compare that name against BGG's own returned category
-// list as a plain string.
+// VERIFIED against real, live BGG data — every category here is one at
+// least one built-in-list game is actually, confirmedly tagged with by
+// BGG itself, not a guessed general-knowledge list. Not exhaustive of
+// every category BGG has ever used (only what these 30 games cover),
+// so this will keep growing as more titles get added and checked.
 const BG_CATEGORIES = [
-  'Strategy Game',
-  'Party Game',
-  'Family Game',
-  'Card Game',
-  'Wargame',
-  'Abstract Strategy',
-  "Children's Game",
-  'Thematic',
-  'Deduction',
-  'Dice',
-  'Economic',
-  'Fantasy',
-  'Horror',
-  'Miniatures',
-  'Negotiation',
-  'Puzzle',
-  'Racing',
-  'Real-time',
-  'Sports'
+  "Abstract Strategy",
+  "Adventure",
+  "Age of Reason",
+  "Ancient",
+  "Animals",
+  "Bluffing",
+  "Card Game",
+  "City Building",
+  "Civilization",
+  "Deduction",
+  "Dice",
+  "Economic",
+  "Educational",
+  "Environmental",
+  "Exploration",
+  "Fantasy",
+  "Fighting",
+  "Horror",
+  "Humor",
+  "Industry / Manufacturing",
+  "Medical",
+  "Medieval",
+  "Miniatures",
+  "Modern Warfare",
+  "Movies / TV / Radio theme",
+  "Nautical",
+  "Negotiation",
+  "Party Game",
+  "Political",
+  "Post-Napoleonic",
+  "Print & Play",
+  "Puzzle",
+  "Renaissance",
+  "Science Fiction",
+  "Space Exploration",
+  "Spies / Secret Agents",
+  "Territory Building",
+  "Trains",
+  "Transportation",
+  "Travel",
+  "Wargame",
+  "Word Game",
 ];
 
 // A specific number, not a range — the spin picks one count and matches
