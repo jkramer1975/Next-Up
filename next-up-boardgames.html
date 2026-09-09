@@ -1,0 +1,3216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+// Applies the saved color theme before first paint, so switching themes
+// never shows a flash of the default one while the rest of the page loads.
+// Kept intentionally tiny and duplicated from the full theme list below —
+// this only needs the color values, not labels or app logic.
+(function(){
+  try{
+    var THEME_VARS = {
+      amber:    { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#f2a93b', amberRgb:'242,169,59', amberDim:'#a8752b', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      crimson:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#e2545f', amberRgb:'226,84,95', amberDim:'#9c3a42', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      emerald:  { bg:'#14141a', surface:'#1e1e27', surface2:'#262633', amber:'#4fbf8b', amberRgb:'79,191,139', amberDim:'#35805e', cream:'#efe7da', muted:'#8b8b98', line:'#34343f' },
+      sapphire: { bg:'#12141a', surface:'#1c1f27', surface2:'#242833', amber:'#5b9fe3', amberRgb:'91,159,227', amberDim:'#3d6d9c', cream:'#e9edf5', muted:'#8b93a3', line:'#2e3340' },
+      violet:   { bg:'#16131a', surface:'#211d27', surface2:'#2a2433', amber:'#b98af0', amberRgb:'185,138,240', amberDim:'#7d5aa6', cream:'#efe7f5', muted:'#948b9e', line:'#38313f' },
+      popcorn:  { bg:'#f4ede0', surface:'#ffffff', surface2:'#f2e8d4', amber:'#d9822b', amberRgb:'217,130,43', amberDim:'#a85f18', cream:'#241a08', muted:'#7a6c54', line:'#ddd0b8' }
+    };
+    var saved = localStorage.getItem('nbg_color_theme');
+    var name = saved ? JSON.parse(saved) : 'amber';
+    var t = THEME_VARS[name] || THEME_VARS.amber;
+    var s = document.documentElement.style;
+    s.setProperty('--bg', t.bg);
+    s.setProperty('--surface', t.surface);
+    s.setProperty('--surface-2', t.surface2);
+    s.setProperty('--amber', t.amber);
+    s.setProperty('--amber-rgb', t.amberRgb);
+    s.setProperty('--amber-dim', t.amberDim);
+    s.setProperty('--cream', t.cream);
+    s.setProperty('--muted', t.muted);
+    s.setProperty('--line', t.line);
+  } catch(e){ /* falls back to the default theme in the stylesheet below */ }
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14141a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Next Up">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Next Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<!-- Firebase (Auth + Firestore) — compat build, so it exposes a plain
+     global `firebase` namespace usable from an ordinary script tag,
+     matching the rest of this file rather than requiring an ES module
+     restructure. -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg: #14141a;
+    --surface: #1e1e27;
+    --surface-2: #262633;
+    --amber: #f2a93b;
+    --amber-rgb: 242,169,59;
+    --amber-dim: #a8752b;
+    --velvet: #a13446;
+    --velvet-rgb: 161,52,70;
+    --green: #5a9e6f;
+    --cream: #efe7da;
+    --muted: #8b8b98;
+    --line: #34343f;
+    --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .app{
+    background: var(--bg);
+    color: var(--cream);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    padding: 44px 16px 60px;
+  }
+  .wrap{ max-width: 980px; margin: 0 auto; }
+
+  .marquee{
+    position: relative;
+    text-align:center;
+    padding: 22px 12px 26px;
+    margin-bottom: 20px;
+    background: linear-gradient(180deg, var(--surface), var(--bg));
+    border-radius: 6px;
+    border: 1px solid var(--line);
+  }
+  .account-corner{
+    display: flex; justify-content: space-between; align-items:center;
+    margin-bottom: 10px;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .home-link{
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
+    border-radius: 14px; padding: 5px 12px; cursor: pointer;
+    text-decoration:none; display:inline-flex; align-items:center; gap:5px;
+  }
+  .home-link:hover{ border-color: var(--amber); color: var(--amber); }
+  .version-badge{
+    position: absolute; bottom: 6px; right: 10px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3px;
+    color: var(--muted); opacity: 0.55; pointer-events: none;
+  }
+  .account-corner button{
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--cream); border: 1px solid var(--line);
+    border-radius: 14px; padding: 5px 12px; cursor: pointer;
+  }
+  .account-corner button:hover{ border-color: var(--amber); }
+  .account-corner .signed-in-pill{
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px 6px 4px 10px;
+  }
+  .account-corner .signed-in-name{ color: var(--muted); max-width: 110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .account-corner .signout-x{
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px;
+    padding: 2px 4px; border-radius: 50%; line-height:1;
+  }
+  .account-corner .signout-x:hover{ color: var(--velvet); border: none; }
+  @media (max-width: 420px){
+    .account-corner{ justify-content: center; }
+    .account-corner .signed-in-name{ max-width: 160px; }
+  }
+  .sprockets{
+    display:flex; justify-content:space-between;
+    position:absolute; left:10px; right:10px; top:8px; bottom:8px;
+    pointer-events:none;
+  }
+  .sprockets::before, .sprockets::after{
+    content:"";
+    position:absolute; left:0; right:0;
+    height:10px;
+    background-image: radial-gradient(circle, var(--bg) 3px, transparent 3.5px);
+    background-size: 18px 10px;
+    background-repeat: repeat-x;
+  }
+  .sprockets::before{ top:0; }
+  .sprockets::after{ bottom:0; }
+  .eyebrow{
+    font-family: var(--font-mono);
+    letter-spacing: 3px;
+    font-size: 11px;
+    color: var(--amber);
+    text-transform: uppercase;
+  }
+  h1{
+    font-family: var(--font-display);
+    font-size: clamp(38px, 8vw, 64px);
+    letter-spacing: 2px;
+    margin: 4px 0 2px;
+    color: var(--cream);
+    text-shadow: 0 0 18px rgba(var(--amber-rgb),0.25);
+  }
+  .tagline{ color: var(--muted); font-size: 14px; }
+
+  /* ---- Tabs ---- */
+  .tabs{ display:flex; justify-content:center; gap: 6px; margin-bottom: 22px; flex-wrap: wrap; }
+  .tab-btn{
+    background: var(--surface); color: var(--muted); border: 1px solid var(--line);
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+    padding: 9px 18px; border-radius: 20px; cursor:pointer; font-weight:500;
+  }
+  .tab-btn.active{ background: var(--amber); color: #241a08; border-color: var(--amber); font-weight:700; }
+
+  @media (max-width: 420px){
+    .tab-btn{ padding: 8px 12px; font-size: 11px; }
+    .reel{ width: 150px; height: 80px; }
+    .reel-value{ font-size: 22px; }
+    .reel-value.long-text{ font-size: 12px; }
+  }
+
+  .theme-swatch-grid{ display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+  .theme-swatch{
+    width: 96px; cursor: pointer; border: 2px solid transparent; border-radius: 10px;
+    padding: 6px; text-align: center; transition: border-color .15s ease, transform .1s ease;
+    background: transparent;
+  }
+  .theme-swatch:hover{ transform: translateY(-2px); }
+  .theme-swatch.active{ border-color: var(--amber); }
+  .theme-swatch-preview{
+    width: 100%; height: 56px; border-radius: 7px; display:flex; align-items:flex-end;
+    padding: 6px; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.08);
+  }
+  .theme-swatch-dot{ width: 16px; height: 16px; border-radius: 50%; }
+  .theme-swatch-label{ font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.3px; }
+  .theme-swatch.active .theme-swatch-label{ color: var(--cream); }
+
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2{
+    font-family: var(--font-display);
+    letter-spacing: 1px;
+    font-size: 22px;
+    margin: 0 0 6px;
+    color: var(--amber);
+  }
+  .card p.desc{ color: var(--muted); font-size: 13.5px; line-height: 1.5; margin: 0 0 14px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=text], input[type=password]{
+    flex: 1 1 200px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--cream);
+    padding: 11px 12px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 14px;
+  }
+  select{
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--cream);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 14px;
+  }
+  input:focus, button:focus-visible, select:focus-visible{ outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  button{
+    font-family: var(--font-body);
+    font-weight: 700;
+    border: none;
+    border-radius: 6px;
+    padding: 11px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: transform .08s ease, filter .15s ease;
+    white-space: nowrap;
+  }
+  button:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--amber); color: #241a08; }
+  .btn-primary:hover{ filter: brightness(1.08); }
+  .btn-primary:disabled{ background: var(--amber-dim); color:#3a2e15; cursor:not-allowed; }
+  .btn-ghost{ background: transparent; color: var(--cream); border: 1px solid var(--line); }
+  .btn-ghost:hover{ border-color: var(--amber); color: var(--amber); }
+  .btn-ghost:disabled{ opacity: 0.35; cursor: not-allowed; color: var(--muted); }
+  .btn-ghost:disabled:hover{ border-color: var(--line); color: var(--muted); }
+  .btn-danger{ background: transparent; color: var(--velvet); border: 1px solid var(--velvet); }
+  .btn-danger:hover{ background: var(--velvet); color: var(--cream); }
+  .btn-icon{ padding: 6px 10px; font-size: 13px; line-height:1; }
+
+  .hint{ color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .error{ color: var(--velvet); font-size: 13px; margin-top: 10px; }
+  .status-pill{
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 20px; display:inline-block;
+  }
+  .status-connected{ background: rgba(90,158,111,0.18); color: var(--green); border: 1px solid var(--green); }
+  .status-off{ background: rgba(139,139,152,0.15); color: var(--muted); border: 1px solid var(--line); }
+
+  .crew-list{ display:flex; flex-direction:column; gap:8px; margin-top: 14px; }
+  .crew-item{
+    display:flex; align-items:center; gap: 10px;
+    background: var(--surface-2); border:1px solid var(--line); border-radius:6px;
+    padding: 9px 12px;
+  }
+  .crew-item.current{ border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
+  .crew-order{
+    font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    width: 20px; flex-shrink:0;
+  }
+  .crew-name{ flex: 1; font-weight: 600; font-size: 14px; }
+  .crew-badge{
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing:1px;
+    background: var(--amber); color:#241a08; padding: 3px 7px; border-radius: 4px;
+  }
+  .crew-actions{ display:flex; gap:4px; }
+
+  /* ---- Up next box (signature-ish) ---- */
+  .up-next-box{
+    display:flex; align-items:center; gap: 16px;
+    background: linear-gradient(120deg, rgba(var(--amber-rgb),0.16), rgba(var(--velvet-rgb),0.08));
+    border: 1px solid var(--amber-dim);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 22px;
+  }
+  .up-next-box .clapper{ font-size: 34px; flex-shrink:0; }
+  .up-next-box .u-eyebrow{ font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px; color: var(--amber); }
+  .up-next-box .u-name{ font-family: var(--font-display); font-size: 30px; letter-spacing: 0.5px; line-height:1.1; }
+  .up-next-box select{ margin-left: auto; font-size: 12px; padding: 6px 10px; }
+  .up-next-empty{ color: var(--muted); font-size: 13px; }
+
+  .reel-stage{
+    display:flex; align-items:center; justify-content:center; gap:18px;
+    flex-wrap: wrap;
+    margin: 10px 0 8px;
+  }
+  .reel{
+    position: relative;
+    width: 190px;
+    height: 92px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reel::before, .reel::after{
+    content:""; position:absolute; left:0; right:0; height:14px;
+    background-image: radial-gradient(circle, var(--bg) 4px, transparent 4.5px);
+    background-size: 22px 14px; background-repeat: repeat-x;
+  }
+  .reel::before{ top:0; } .reel::after{ bottom:0; }
+  .reel-label{
+    position:absolute; top: -18px; left:0; right:0; text-align:center;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--muted);
+  }
+  .reel-value{
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: var(--cream);
+    text-align:center;
+    padding: 0 8px;
+  }
+  .reel-value.long-text{ font-size: 15px; letter-spacing: 0.5px; line-height: 1.2; }
+  .reel.spinning .reel-value{ color: var(--amber); }
+
+  .spin-btn-row{ text-align:center; margin: 18px 0 30px; }
+  .spin-btn{ font-size: 16px; padding: 14px 30px; letter-spacing: 0.5px; }
+  .source-note{ text-align:center; color: var(--muted); font-family: var(--font-mono); font-size: 11px; margin-top: 10px; }
+
+  .source-boxes{ display:flex; gap:8px; margin-top: 14px; flex-wrap: wrap; }
+  .source-box{
+    flex: 1 1 160px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 10px;
+    text-align: left;
+    opacity: 0.5;
+    filter: grayscale(0.4);
+    cursor: pointer;
+    transition: opacity .15s ease, border-color .15s ease, filter .15s ease, background .15s ease;
+  }
+  .source-box:hover{ opacity: 0.75; }
+  .source-box.active{
+    opacity: 1;
+    filter: none;
+    border-color: var(--amber);
+    background: linear-gradient(120deg, rgba(var(--amber-rgb),0.12), rgba(var(--amber-rgb),0.02));
+    box-shadow: 0 0 0 1px var(--amber-dim);
+  }
+  .source-box.active:hover{ opacity: 1; }
+  .source-box-top{ display:flex; align-items:center; gap:6px; }
+  .source-box-icon{ font-size: 13px; }
+  .source-box-title{ font-family: var(--font-display); font-size: 14px; letter-spacing: 0.5px; color: var(--cream); }
+  .source-live-badge{
+    margin-left: auto; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 1px;
+    color: var(--amber); opacity: 0; transition: opacity .15s ease; flex-shrink:0;
+  }
+  .source-box.active .source-live-badge{ opacity: 1; }
+
+  .results-head{
+    display:flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 10px 0 16px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+  .results-head h2{
+    font-family: var(--font-display); font-size: 26px; letter-spacing: 1px; margin:0; color: var(--cream);
+  }
+  .results-head .count{ color: var(--muted); font-size: 13px; font-family: var(--font-mono); }
+
+  .tonight{
+    display:flex; gap: 16px; background: linear-gradient(120deg, rgba(var(--amber-rgb),0.14), rgba(var(--velvet-rgb),0.10));
+    border: 1px solid var(--amber-dim);
+    border-radius: 10px; padding: 16px 18px; margin-bottom: 22px;
+    align-items:center;
+  }
+  .tonight img{ width: 70px; border-radius: 6px; flex-shrink:0; }
+  .tonight .t-icon{ font-size: 36px; flex-shrink:0; }
+  .tonight .t-eyebrow{ font-family: var(--font-mono); font-size: 11px; color: var(--amber); letter-spacing: 2px; }
+  .tonight h3{ font-family: var(--font-display); font-size: 24px; margin: 2px 0 4px; letter-spacing: 0.5px; }
+  .tonight p{ margin:0; color: var(--muted); font-size: 13px; }
+
+  .grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+    align-items: stretch;
+  }
+  .poster-card{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow:hidden;
+    cursor: pointer;
+    transition: transform .12s ease, border-color .12s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .poster-card:hover:not(.disabled){ transform: translateY(-3px); border-color: var(--amber); }
+  .poster-meta{ padding: 14px 14px 12px; display:flex; flex-direction:column; flex:1; }
+  .poster-card .p-num{ font-family: var(--font-mono); font-size: 10px; color: var(--amber-dim); }
+  .p-title-row{ min-height: 37px; } /* reserves 2 lines so titles of any length align the rows below them */
+  .poster-card .p-title{
+    font-size: 14px; font-weight: 700; line-height: 1.3; margin: 3px 0 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .poster-card .p-year{ font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+  .poster-card.disabled{ cursor: not-allowed; opacity: 0.5; }
+  .poster-card.disabled .p-title{ text-decoration: line-through; text-decoration-color: var(--velvet); }
+  .rating-row{ min-height: 24px; margin-top: 6px; }
+  .genre-row{ min-height: 22px; margin-bottom: 2px; }
+  .theme-row{ min-height: 22px; margin-bottom: 2px; }
+  .genre-chips{ display:flex; flex-wrap:wrap; gap:4px; }
+  .genre-chip{
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .theme-chip{
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
+    background: rgba(90,158,111,0.14); color: var(--green); border: 1px solid var(--green);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .rating-chip{
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.5px;
+    background: rgba(var(--amber-rgb),0.14); color: var(--amber); border: 1px solid var(--amber-dim);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .detail-link{
+    display:inline-block; font-family: var(--font-mono); font-size: 11px;
+    color: var(--amber); text-decoration:none; border-bottom: 1px dotted var(--amber-dim);
+  }
+  .detail-link:hover{ color: var(--cream); border-bottom-color: var(--cream); }
+  .meta-footer{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:10px; }
+  .watched-tag{
+    position:absolute; top:8px; right:8px; z-index:2;
+    background: rgba(20,20,26,0.85);
+    color: var(--amber);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--amber-dim);
+  }
+  .block-card-btn{
+    flex-shrink:0;
+    background: var(--surface-2); color: var(--velvet); border: 1px solid var(--velvet);
+    font-size: 11px; line-height:1; padding: 4px 6px; border-radius: 4px; cursor:pointer;
+  }
+  .block-card-btn:hover{ background: var(--velvet); color: var(--cream); }
+
+  .empty-note{ color: var(--muted); font-size: 14px; text-align:center; padding: 30px 10px; }
+
+  .section-toggle{ text-align:center; margin: 26px 0 10px; }
+  .history-list{ margin-top: 14px; display:flex; flex-direction:column; gap:8px; }
+  .history-item{
+    display:flex; justify-content:space-between; gap: 10px;
+    background: var(--surface); border:1px solid var(--line); border-radius:6px;
+    padding: 10px 12px; font-size: 13px; flex-wrap: wrap;
+  }
+  .history-item .h-name{ font-weight:600; }
+  .history-item .h-meta{ color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+  .history-item.clickable{ cursor: pointer; transition: border-color .12s ease; }
+  .history-item.clickable:hover{ border-color: var(--amber); }
+
+  .footer-actions{ display:flex; justify-content:center; gap:10px; margin-top: 16px; flex-wrap:wrap; }
+
+  /* ---- Admin ---- */
+  .toggle-grid{
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr));
+    gap: 8px; margin-top: 12px;
+  }
+  .toggle-chip{
+    display:flex; align-items:center; gap:8px;
+    background: var(--surface-2); border:1px solid var(--line); border-radius:6px;
+    padding: 9px 12px; font-size: 13px; cursor:pointer; user-select:none;
+  }
+  .toggle-chip input{ accent-color: var(--amber); width:15px; height:15px; }
+  .toggle-chip.off{ opacity: 0.5; }
+  .toggle-chip.disabled{ opacity: 0.35; cursor: not-allowed; }
+  .toggle-chip.disabled input{ cursor: not-allowed; }
+  .select-all-row{ display:flex; gap:8px; margin-top: 10px; }
+
+  .modal-backdrop{
+    position: fixed; inset:0; background: rgba(10,10,14,0.72);
+    display:flex; align-items:center; justify-content:center; padding: 20px; z-index: 50;
+  }
+  .modal{
+    position: relative;
+    background: var(--surface); border:1px solid var(--line); border-radius: 10px;
+    padding: 26px; max-width: 380px; width:100%; text-align:center;
+    max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .force-refresh-btn{
+    position: absolute; top: 8px; right: 8px;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 12px; padding: 4px 9px; font-size: 11px; cursor: pointer;
+    font-family: var(--font-mono);
+  }
+  .force-refresh-btn:hover{ border-color: var(--amber); color: var(--amber); }
+  .force-refresh-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+  .modal img{ width: 120px; border-radius: 6px; margin-bottom: 12px; }
+  .modal .m-icon{ font-size: 42px; margin-bottom: 8px; }
+  .modal h3{ font-family: var(--font-display); font-size: 26px; margin: 0 0 4px; letter-spacing: 0.5px; }
+  .modal p{ color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .modal .row{ justify-content:center; }
+  .modal-description{
+    text-align: left; font-size: 12.5px; line-height: 1.5; color: var(--cream);
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px; margin: 10px 0 !important; max-height: 140px; overflow-y: auto;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="wrap">
+
+    <div class="account-corner" id="accountCorner">
+      <a class="home-link" href="index.html" title="Back to Next Up home">🏠 Home</a>
+      <div id="authSignedOut">
+        <button id="signInBtn">Sign in with Google</button>
+      </div>
+      <div id="authSignedIn" class="signed-in-pill" style="display:none;">
+        <span class="signed-in-name" id="authName"></span>
+        <button class="signout-x" id="signOutBtn" title="Sign out">✕</button>
+      </div>
+    </div>
+
+    <div class="marquee">
+      <div class="sprockets"></div>
+      <h1>🎲 NEXT UP - BOARD GAMES</h1>
+      <div class="tagline">We spin up a random category + player count to break the shelf paralysis — you still pick whatever actually hits the table.</div>
+      <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
+      <div class="version-badge" id="versionBadge"></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabMainBtn">🎲 Next Up</button>
+      <button class="tab-btn" id="tabFiltersBtn">🎯 Board Game Filters</button>
+      <button class="tab-btn" id="tabBuiltinBtn">🎲 Built-In Board Game List</button>
+      <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
+    </div>
+
+    <!-- ===================== MAIN TAB ===================== -->
+    <div id="mainTab">
+
+      <div class="reel-stage">
+        <div class="reel" id="platformReel">
+          <div class="reel-label">PLATFORM</div>
+          <div class="reel-value" id="platformValue">----</div>
+        </div>
+        <div class="reel" id="genreReel">
+          <div class="reel-label">GENRE</div>
+          <div class="reel-value" id="genreValue">----</div>
+        </div>
+      </div>
+      <div class="spin-btn-row">
+        <button class="btn-primary spin-btn" id="spinBtn">🎲 Roll the Dice</button>
+        <div class="error" id="spinError" style="display:none;"></div>
+        <div class="source-note" id="spinStatusNote"></div>
+        <div class="source-note" id="enrichStatusNote"></div>
+      </div>
+
+      <div id="tonightBanner"></div>
+
+      <div id="resultsArea" style="display:none;">
+        <div class="results-head">
+          <h2 id="resultsTitle"></h2>
+          <span class="count" id="resultsCount"></span>
+        </div>
+        <div id="grid" class="grid"></div>
+        <div id="emptyNote" class="empty-note" style="display:none;">
+          No titles available for this combo — spin again for a new platform & genre.
+        </div>
+        <div class="section-toggle" id="filteredOutToggleRow" style="display:none; margin-top:16px;">
+          <button class="btn-ghost" id="filteredOutToggleBtn"></button>
+        </div>
+        <div id="filteredOutPanel" style="display:none;">
+          <div id="filteredOutList" class="history-list"></div>
+        </div>
+      </div>
+
+      <div class="section-toggle">
+        <button class="btn-ghost" id="historyToggleBtn">Show Past Picks</button>
+      </div>
+      <div id="historyPanel" style="display:none;">
+        <div id="historyList" class="history-list"></div>
+        <div class="footer-actions">
+          <button class="btn-danger" id="clearHistoryBtn">Clear All History</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================== ADMIN TAB ===================== -->
+    <div id="adminTab" style="display:none;">
+
+      <div class="card">
+        <h2>Color Scheme</h2>
+        <p class="desc">Pick a look for the app. Applies immediately and everywhere.</p>
+        <div id="themeSwatchGrid" class="theme-swatch-grid"></div>
+      </div>
+
+      <div class="card" id="igdbConnectionCard">
+        <h2>BoardGameGeek <span class="status-pill" style="background:rgba(255,255,255,0.08); color:var(--muted);">NOT YET CONNECTED</span></h2>
+        <p class="desc">Prototype status: category and player count spin from the built-in list below, but enrichment against BoardGameGeek's real data (rating, description, image, playtime, complexity, age) isn't wired up yet — that's the next step, pending verification of BGG's API behavior from a browser context.</p>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn-danger" id="clearCacheBtn">Clear Cache</button>
+        </div>
+
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many games are already cached for a platform/genre. Those spins feel faster since little or no live lookup is needed.</p>
+        <div class="row">
+          <select id="cacheStatsDecade" style="max-width:140px;">
+            <option value="all">All Platforms</option>
+          </select>
+          <select id="cacheStatsGenre" style="max-width:160px;">
+            <option value="all">All Genres</option>
+          </select>
+        </div>
+        <p class="desc" id="cacheStatsResult" style="margin-top:10px; margin-bottom:0;"></p>
+      </div>
+
+      <div class="card">
+        <h2>Max Results</h2>
+        <p class="desc">How many titles you'll see after a IGDB spin (10–100). If filtering leaves you short, it fetches more to make up the difference — higher numbers mean a longer wait. Doesn't affect the built-in list.</p>
+        <input type="number" id="maxResultsInput" min="10" max="100" step="1" style="max-width:120px;">
+      </div>
+
+      <div class="card">
+        <h2>API Call Log <span class="hint" id="apiLogCount" style="margin:0;"></span></h2>
+        <p class="desc">Every IGDB request made since your last spin, and why — useful for seeing where time (and today's free-tier quota) goes. Clears on the next spin.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="apiLogToggleBtn">Show Log</button>
+        </div>
+        <div id="apiLogPanel" style="display:none;">
+          <div id="apiLogList" class="history-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>About</h2>
+        <p class="desc">Next Up is a free, independent project — not affiliated with, endorsed by, or sponsored by IGDB, Twitch, or any publisher. Game data, covers, and ratings come from IGDB and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
+        <p class="desc" style="margin-top:8px;"><a href="privacy.html">Privacy Policy</a></p>
+        <p class="desc hint" style="margin-top:8px;">App version: <span id="appVersionLabel"></span></p>
+      </div>
+
+    </div>
+
+    <!-- ===================== VIDEO GAME FILTERS TAB ===================== -->
+    <div id="filtersTab" style="display:none;">
+
+      <div class="card" id="rerunFiltersCard" style="display:none;">
+        <h2>Apply Changes</h2>
+        <p class="desc">Re-run your filters against the same fetched games — no new spin, no new API calls, just re-checks who currently passes.</p>
+        <button class="btn-primary" id="rerunFiltersBtn">🔄 Re-run Filters</button>
+      </div>
+
+      <div class="card">
+        <h2>Player Count</h2>
+        <p class="desc">Check which player counts you want included — a spin picks one of these plus a category. A game matches if its real min–max player range from BGG includes the spun number, not just if it's labeled exactly that count.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="platformsAllBtn">Select All</button>
+          <button class="btn-ghost" id="platformsNoneBtn">Select None</button>
+        </div>
+        <div id="platformToggles" class="toggle-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Categories</h2>
+        <p class="desc">Check which categories you want included.</p>
+        <div class="select-all-row">
+          <button class="btn-ghost" id="genresAllBtn">Select All</button>
+          <button class="btn-ghost" id="genresNoneBtn">Select None</button>
+        </div>
+        <div id="genreToggles" class="toggle-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>User Rating</h2>
+        <p class="desc">Only shows games within this rating range (0–10). Games with no rating data (including the built-in list, until enriched) are never excluded by this.</p>
+        <div class="row">
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Minimum</div>
+            <select id="minRatingSelect">
+              <option value="0">0.0+</option>
+              <option value="1">1.0+</option>
+              <option value="2">2.0+</option>
+              <option value="3">3.0+</option>
+              <option value="4">4.0+</option>
+              <option value="5">5.0+</option>
+              <option value="6">6.0+</option>
+              <option value="7">7.0+</option>
+              <option value="8">8.0+</option>
+              <option value="9">9.0+</option>
+            </select>
+          </div>
+          <div>
+            <div class="hint" style="margin:0 0 4px;">Maximum</div>
+            <select id="maxRatingSelect">
+              <option value="1">Up to 1.0</option>
+              <option value="2">Up to 2.0</option>
+              <option value="3">Up to 3.0</option>
+              <option value="4">Up to 4.0</option>
+              <option value="5">Up to 5.0</option>
+              <option value="6">Up to 6.0</option>
+              <option value="7">Up to 7.0</option>
+              <option value="8">Up to 8.0</option>
+              <option value="9">Up to 9.0</option>
+              <option value="10">Up to 10.0</option>
+            </select>
+          </div>
+        </div>
+        <div class="hint" id="ratingRangeNote" style="display:none; margin-top:8px; color: var(--amber);"></div>
+      </div>
+
+      <div class="card">
+        <h2>Explicit Content Filter</h2>
+        <p class="desc">Also excludes any game IGDB itself tags with the "Erotic" theme — real, structured data, not a guess, so these never appear anywhere, including the Filtered Out list below. Beyond that, this is best-effort: a keyword match on title and description, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
+        <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
+          <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Games With Explicit Content
+        </label>
+        <div class="row">
+          <input type="text" id="explicitKeywordInput" placeholder="Add a keyword or phrase">
+          <button class="btn-primary" id="explicitKeywordAddBtn">Add</button>
+        </div>
+        <div class="hint" id="explicitKeywordCount" style="margin-top:10px;"></div>
+        <button class="btn-ghost" id="explicitKeywordClearBtn" style="margin-top:8px;">Clear My Added Keywords</button>
+      </div>
+
+      <div class="card">
+        <h2>Blocked Games</h2>
+        <p class="desc">Titles here never show up in a spin, from either source. Leave year blank to block every version/remake of that title.</p>
+        <div class="row">
+          <input type="text" id="blockTitleInput" placeholder="Game title">
+          <input type="text" id="blockYearInput" placeholder="Year (optional)" style="flex: 0 1 140px;">
+          <button class="btn-primary" id="blockAddBtn">Block</button>
+        </div>
+        <div id="blockList" class="crew-list"></div>
+        <div class="hint" id="blockEmptyHint" style="display:none;">No blocked games.</div>
+      </div>
+
+    </div>
+
+    <!-- ===================== BUILT-IN VIDEO GAME LIST TAB ===================== -->
+    <div id="builtinTab" style="display:none;">
+
+      <div class="card">
+        <h2>Edit Built-in List</h2>
+        <p class="desc">Add or remove games from the built-in list for one platform + genre — used whenever that's the active source. These titles also get looked up automatically on IGDB for covers, ratings, and descriptions.</p>
+        <div class="row">
+          <select id="editListDecade"></select>
+          <select id="editListGenre"></select>
+        </div>
+        <div id="editListGames" class="crew-list" style="margin-top:14px;"></div>
+        <div class="row" style="margin-top:12px;">
+          <input type="text" id="editListTitleInput" placeholder="Game title">
+          <input type="text" id="editListYearInput" placeholder="Year" style="flex: 0 1 100px;">
+          <button class="btn-primary" id="editListAddBtn">Add</button>
+        </div>
+        <div class="error" id="editListError" style="display:none;"></div>
+        <div class="footer-actions" style="margin-top:12px;">
+          <button class="btn-danger" id="editListResetBtn">Reset This Combo to Default</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+/* ==================================================================
+   Firebase — Google sign-in + cross-device sync
+
+   Config values are public identifiers, not secrets — safe to embed in
+   client code (this is how every Firebase web app does it; access
+   control is enforced by the Firestore security rules, not by hiding
+   this object). This project ("Next Up Suite") is shared across the
+   whole planned app suite, not just this one.
+   ================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyADAPuMongfa8YII9PY39DWNeWuMnFknLc",
+  authDomain: "next-up-suite.firebaseapp.com",
+  projectId: "next-up-suite",
+  storageBucket: "next-up-suite.firebasestorage.app",
+  messagingSenderId: "517680626452",
+  appId: "1:517680626452:web:37b6ef5f9324d4beb36001",
+  measurementId: "G-44NFR9FPGX"
+};
+firebase.initializeApp(firebaseConfig);
+const fbAuth = firebase.auth();
+const fbDb = firebase.firestore();
+
+let currentUser = null; // set once signed in; null while signed out
+
+// Which localStorage/window.storage keys sync to the cloud when signed
+// in. Deliberately excludes anything device-local or easily regenerated
+// (the ratings/search caches, the resolved genre-ID map) — those stay
+// local to each device rather than bloating the synced document or
+// fighting over which device's cache "wins."
+// Bumped with every shipped update — shown in Admin's About card, and a
+// useful thing to check if you're ever unsure whether a page is actually
+// running the latest version versus something the service worker cached.
+const APP_VERSION = '0.1.0'; // MAJOR.MINOR.PATCH — first publish of the Board Games prototype. Copied from Games as a structural template, then substantially reworked: BGG has no live "discover by category" endpoint (confirmed against its official docs before building), so the entire live-discovery architecture (fetchGamesByRating, getCachedGamesForCombo, getSharedGamesForComboBatch, the auto/builtin data-source toggle) was removed — the pool for any spin is always exactly the built-in list, with BGG's /thing endpoint used only to enrich already-known titles, never to discover new ones. Rewrote the fetch layer for BGG's GET+XML API (bggFetch, replacing IGDB's POST+JSON igdbFetch), including the Authorization Bearer token flow required since BGG's July 2025 policy change and the CORS proxy (bgg-proxy.nextupsuite.workers.dev) that fix required. Enrichment (fetchGameDetails, enrichOneGame) and built-in-list resolution (searchIGDBForGame) rewritten against BGG's confirmed real XML shape (name[type=primary], yearpublished, minplayers/maxplayers, playtime, minage, category/mechanic links, stats-gated rating/averageweight) and verified end-to-end against real data from a live Catan lookup, not just mocked assumptions. GAME_DB seeded with 30 real, well-known games, each expanded across every player count in its real range — categories are explicitly marked unverified pending correction as real titles get resolved (Catan's own hardcoded "Strategy Game" tag was already found wrong against real BGG data: Economic/Negotiation). Before this first publish, caught and fixed four real, would-have-shipped bugs from copying Games' template without adjusting its hardcoded namespacing: the shared Firestore collection (sharedGameRatings), the localStorage key prefix (nug_), a sessionStorage sync-throttle key, and the cross-app pickStats field name (.games) were all still identical to the real, live Video Games app — meaning opening both in the same browser would have silently corrupted each other's data. All four renamed to be Board-Games-specific and reverified. Secondary filters (playtime, complexity, age) still have no UI or filtering logic — next step.
+document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
+
+const SYNCED_KEYS = new Set([
+  'game_picks', 'blocked_games',
+  'custom_game_additions', 'custom_game_removals',
+  'enabled_genres', 'enabled_platforms',
+  'min_rating', 'max_rating_ceiling',
+  'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
+  'data_source_pref', 'color_theme'
+]);
+
+/* ==================================================================
+   Curated game database — platform -> genre -> [{title,year}]
+   Rebuilt from the decade-based version (see below): each title is assigned to
+   exactly one platform (the one it's most associated with/best known
+   on), even though many are genuinely available on several — a
+   deliberate simplification so the built-in list stays a single
+   lookup per title rather than needing multi-platform tracking. Live
+   IGDB discovery is not limited this way: a game there can match any
+   platform it's actually tagged with.
+   A few titles' true home platform (Sega Saturn, Dreamcast, Atari
+   2600, Wii U) isn't in the 23 verified IGDB platforms this app
+   supports, so those were mapped to the closest reasonable fit
+   instead (mostly PC, or a later port's platform) rather than
+   dropped — except one (the 1981 Atari exclusive "Video Pinball"),
+   which had no honest fit anywhere and was dropped rather than
+   force-placed.
+   ================================================================== */
+// STARTER LIST — NOT YET VERIFIED against live BGG data. Titles, years,
+// and player-count ranges are drawn from general familiarity with these
+// well-known games, not confirmed via a live lookup. bggId is
+// deliberately omitted from every entry — resolving it requires a
+// searchBGGForGame-style function (not yet built, pending verification
+// of BGG's /search endpoint from an actual browser context, since BGG's
+// robots.txt blocks this project's own tooling from checking directly).
+// Each game is listed under every player count within its real min-max
+// range, not just one — e.g. a 3-7 player game appears under 3, 4, 5, 6,
+// and 7+, matching how a spin should genuinely match any of those counts
+// once real BGG min/max data drives this instead of this hardcoded list.
+const GAME_DB = {
+"1":{
+"Strategy Game":[{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016}],
+"Thematic":[{title:"Gloomhaven",year:2017}],
+"Economic":[{title:"Terraforming Mars",year:2016}],
+"Family Game":[{title:"Sagrada",year:2017}],
+"Puzzle":[{title:"Sagrada",year:2017}]
+},
+"2":{
+"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Splendor",year:2014},{title:"Azul",year:2017},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Patchwork",year:2014},{title:"Sagrada",year:2017},{title:"Kingdomino",year:2016},{title:"Century: Spice Road",year:2017}],
+"Thematic":[{title:"Pandemic",year:2008},{title:"Gloomhaven",year:2017}],
+"Party Game":[{title:"Codenames",year:2015},{title:"Coup",year:2012}],
+"Abstract Strategy":[{title:"Azul",year:2017},{title:"Onitama",year:2014},{title:"Hive",year:2001}],
+"Strategy Game":[{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Twilight Struggle",year:2005},{title:"Root",year:2018},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
+"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
+"Card Game":[{title:"Coup",year:2012},{title:"Sushi Go!",year:2013},{title:"Love Letter",year:2012}],
+"Wargame":[{title:"Twilight Struggle",year:2005},{title:"Root",year:2018}],
+"Puzzle":[{title:"Sagrada",year:2017}]
+},
+"3":{
+"Strategy Game":[{title:"Catan",year:1995},{title:"7 Wonders",year:2010},{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Root",year:2018},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
+"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Splendor",year:2014},{title:"Azul",year:2017},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Sagrada",year:2017},{title:"Kingdomino",year:2016},{title:"Century: Spice Road",year:2017}],
+"Thematic":[{title:"Pandemic",year:2008},{title:"Gloomhaven",year:2017},{title:"Betrayal at House on the Hill",year:2004}],
+"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
+"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012},{title:"Sushi Go!",year:2013},{title:"Love Letter",year:2012}],
+"Abstract Strategy":[{title:"Azul",year:2017}],
+"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
+"Wargame":[{title:"Root",year:2018}],
+"Puzzle":[{title:"Sagrada",year:2017}],
+"Deduction":[{title:"Skull",year:2011}]
+},
+"4":{
+"Strategy Game":[{title:"Catan",year:1995},{title:"7 Wonders",year:2010},{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Root",year:2018},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
+"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Splendor",year:2014},{title:"Azul",year:2017},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Sagrada",year:2017},{title:"Kingdomino",year:2016},{title:"Century: Spice Road",year:2017}],
+"Thematic":[{title:"Pandemic",year:2008},{title:"Gloomhaven",year:2017},{title:"Betrayal at House on the Hill",year:2004}],
+"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
+"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012},{title:"Sushi Go!",year:2013},{title:"Love Letter",year:2012}],
+"Abstract Strategy":[{title:"Azul",year:2017}],
+"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013},{title:"Brass: Birmingham",year:2018}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
+"Wargame":[{title:"Root",year:2018}],
+"Puzzle":[{title:"Sagrada",year:2017}],
+"Deduction":[{title:"Skull",year:2011}]
+},
+"5":{
+"Family Game":[{title:"Ticket to Ride",year:2004},{title:"Carcassonne",year:2000},{title:"Sushi Go!",year:2013},{title:"King of Tokyo",year:2011},{title:"Century: Spice Road",year:2017}],
+"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"The Resistance",year:2009},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
+"Strategy Game":[{title:"7 Wonders",year:2010},{title:"Wingspan",year:2019},{title:"Terraforming Mars",year:2016},{title:"Concordia",year:2013}],
+"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012},{title:"Sushi Go!",year:2013}],
+"Economic":[{title:"Terraforming Mars",year:2016},{title:"Century: Spice Road",year:2017},{title:"Concordia",year:2013}],
+"Deduction":[{title:"The Resistance",year:2009},{title:"Skull",year:2011}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
+"Thematic":[{title:"Betrayal at House on the Hill",year:2004}]
+},
+"6":{
+"Party Game":[{title:"Codenames",year:2015},{title:"Dixit",year:2008},{title:"The Resistance",year:2009},{title:"Coup",year:2012},{title:"Just One",year:2018},{title:"Skull",year:2011}],
+"Strategy Game":[{title:"7 Wonders",year:2010}],
+"Card Game":[{title:"7 Wonders",year:2010},{title:"Coup",year:2012}],
+"Deduction":[{title:"The Resistance",year:2009},{title:"Skull",year:2011}],
+"Family Game":[{title:"King of Tokyo",year:2011}],
+"Horror":[{title:"Betrayal at House on the Hill",year:2004}],
+"Thematic":[{title:"Betrayal at House on the Hill",year:2004}]
+},
+"7+":{
+"Party Game":[{title:"Codenames",year:2015},{title:"The Resistance",year:2009},{title:"Just One",year:2018}],
+"Strategy Game":[{title:"7 Wonders",year:2010}],
+"Card Game":[{title:"7 Wonders",year:2010}],
+"Deduction":[{title:"The Resistance",year:2009}]
+},
+};
+
+// All 23 genres IGDB actually returns (confirmed live against the real
+// /genres endpoint, not assumed from docs) — every one is a reasonable
+// "pick something to play" category, so unlike IGDB's 89-genre
+// list, no real curation was needed. Keys match GAME_DB's genre names
+// above exactly, so the same GENRES list drives both the built-in list
+// and live IGDB discovery.
+// NOT YET VERIFIED LIVE — this list is based on general familiarity with
+// BGG's well-known category names, not a confirmed live query (BGG's API
+// has no endpoint to list all valid categories the way IGDB's /genres
+// did, and BGG's robots.txt blocks this project's own tooling from
+// fetching it directly to check). Needs spot-checking against a few real
+// games' actual <link type="boardgamecategory"> values before this is
+// trusted the way every other app's category/genre list has been.
+// Stored as plain names, not IDs — unlike IGDB_GENRES/IGDB_PLATFORMS,
+// there's no live "discover by category ID" query to build against (see
+// the architecture note on GAME_DB below), so a numeric ID buys nothing
+// here; the built-in list just needs a name to tag each entry with, and
+// enrichment can compare that name against BGG's own returned category
+// list as a plain string.
+const BG_CATEGORIES = [
+  'Strategy Game',
+  'Party Game',
+  'Family Game',
+  'Card Game',
+  'Wargame',
+  'Abstract Strategy',
+  "Children's Game",
+  'Thematic',
+  'Deduction',
+  'Dice',
+  'Economic',
+  'Fantasy',
+  'Horror',
+  'Miniatures',
+  'Negotiation',
+  'Puzzle',
+  'Racing',
+  'Real-time',
+  'Sports'
+];
+
+// A specific number, not a range — the spin picks one count and matches
+// it against each game's real minplayers–maxplayers range from BGG (a
+// game supporting 2–5 players matches a spin of 3, 4, or 5, not just a
+// game explicitly labeled "3 players"). "7+" catches anything whose max
+// genuinely goes that high, not just games specifically designed for 7.
+const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '5', '6', '7+'];
+
+
+
+// ESRB is organization id 1 within IGDB's age_ratings system — confirmed
+// live via /age_rating_categories, not assumed. rating_category values
+// below are ESRB-specific; other organizations (PEGI, CERO, etc.) have
+// their own separate category IDs not listed here.
+const ESRB_RATINGS = {
+  1: 'RP',   // Rating Pending
+  2: 'EC',   // Early Childhood
+  3: 'E',    // Everyone
+  4: 'E10+', // Everyone 10+
+  5: 'T',    // Teen
+  6: 'M',    // Mature
+  7: 'AO'    // Adults Only
+};
+
+// Sourced directly from BG_CATEGORIES/PLAYER_COUNT_OPTIONS — unlike the
+// other apps, there's no live "discover" query these could fall back to
+// verifying against (see the architecture note on GAME_DB below), so
+// this list IS the complete, authoritative set of what's toggle-able,
+// not just a convenience derived from something more authoritative.
+const GENRES = BG_CATEGORIES.slice();
+const PLATFORM_KEYS = PLAYER_COUNT_OPTIONS.slice();
+
+function comboKey(platform, genre){ return `${platform}|${genre}`; }
+
+// Returns the built-in list for one platform/genre with the user's own edits
+// applied — anything they've removed hidden, anything they've added
+// appended. GAME_DB itself is never modified; this is the only place that
+// should be read from when the built-in list is actually used for a spin.
+function getEffectiveGameList(platform, genre){
+  const base = (GAME_DB[platform] && GAME_DB[platform][genre]) || [];
+  const key = comboKey(platform, genre);
+  const removed = new Set(customRemovals[key] || []);
+  const kept = base.filter(m => !removed.has(`${m.title}|${m.year}`));
+  const additions = customAdditions[key] || [];
+  return kept.concat(additions);
+}
+// User-configurable in Admin — how many titles a IGDB spin pulls
+// back. Requesting more costs nothing extra for discovery itself (still
+// one call either way); the actual state variable and its bounds are set
+// below.
+const MAX_RESULTS_MIN = 10;
+const MAX_RESULTS_MAX = 100;
+const MAX_RESULTS_DEFAULT = 20;
+// Best-effort extra genre tags for well-known crossover titles in the
+// built-in list (keyed "Title|Year"). Anything not listed here just shows
+// the single genre it's filed under below — IGDB-sourced results
+// don't need this, since each result is already tagged with the genre it
+// was searched under.
+const EXTRA_GENRES = {
+  "The Terminator|1984":["Action","Sci-Fi"], "RoboCop|1987":["Action","Sci-Fi"],
+  "Gremlins|1984":["Horror","Comedy"], "Aliens|1986":["Action","Sci-Fi","Horror"],
+  "Predator|1987":["Action","Sci-Fi","Horror"], "The Fly|1986":["Horror","Sci-Fi"],
+  "Beetlejuice|1988":["Comedy","Horror"], "The Princess Bride|1987":["Romance","Comedy"],
+  "Splash|1984":["Romance","Comedy"], "Working Girl|1988":["Romance","Comedy","Drama"],
+  "When Harry Met Sally...|1989":["Romance","Comedy"],
+  "The Matrix|1999":["Action","Sci-Fi"], "Total Recall|1990":["Action","Sci-Fi"],
+  "Starship Troopers|1997":["Action","Sci-Fi"], "Titanic|1997":["Drama","Romance"],
+  "Ghost|1990":["Romance","Drama","Thriller"], "Jerry Maguire|1996":["Romance","Drama","Comedy"],
+  "The Sixth Sense|1999":["Horror","Thriller","Drama"], "Scream|1996":["Horror","Comedy","Thriller"],
+  "Fargo|1996":["Thriller","Comedy","Drama"], "Braveheart|1995":["Action","Drama"],
+  "Beauty and the Beast|1991":["Animation","Romance"],
+  "Gladiator|2000":["Action","Drama"], "The Departed|2006":["Thriller","Drama","Crime"],
+  "Wall-E|2008":["Animation","Sci-Fi"], "District 9|2009":["Sci-Fi","Action","Thriller"],
+  "The Notebook|2004":["Romance","Drama"], "500 Days of Summer|2009":["Romance","Comedy","Drama"],
+  "(500) Days of Summer|2009":["Romance","Comedy","Drama"], "Little Miss Sunshine|2006":["Comedy","Drama"],
+  "Zombieland|2009":["Comedy","Horror"], "Shaun of the Dead|2004":["Horror","Comedy"],
+  "Get Out|2017":["Horror","Thriller"], "A Quiet Place|2018":["Horror","Thriller","Sci-Fi"],
+  "It Follows|2014":["Horror","Thriller"], "The Babadook|2014":["Horror","Drama"],
+  "Deadpool|2016":["Action","Comedy"], "Knives Out|2019":["Comedy","Thriller"],
+  "Silver Linings Playbook|2012":["Romance","Comedy","Drama"], "La La Land|2016":["Drama","Romance","Comedy"],
+  "Inception|2010":["Action","Sci-Fi","Thriller"], "Ex Machina|2014":["Sci-Fi","Thriller","Drama"],
+  "Everything Everywhere All at Once|2022":["Action","Comedy","Sci-Fi","Drama"],
+  "Barbie|2023":["Comedy","Drama"], "The Menu|2022":["Comedy","Thriller","Horror"],
+  "Talk to Me|2023":["Horror","Thriller"], "Nope|2022":["Horror","Sci-Fi","Thriller"],
+  "M3GAN|2023":["Horror","Comedy","Sci-Fi"], "Anyone but You|2023":["Romance","Comedy"],
+  "Free Guy|2021":["Action","Comedy","Sci-Fi"], "Dune|2021":["Sci-Fi","Action","Drama"],
+  "Oppenheimer|2023":["Drama","Thriller","History"], "Cocaine Bear|2023":["Comedy","Horror","Thriller"]
+};
+const CURRENT_YEAR = new Date().getFullYear();
+// Routed through a Cloudflare Worker proxy rather than called directly —
+// IGDB (like Open Library before it) doesn't send the
+// Access-Control-Allow-Origin header browsers require for cross-origin
+// fetch() calls, confirmed via direct testing. The proxy also means the
+// API key never has to live in client-side code at all — it's stored as
+// an encrypted secret on the Worker, genuinely more secure than the
+// BGG's proxy Worker — adds the CORS header and Authorization Bearer
+// token BGG's own API requires (as of a July 2025 policy change,
+// confirmed live), keeping the token server-side rather than exposed to
+// the client. See bgg-proxy-worker.js for the actual proxy code.
+
+/* ==================================================================
+   State
+   ================================================================== */
+let picks = [];
+let crew = []; // populated from the shared, cross-app local storage key — see loadSharedCrew()
+let currentBatch = [];
+const forceRefreshedThisSpin = new Set(); // big game ids already force-refreshed during the current spin — reset in spin(), never in applyFiltersAndRender() so re-applying a filter doesn't quietly reset the limit
+let lastFilteredOut = []; // [{game, reason}] — cleared/rebuilt each spin
+let lastFullPool = []; // every game fetched (and enriched, if unblocked) this spin, before filters — lets "Re-run Filters" work with no new API calls
+let currentChoice = null;
+let currentSource = 'builtin'; // 'builtin' | 'igdb'
+
+let minRating = 0;
+let maxRating = 10; // top of the 0-10 scale — "Any rating" was removed as a selectable option, matching Movies/TV/Books
+
+const WM_DISCOVERY_STALE_MS = 20 * 24 * 60 * 60 * 1000;
+const WM_ENRICHMENT_STALE_MS = 90 * 24 * 60 * 60 * 1000;
+const WM_GLOBAL_MAX_STALE_MS = 90 * 24 * 60 * 60 * 1000;
+
+function isFresh(timestamp, windowMs){
+  return timestamp != null && timestamp >= Date.now() - windowMs;
+}
+
+// IGDB never returns genre tags directly — the only genre
+// knowledge this app ever has for a game comes from which genre filter
+// it happened to be discovered under during a spin. A game can
+// genuinely belong to more than one of the app's genres, and different
+// spins over time can surface the same game under different ones — so
+// this always unions rather than replaces, or a later discovery under
+// one genre would silently erase an earlier one. Returns null (not [])
+// when there's nothing at all, consistent with how "no genre known yet"
+// is represented everywhere else.
+function mergeGenreLists(a, b){
+  const set = new Set([...(a || []), ...(b || [])]);
+  return set.size ? Array.from(set) : null;
+}
+
+function mergeFreshestTiers(local, shared){
+  const merged = Object.assign({}, local);
+  merged.genres = mergeGenreLists(local.genres, shared.genres); // always merged, independent of which side is "fresher" below
+  if ((shared.discoveredAt || 0) > (local.discoveredAt || 0)){
+    merged.title = shared.title;
+    merged.discoveredAt = shared.discoveredAt;
+  }
+  if ((shared.enrichedAt || 0) > (local.enrichedAt || 0)){
+    merged.year = shared.year;
+    merged.posterUrl = shared.posterUrl;
+    merged.description = shared.description;
+    merged.userRating = sanitizeUserRating(shared.userRating);
+    merged.platforms = shared.platforms;
+    merged.themes = shared.themes;
+    merged.igdbUrl = shared.igdbUrl;
+    merged.esrbRating = shared.esrbRating;
+    merged.enrichedAt = shared.enrichedAt;
+  }
+  return merged;
+}
+
+// Ratings are stored on this app's 0-10 display scale, never IGDB's raw
+// 0-100 — a cached value above 10 could only mean it was written before
+// a real conversion bug was fixed (Math.round(X*10)/10 instead of
+// Math.round(X)/10, shipped in 0.4.1), never a legitimate rating.
+// Treated as corrupted data rather than trusted at face value, so a
+// stale entry heals itself back to "no rating known" instead of
+// perpetuating the bug indefinitely for anyone who cached a bad value
+// before the fix — including via the shared, cross-user Firestore
+// cache, which could otherwise keep serving a wrong number to everyone
+// long after the code itself was corrected.
+function sanitizeUserRating(value){
+  return (value != null && value <= 10) ? value : null;
+}
+
+function applyRecordToGame(game, record, tierFlags){
+  const flags = tierFlags || { discoveryFresh: true, enrichmentFresh: true };
+  if (flags.discoveryFresh && record.genres && record.genres.length) game.genresOverride = record.genres;
+  if (flags.enrichmentFresh){
+    if (record.year != null && game.year == null) game.year = record.year;
+    if (record.posterUrl && !game.posterUrl) game.posterUrl = record.posterUrl;
+    if (record.description && !game.description) game.description = record.description;
+    const safeRating = sanitizeUserRating(record.userRating);
+    if (safeRating != null && game.userRating == null) game.userRating = safeRating;
+    if (record.minPlayers != null) game.minPlayers = record.minPlayers;
+    if (record.maxPlayers != null) game.maxPlayers = record.maxPlayers;
+    if (record.playtime != null) game.playtime = record.playtime;
+    if (record.complexity != null) game.complexity = record.complexity;
+    if (record.minAge != null) game.minAge = record.minAge;
+    if (record.mechanics && record.mechanics.length) game.mechanics = record.mechanics;
+    if (record.bggUrl) game.bggUrl = record.bggUrl;
+  }
+}
+const wmDetailsCache = new Map(); // gameId -> {posterUrl, genres, description, userRating, minPlayers, maxPlayers, playtime, complexity, minAge, mechanics, enrichedAt} — persisted locally, mirroring wmRatingsCache's shape
+const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
+const wmRatingsCache = new Map(); // gameId -> {title, year, genres, posterUrl, description, userRating, minPlayers, maxPlayers, playtime, complexity, minAge, mechanics, bggUrl, discoveredAt, enrichedAt} — used for the whole grid (session only)
+const wmSearchCache = new Map(); // "title|year" -> gameId (or null for a confirmed no-match), used to enrich the built-in list
+let enabledGenres = GENRES.slice();
+let enabledPlatforms = PLATFORM_KEYS.slice();
+
+// Color themes — each swaps the accent + base palette; danger (velvet) and
+// success (green) colors stay fixed across all of them so status colors
+// keep a consistent meaning no matter which theme is active.
+const COLOR_THEMES = {
+  amber: {
+    label: 'Amber Marquee', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#f2a93b', amberRgb: '242,169,59', amberDim: '#a8752b', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  crimson: {
+    label: 'Crimson Velvet', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#e2545f', amberRgb: '226,84,95', amberDim: '#9c3a42', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  emerald: {
+    label: 'Emerald Cinema', bg: '#14141a', surface: '#1e1e27', surface2: '#262633',
+    amber: '#4fbf8b', amberRgb: '79,191,139', amberDim: '#35805e', cream: '#efe7da', muted: '#8b8b98', line: '#34343f'
+  },
+  sapphire: {
+    label: 'Sapphire Noir', bg: '#12141a', surface: '#1c1f27', surface2: '#242833',
+    amber: '#5b9fe3', amberRgb: '91,159,227', amberDim: '#3d6d9c', cream: '#e9edf5', muted: '#8b93a3', line: '#2e3340'
+  },
+  violet: {
+    label: 'Violet Reel', bg: '#16131a', surface: '#211d27', surface2: '#2a2433',
+    amber: '#b98af0', amberRgb: '185,138,240', amberDim: '#7d5aa6', cream: '#efe7f5', muted: '#948b9e', line: '#38313f'
+  },
+  popcorn: {
+    label: 'Popcorn Light', bg: '#f4ede0', surface: '#ffffff', surface2: '#f2e8d4',
+    amber: '#d9822b', amberRgb: '217,130,43', amberDim: '#a85f18', cream: '#241a08', muted: '#7a6c54', line: '#ddd0b8'
+  }
+};
+let colorTheme = 'amber';
+let filterExplicitContent = true; // on by default — safety filter, checked unless explicitly turned off
+// Best-effort text filter, not a guarantee — matched case-insensitively
+// against title + description. Kept to specific, unambiguous phrases
+// rather than broad single words (avoiding e.g. "sex" or "nude" alone,
+// which would sweep up ordinary dramas/romances). Intentionally not
+// exposed in the UI — only its existence and size are shown, not its
+// contents.
+const DEFAULT_EXPLICIT_KEYWORDS = [
+  'pornographic', 'pornography', 'porn film', 'xxx-rated', 'hardcore sex',
+  'explicit sex', 'sexually explicit', 'erotica', 'erotic film',
+  'adult film', 'adult entertainment', 'sex industry', 'hentai', 'nsfw'
+];
+let customExplicitKeywords = []; // user-added, on top of the built-in list above
+let blockedGames = []; // {title, year|null}
+let customAdditions = {}; // "platform|genre" -> [{title, year}] — user-added built-in-list entries
+let customRemovals = {}; // "platform|genre" -> ["title|year", ...] — built-in entries the user has hidden
+let maxResults = MAX_RESULTS_DEFAULT;
+
+const $ = (id) => document.getElementById(id);
+function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function randomFrom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+/* ==================================================================
+   Storage (each save wrapped so a failure never blocks the UI update)
+
+   Uses the Claude artifact storage API (window.storage) when it's
+   available — that's the case when this app is viewed inside a
+   Claude artifact panel. If this file has been downloaded and is
+   being opened directly in a browser (window.storage won't exist
+   there), it falls back to the browser's own localStorage so data
+   still saves between visits on that device.
+   ================================================================== */
+const HAS_CLAUDE_STORAGE = (typeof window.storage !== 'undefined' && !!window.storage);
+let storageWarningShown = false;
+
+function warnStorageFallback(){
+  if (storageWarningShown) return;
+  storageWarningShown = true;
+  console.warn('Claude artifact storage not detected — using this browser\'s local storage instead.');
+}
+
+async function loadJSON(key, fallback){
+  if (HAS_CLAUDE_STORAGE){
+    try{ const r = await window.storage.get('nbg_' + key); return r ? JSON.parse(r.value) : fallback; }
+    catch(e){ return fallback; }
+  }
+  warnStorageFallback();
+  try{ const raw = localStorage.getItem('nbg_' + key); return raw ? JSON.parse(raw) : fallback; }
+  catch(e){ return fallback; }
+}
+async function saveJSON(key, value){
+  if (HAS_CLAUDE_STORAGE){
+    try{ await window.storage.set('nbg_' + key, JSON.stringify(value)); }
+    catch(e){ console.error('Storage save failed for ' + key, e); }
+  } else {
+    warnStorageFallback();
+    try{ localStorage.setItem('nbg_' + key, JSON.stringify(value)); }
+    catch(e){ console.error('Local storage save failed for ' + key, e); }
+  }
+  if (currentUser && SYNCED_KEYS.has(key)){
+    syncKeyToCloud(key, value); // fire-and-forget — local save above already succeeded either way
+  }
+}
+
+async function syncKeyToCloud(key, value){
+  try{
+    await fbDb.collection('users').doc(currentUser.uid)
+      .collection('nextUpApps').doc('games')
+      .set({ [key]: value }, { merge: true });
+  } catch(e){
+    console.warn('Cloud sync failed for ' + key, e.message);
+  }
+}
+
+// Starts sign-in. Inside the Android app, Google actively blocks sign-in
+// popups from running inside an embedded WebView (a real, enforced
+// security policy — not something we can code around) — so on that
+// platform, sign-in has to happen natively instead. This detects which
+// context it's in and picks the right path; the browser-hosted website
+// version always uses the normal popup.
+// Guards syncOnSignIn so it only ever runs once per actual app
+// launch/session — sessionStorage specifically, not a plain JS variable,
+// because syncOnSignIn's own location.reload() would otherwise reset a
+// plain variable and let it fire again on the reloaded page, right back
+// into the same loop this was built to avoid. sessionStorage survives a
+// same-tab reload but resets on a genuinely new launch (tab/app closed
+// and reopened), which is exactly the "once per launch" behavior wanted.
+// Centralized here (rather than called separately from each sign-in
+// path) so an explicit sign-in and the auth-state listener firing for
+// that same event can't both trigger a sync.
+function triggerSyncOnce(user){
+  const lastSync = Number(sessionStorage.getItem('nextup_last_sync_boardgames') || 0);
+  if (Date.now() - lastSync < 15000) return; // synced within the last 15s — skip, most likely just re-rendering the same page, not returning after real activity elsewhere
+  sessionStorage.setItem('nextup_last_sync_boardgames', String(Date.now()));
+  syncOnSignIn(user);
+}
+
+function signInWithGoogle(){
+  const hasNativeBridge = typeof Android !== 'undefined' && typeof Android.signIn === 'function';
+  console.log('[signInWithGoogle] hasNativeBridge =', hasNativeBridge, '| typeof Android =', typeof Android);
+  if (hasNativeBridge){
+    showAuthStatus('Opening Google sign-in…');
+    Android.signIn(); // result arrives async via window.onNativeGoogleSignIn below
+    return;
+  }
+  if (location.protocol === 'file:'){
+    // Firebase Auth's browser sign-in flow (and its session persistence)
+    // requires a real http(s) origin — it can't work when this file is
+    // opened directly rather than loaded from a hosted URL. This isn't a
+    // bug to fix in code; it only works once this is actually hosted
+    // somewhere (e.g. GitHub Pages) and opened via that address.
+    showAuthStatus('Google Sign-In needs the app loaded from a real web address (https://…) — it can\'t work when opening this file directly. Try it from the hosted version instead.');
+    return;
+  }
+  showAuthStatus('Opening sign-in…');
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).then(result => {
+    triggerSyncOnce(result.user);
+  }).catch(e => {
+    console.warn('Google sign-in failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+}
+
+// Called by the native Android side (MainActivity.kt) after it gets a
+// Google credential outside the WebView. Payload is a JSON string:
+// {success:true, idToken} or {success:false, error}.
+window.onNativeGoogleSignIn = function(payloadStr){
+  let payload;
+  try{ payload = JSON.parse(payloadStr); }
+  catch(e){ showAuthStatus('Sign-in failed: unexpected response from the app.'); return; }
+
+  if (!payload.success){
+    showAuthStatus('Sign-in failed: ' + (payload.error || 'unknown error'));
+    return;
+  }
+  const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
+  fbAuth.signInWithCredential(credential).then(result => {
+    triggerSyncOnce(result.user);
+  }).catch(e => {
+    console.warn('Firebase sign-in with native credential failed', e.message);
+    showAuthStatus('Sign-in failed: ' + e.message);
+  });
+};
+
+// The true fresh-install default for every synced key — these must match
+// exactly what init() falls back to when nothing's been saved yet, so
+// signing out genuinely looks like a first-ever run, not an arbitrary
+// blank state.
+const SYNCED_KEY_DEFAULTS = {
+  game_picks: () => [],
+  blocked_games: () => [],
+  custom_game_additions: () => ({}),
+  custom_game_removals: () => ({}),
+  enabled_genres: () => GENRES.slice(),
+  enabled_platforms: () => PLATFORM_KEYS.slice(),
+  min_rating: () => 0,
+  max_rating_ceiling: () => 10,
+  filter_explicit_content: () => true,
+  custom_explicit_keywords: () => [],
+  max_results: () => MAX_RESULTS_DEFAULT,
+  data_source_pref: () => 'auto',
+  color_theme: () => 'amber'
+};
+
+// Resets every synced key back to its true default — this is what makes
+// signing out actually behave like signing out, rather than leaving
+// whatever was last synced sitting in local storage for the next person
+// to use this device/browser. Deliberately leaves the ratings/search
+// cache alone — that's not personal data, just cached game metadata, and
+// clearing it would only cost the next connection extra API calls to
+// rebuild for no real benefit.
+async function resetLocalStateToDefaults(){
+  for (const key of SYNCED_KEYS){
+    const getDefault = SYNCED_KEY_DEFAULTS[key];
+    const value = getDefault ? getDefault() : null;
+    if (HAS_CLAUDE_STORAGE) await window.storage.set('nbg_' + key, JSON.stringify(value));
+    else localStorage.setItem('nbg_' + key, JSON.stringify(value));
+  }
+}
+
+async function signOutOfGoogle(){
+  try{ await fbAuth.signOut(); }
+  catch(e){ console.warn('Sign-out failed', e.message); }
+  // Also clears the native side's remembered credential state, if
+  // available, so the account picker shows fresh next time rather than
+  // silently reusing the last selection. Harmless no-op on the website.
+  if (typeof Android !== 'undefined' && typeof Android.signOutNative === 'function'){
+    Android.signOutNative();
+  }
+  sessionStorage.removeItem('nextup_last_sync_boardgames'); // so signing back in this same tab/session resyncs fresh rather than being throttled
+  showAuthStatus('Signed out — resetting to defaults…');
+  await resetLocalStateToDefaults();
+  location.reload(); // same pattern as sign-in — the reliable way to get every part of the app to re-read the reset state
+}
+
+function showAuthStatus(text){
+  const el = document.getElementById('authStatus');
+  if (el){ el.textContent = text; el.style.display = text ? 'block' : 'none'; }
+}
+
+// Fires whenever sign-in state changes, INCLUDING automatically on every
+// app load if there's already a valid session — Firebase persists that
+// itself. That's also exactly the moment a resync-on-launch is wanted:
+// if you were signed in on this device already, this is the one chance
+// to pick up whatever changed on another device since last time. Routed
+// through triggerSyncOnce so it can never fire more than once per actual
+// launch — without that guard, this would be the same infinite-reload
+// bug as before, since syncOnSignIn's own reload would just cause this
+// listener to fire again on the reloaded page.
+fbAuth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  renderAuthUI();
+  if (user){
+    triggerSyncOnce(user);
+    renderAdmin();
+  }
+});
+
+// Runs once right after a sign-in is confirmed. If cloud data already
+// exists for this account (they've synced from another device before),
+// it's treated as authoritative and pulled down, replacing local state —
+// simple and predictable, though it does mean an unsynced change sitting
+// only on a *different* device could get overwritten the next time that
+// device reconnects. If there's no cloud data yet, this device's current
+// local state is pushed up as the starting point instead.
+async function syncOnSignIn(user){
+  showAuthStatus('Syncing…');
+  try{
+    const ref = fbDb.collection('users').doc(user.uid).collection('nextUpApps').doc('games');
+    const snap = await ref.get();
+    if (snap.exists){
+      const data = snap.data();
+      for (const key of SYNCED_KEYS){
+        // Treat a stored null exactly like a missing field — never write a
+        // literal "null" into local storage, which would otherwise get
+        // read back as a real (empty) value instead of falling through to
+        // the app's actual defaults.
+        if (data[key] !== undefined && data[key] !== null){
+          if (HAS_CLAUDE_STORAGE) await window.storage.set('nbg_' + key, JSON.stringify(data[key]));
+          else localStorage.setItem('nbg_' + key, JSON.stringify(data[key]));
+        }
+      }
+      showAuthStatus('Synced from your account — reloading…');
+      location.reload(); // simplest reliable way to get every part of the app to re-read the newly-pulled state
+    } else {
+      const payload = {};
+      for (const key of SYNCED_KEYS){
+        const val = await loadJSON(key, null);
+        if (val !== null) payload[key] = val; // never seed the cloud with a bare null for a key that's never actually been set locally
+      }
+      await ref.set(payload);
+      showAuthStatus('');
+    }
+  } catch(e){
+    console.warn('Sync on sign-in failed', e.message);
+    showAuthStatus('Could not sync right now: ' + e.message);
+  }
+}
+
+function renderAuthUI(){
+  const signedOutBox = document.getElementById('authSignedOut');
+  const signedInBox = document.getElementById('authSignedIn');
+  if (!signedOutBox || !signedInBox) return; // shell not rendered yet
+  if (currentUser){
+    signedOutBox.style.display = 'none';
+    signedInBox.style.display = 'flex';
+    const firstName = (currentUser.displayName || currentUser.email || 'Signed in').split(' ')[0];
+    document.getElementById('authName').textContent = firstName;
+    document.getElementById('authName').title = currentUser.displayName || currentUser.email || '';
+  } else {
+    signedOutBox.style.display = 'block';
+    signedInBox.style.display = 'none';
+  }
+}
+
+async function savePicks(){ await saveJSON('game_picks', picks); }
+async function saveMinRating(){ await saveJSON('min_rating', minRating); }
+async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating); }
+async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
+async function saveEnabledPlatforms(){ await saveJSON('enabled_platforms', enabledPlatforms); }
+
+function applyColorTheme(name){
+  const theme = COLOR_THEMES[name] || COLOR_THEMES.amber;
+  const root = document.documentElement.style;
+  root.setProperty('--bg', theme.bg);
+  root.setProperty('--surface', theme.surface);
+  root.setProperty('--surface-2', theme.surface2);
+  root.setProperty('--amber', theme.amber);
+  root.setProperty('--amber-rgb', theme.amberRgb);
+  root.setProperty('--amber-dim', theme.amberDim);
+  root.setProperty('--cream', theme.cream);
+  root.setProperty('--muted', theme.muted);
+  root.setProperty('--line', theme.line);
+}
+async function saveColorTheme(){ await saveJSON('color_theme', colorTheme); }
+
+function renderThemeSwatches(){
+  $('themeSwatchGrid').innerHTML = Object.entries(COLOR_THEMES).map(([key, t]) => `
+    <div class="theme-swatch ${key === colorTheme ? 'active' : ''}" data-theme="${key}">
+      <div class="theme-swatch-preview" style="background:${t.bg};">
+        <span class="theme-swatch-dot" style="background:${t.amber};"></span>
+      </div>
+      <div class="theme-swatch-label">${escapeHtml(t.label)}</div>
+    </div>
+  `).join('');
+  $('themeSwatchGrid').querySelectorAll('.theme-swatch').forEach(el => {
+    el.addEventListener('click', async () => {
+      const name = el.dataset.theme;
+      if (name === colorTheme) return;
+      colorTheme = name;
+      applyColorTheme(colorTheme);
+      await saveColorTheme();
+      renderThemeSwatches();
+    });
+  });
+}
+async function saveFilterExplicitContent(){ await saveJSON('filter_explicit_content', filterExplicitContent); }
+async function saveCustomExplicitKeywords(){ await saveJSON('custom_explicit_keywords', customExplicitKeywords); }
+async function saveBlockedGames(){ await saveJSON('blocked_games', blockedGames); }
+async function saveCustomAdditions(){ await saveJSON('custom_game_additions', customAdditions); }
+async function saveCustomRemovals(){ await saveJSON('custom_game_removals', customRemovals); }
+async function saveMaxResults(){ await saveJSON('max_results', maxResults); }
+async function saveWmRatingsCache(){
+  const obj = {};
+  wmRatingsCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('bgg_ratings_cache', obj);
+}
+async function saveWmSearchCache(){
+  const obj = {};
+  wmSearchCache.forEach((v, k) => { obj[k] = v; });
+  await saveJSON('bgg_search_cache', obj);
+}
+async function saveWmDetailsCache(){
+  const obj = {};
+  const cutoff = Date.now() - WM_DETAILS_PRUNE_MS;
+  wmDetailsCache.forEach((v, k) => {
+    if ((v?.enrichedAt || 0) >= cutoff) obj[k] = v;
+  });
+  await saveJSON('bgg_details_cache', obj);
+}
+
+/* ==================================================================
+   Init
+   ================================================================== */
+async function init(){
+  picks = await loadJSON('game_picks', []);
+  loadSharedCrew();
+  minRating = await loadJSON('min_rating', 0);
+  maxRating = await loadJSON('max_rating_ceiling', 10);
+  enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
+  enabledPlatforms = await loadJSON('enabled_platforms', PLATFORM_KEYS.slice());
+  // Migration: a genre added to the app after someone already saved their
+  // filter selection (e.g. Fantasy/Western) should default to enabled for
+  // them too, not silently vanish from their spin pool — but a genre the
+  // user has deliberately unchecked must never get silently re-enabled
+  // just because it's also "missing" from their enabled list. The only way
+  // to tell those apart is to track which categories the app has actually
+  // seen before: only a category that's brand new since last time counts
+  // as "missing," never one that already existed and was just turned off.
+  const knownGenres = await loadJSON('known_genres', GENRES.slice()); // first run after this fix: treat everything current as already known, so nothing gets force-re-enabled once
+  const newlyAddedGenres = GENRES.filter(g => !knownGenres.includes(g));
+  if (newlyAddedGenres.length){
+    enabledGenres = enabledGenres.concat(newlyAddedGenres.filter(g => !enabledGenres.includes(g)));
+    await saveEnabledGenres();
+  }
+  await saveJSON('known_genres', GENRES.slice());
+
+  colorTheme = await loadJSON('color_theme', 'amber');
+  filterExplicitContent = await loadJSON('filter_explicit_content', true);
+  customExplicitKeywords = await loadJSON('custom_explicit_keywords', null);
+  if (customExplicitKeywords === null){
+    // Migration: this used to be one combined, user-editable list. Split
+    // off anything that isn't part of the current built-in defaults as a
+    // preserved custom addition, so nothing already added gets lost now
+    // that the list is a hidden default + separate custom additions.
+    const oldCombined = await loadJSON('explicit_content_keywords', []);
+    const defaultsLower = new Set(DEFAULT_EXPLICIT_KEYWORDS.map(k => k.toLowerCase()));
+    customExplicitKeywords = oldCombined.filter(k => !defaultsLower.has(k.toLowerCase()));
+    await saveCustomExplicitKeywords();
+  }
+  blockedGames = await loadJSON('blocked_games', []);
+  customAdditions = await loadJSON('custom_game_additions', {});
+  customRemovals = await loadJSON('custom_game_removals', {});
+  maxResults = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, await loadJSON('max_results', MAX_RESULTS_DEFAULT)));
+  const savedRatingsCache = await loadJSON('bgg_ratings_cache', {});
+  Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
+  const savedSearchCache = await loadJSON('bgg_search_cache', {});
+  Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
+  const savedDetailsCache = await loadJSON('bgg_details_cache', {});
+  Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchGameExtras, not at load time
+
+  renderHistory();
+  renderAdmin();
+  updateSourceNote();
+}
+
+/* ==================================================================
+   Tabs
+   ================================================================== */
+$('tabMainBtn').addEventListener('click', () => switchTab('main'));
+$('tabFiltersBtn').addEventListener('click', () => switchTab('filters'));
+$('tabBuiltinBtn').addEventListener('click', () => switchTab('builtin'));
+
+$('tabAdminBtn').addEventListener('click', () => switchTab('admin'));
+function switchTab(tab){
+  $('mainTab').style.display = tab === 'main' ? 'block' : 'none';
+  $('filtersTab').style.display = tab === 'filters' ? 'block' : 'none';
+  $('builtinTab').style.display = tab === 'builtin' ? 'block' : 'none';
+  $('adminTab').style.display = tab === 'admin' ? 'block' : 'none';
+  $('tabMainBtn').classList.toggle('active', tab === 'main');
+  $('tabFiltersBtn').classList.toggle('active', tab === 'filters');
+  $('tabBuiltinBtn').classList.toggle('active', tab === 'builtin');
+  $('tabAdminBtn').classList.toggle('active', tab === 'admin');
+  if (tab === 'admin') updateCacheStats();
+  if (tab === 'builtin') renderEditList();
+}
+
+/* ==================================================================
+   Crew — read-only here. Managed exclusively on the landing page
+   (index.html), shared across every section via an unprefixed local
+   storage key so every app on this device reads the same list without
+   needing to be signed in, and synced through Firestore when signed
+   in. Refreshed from that shared key at load and right before the
+   picker prompt shows, so an addition made on the landing page in
+   another tab is picked up without needing a full reload here.
+   ================================================================== */
+function loadSharedCrew(){
+  try{
+    const raw = localStorage.getItem('nextup_shared_crew');
+    crew = raw ? JSON.parse(raw) : [];
+  } catch(e){ crew = []; }
+}
+
+/* ==================================================================
+   Pick stats — who picked what, per section. Written here (this
+   section is "games"), but owned and displayed on the landing page
+   alongside every other section's numbers. Same unprefixed shared
+   local storage pattern as crew; synced to Firestore via a dotted
+   top-level key (e.g. "Alan.games") so FieldValue.increment only
+   ever touches that one nested leaf — a plain nested object under
+   {merge:true} would silently overwrite the whole per-person map
+   instead of adding to it.
+   ================================================================== */
+let pickStats = {}; // populated from the shared, cross-app local storage key — see loadSharedPickStats()
+
+function loadSharedPickStats(){
+  try{
+    pickStats = JSON.parse(localStorage.getItem('nextup_shared_pickstats') || '{}');
+  } catch(e){ pickStats = {}; }
+}
+
+async function recordPick(name){
+  if (!name || name === 'Unknown') return;
+  loadSharedPickStats(); // fresh read — another tab/section may have changed this since page load
+  if (!pickStats[name]) pickStats[name] = {};
+  pickStats[name].boardgames = (pickStats[name].boardgames || 0) + 1;
+  localStorage.setItem('nextup_shared_pickstats', JSON.stringify(pickStats));
+  if (!currentUser) return;
+  try{
+    await fbDb.collection('users').doc(currentUser.uid).collection('sharedSettings').doc('pickStats')
+      .set({ [`${name}.games`]: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+  } catch(e){ console.warn('Could not sync pick stat to cloud', e.message); }
+}
+
+/* ==================================================================
+   Picker prompt — shown at the moment of confirming a pick, not when
+   switching screens. Reuses the same modal-root/backdrop pattern as
+   the main confirm modal.
+   ================================================================== */
+function openPickerPrompt(game){
+  loadSharedCrew();
+  loadSharedPickStats();
+  if (!crew.length){
+    confirmPick(game, 'Unknown');
+    return;
+  }
+  const root = $('modalRoot');
+  root.innerHTML = `
+    <div class="modal-backdrop" id="pickerBackdrop">
+      <div class="modal">
+        <h3>Who's picking?</h3>
+        <div class="crew-list" style="margin-top:14px;">
+          ${crew.map(name => {
+            const count = (pickStats[name] && pickStats[name].boardgames) || 0;
+            return `<button class="btn-ghost picker-choice" data-name="${escapeHtml(name)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:12px 14px;"><span>${escapeHtml(name)}</span><span class="hint" style="margin:0;">${count} picked</span></button>`;
+          }).join('')}
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn-ghost" id="pickerSkip" style="flex:1;">Skip / Unknown</button>
+          <button class="btn-ghost" id="pickerCancel" style="flex:1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `;
+  $('pickerBackdrop').addEventListener('click', (e) => { if (e.target.id === 'pickerBackdrop') closeModal(); });
+  root.querySelectorAll('.picker-choice').forEach(btn => {
+    btn.addEventListener('click', () => confirmPick(game, btn.dataset.name));
+  });
+  $('pickerSkip').addEventListener('click', () => confirmPick(game, 'Unknown'));
+  $('pickerCancel').addEventListener('click', closeModal);
+}
+
+/* ==================================================================
+   Game discovery: IGDB (via Cloudflare Worker proxy)
+   ================================================================== */
+// Global request pacing — shared across every call, persists for the
+const BGG_PROXY_BASE = 'https://bgg-proxy.nextupsuite.workers.dev';
+
+// BGG's own docs recommend ~5 seconds between requests — a much slower
+// pace than IGDB's, confirmed from BGG's official "Using the XML API"
+// guide, not assumed. Starting at that recommended pace rather than
+// starting fast and backing off, since undershooting here risks the
+// same kind of block that cost real time to diagnose already.
+let bggLastRequestAt = 0;
+let bggMinIntervalMs = 5000;
+async function bggThrottleGate(){
+  const now = Date.now();
+  const slot = Math.max(now, bggLastRequestAt + bggMinIntervalMs);
+  bggLastRequestAt = slot;
+  const wait = slot - now;
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+}
+
+// Log of every BGG request since the last spin/enrichment pass —
+// past that for any click-triggered lookups that happen afterward, until
+// the next spin resets it. Shown in Admin for optimization purposes.
+let apiCallLog = [];
+function logApiCall(reason, path, queryBody, attempt){
+  apiCallLog.push({
+    time: new Date().toLocaleTimeString(),
+    reason: (reason || 'Unspecified') + (attempt ? ` — retry ${attempt}` : ''),
+    path,
+    query: queryBody || ''
+  });
+  renderApiCallLog();
+}
+
+function renderApiCallLog(){
+  const countEl = document.getElementById('apiLogCount');
+  if (countEl) countEl.textContent = apiCallLog.length ? `(${apiCallLog.length} calls)` : '';
+  const listEl = document.getElementById('apiLogList');
+  if (!listEl) return;
+  if (!apiCallLog.length){
+    listEl.innerHTML = '<div class="empty-note">No API calls yet this spin.</div>';
+    return;
+  }
+  listEl.innerHTML = apiCallLog.map((entry, i) => `
+    <div class="history-item">
+      <span class="h-name">${String(i + 1).padStart(2, '0')}. ${escapeHtml(entry.path)} <span class="h-meta">${entry.time}</span></span>
+      <span class="h-meta">${escapeHtml(entry.reason)}${entry.query ? ' — ' + escapeHtml(entry.query) : ''}</span>
+    </div>
+  `).join('');
+}
+
+// Session-only circuit breaker for genuine outages/rate-limiting.
+let bggUnavailable = false;
+let bggConsecutiveFailedCalls = 0;
+
+const BGG_PER_CALL_TIMEOUT_MS = 10000;
+
+// path: one of the proxy's allowed BGG commands ('search', 'thing', etc).
+// params: plain object of query params (e.g. {query:'Catan', type:'boardgame'}
+// or {id:13, stats:1}) — BGG's API takes GET query params, not a POST
+// body the way IGDB's Apicalypse queries did. Returns a parsed XML
+// Document, not JSON — BGG's API returns XML only, confirmed live.
+// No sign-in requirement: unlike IGDB, BGG's token lives entirely
+// server-side in the Cloudflare Worker (BGG_TOKEN secret), never sent to
+// or held by the client, so there's nothing here for a signed-out user
+// to be missing.
+async function bggFetch(path, params, attempt, maxAttempts, reason){
+  if (bggUnavailable){
+    throw new Error('BGG isn\'t responding right now — using the built-in list instead.');
+  }
+  attempt = attempt || 0;
+  const limit = (maxAttempts == null) ? 4 : maxAttempts;
+  await bggThrottleGate();
+  const queryString = new URLSearchParams(params).toString();
+  logApiCall(reason, path, queryString, attempt);
+  const res = await withTimeout(
+    fetch(`${BGG_PROXY_BASE}/${path}?${queryString}`),
+    BGG_PER_CALL_TIMEOUT_MS,
+    'BGG request timed out'
+  );
+
+  if (res.status === 429 || res.status >= 500){
+    if (attempt < limit){
+      bggMinIntervalMs = Math.min(15000, bggMinIntervalMs * 1.5);
+      const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+      await new Promise(r => setTimeout(r, delay));
+      return bggFetch(path, params, attempt + 1, maxAttempts, reason);
+    }
+    bggConsecutiveFailedCalls++;
+    if (bggConsecutiveFailedCalls >= 2){
+      bggUnavailable = true;
+      throw new Error('BGG is persistently unavailable — using the built-in list instead for the rest of this session.');
+    }
+    throw new Error(`BGG request failed (${res.status})`);
+  }
+  const bodyText = await res.text();
+  if (!res.ok){
+    // The proxy itself (not BGG) returns JSON for its own failures —
+    // e.g. a missing BGG_TOKEN secret, or an unsupported path — distinct
+    // from BGG's own XML error responses, which come through as res.ok
+    // with an <error> element inside (handled by the caller, not here).
+    let message = bodyText;
+    try{ message = JSON.parse(bodyText).error || bodyText; } catch(e){ /* not JSON — use as-is */ }
+    throw new Error(`BGG request failed (${res.status}): ${message}`);
+  }
+  bggConsecutiveFailedCalls = 0;
+  bggMinIntervalMs = Math.max(5000, bggMinIntervalMs * 0.95); // never below BGG's own recommended floor
+  return new DOMParser().parseFromString(bodyText, 'text/xml');
+}
+
+
+$('clearCacheBtn').addEventListener('click', async () => {
+  if (!confirm(`Clear all ${wmRatingsCache.size} cached game details? Spins will need to re-fetch from BGG until the cache rebuilds.`)) return;
+  wmRatingsCache.clear();
+  await saveWmRatingsCache();
+  updateCacheStats();
+});
+
+function renderAdmin(){
+  renderAuthUI();
+  const versionLabel = $('appVersionLabel');
+  if (versionLabel) versionLabel.textContent = APP_VERSION;
+  renderThemeSwatches();
+  populateCacheStatsDropdowns();
+  updateCacheStats();
+  populateEditListDropdowns();
+  renderEditList();
+
+  $('minRatingSelect').value = String(minRating);
+  $('maxRatingSelect').value = String(maxRating);
+
+  $('genreToggles').innerHTML = GENRES.map(g => `
+    <label class="toggle-chip ${enabledGenres.includes(g) ? '' : 'off'}">
+      <input type="checkbox" data-genre="${escapeHtml(g)}" ${enabledGenres.includes(g) ? 'checked' : ''}> ${escapeHtml(g)}
+    </label>
+  `).join('');
+  $('genreToggles').querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const g = cb.dataset.genre;
+      if (cb.checked) { if (!enabledGenres.includes(g)) enabledGenres.push(g); }
+      else { enabledGenres = enabledGenres.filter(x => x !== g); }
+      renderAdmin();
+      await saveEnabledGenres();
+    });
+  });
+
+  $('platformToggles').innerHTML = PLATFORM_KEYS.map(p => `
+    <label class="toggle-chip ${enabledPlatforms.includes(p) ? '' : 'off'}">
+      <input type="checkbox" data-platform="${escapeHtml(p)}" ${enabledPlatforms.includes(p) ? 'checked' : ''}> ${escapeHtml(p)}
+    </label>
+  `).join('');
+  $('platformToggles').querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const p = cb.dataset.platform;
+      if (cb.checked) { if (!enabledPlatforms.includes(p)) enabledPlatforms.push(p); }
+      else { enabledPlatforms = enabledPlatforms.filter(x => x !== p); }
+      renderAdmin();
+      await saveEnabledPlatforms();
+    });
+  });
+
+  $('filterExplicitContentCheckbox').checked = filterExplicitContent;
+  $('maxResultsInput').value = String(maxResults);
+
+  renderExplicitKeywordCount();
+  renderBlockList();
+}
+
+function renderBlockList(){
+  $('blockEmptyHint').style.display = blockedGames.length ? 'none' : 'block';
+  $('blockList').innerHTML = blockedGames.map((b, i) => `
+    <div class="crew-item">
+      <span class="crew-name">${escapeHtml(b.title)} <span class="hint" style="margin:0;">${b.year ? '(' + b.year + ')' : '(any year)'}</span></span>
+      <div class="crew-actions">
+        <button class="btn-danger btn-icon" title="Unblock" data-idx="${i}">×</button>
+      </div>
+    </div>
+  `).join('');
+  $('blockList').querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => removeBlockedGame(Number(btn.dataset.idx)));
+  });
+}
+
+async function addBlockedGame(){
+  const title = $('blockTitleInput').value.trim();
+  const yearRaw = $('blockYearInput').value.trim();
+  if (!title) return;
+  const year = yearRaw ? Number(yearRaw) : null;
+  blockedGames.push({ title, year: (year && !isNaN(year)) ? year : null });
+  $('blockTitleInput').value = '';
+  $('blockYearInput').value = '';
+  renderBlockList();
+  await saveBlockedGames();
+}
+
+async function removeBlockedGame(idx){
+  blockedGames.splice(idx, 1);
+  renderBlockList();
+  await saveBlockedGames();
+}
+
+function isBlocked(title, year){
+  return blockedGames.some(b =>
+    b.title.toLowerCase() === (title || '').toLowerCase() && (b.year == null || b.year === year)
+  );
+}
+
+function populateEditListDropdowns(){
+  const platformSel = $('editListDecade');
+  if (platformSel.options.length === 0){
+    PLATFORM_KEYS.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      platformSel.appendChild(opt);
+    });
+  }
+  const genreSel = $('editListGenre');
+  if (genreSel.options.length === 0){
+    GENRES.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      genreSel.appendChild(opt);
+    });
+  }
+}
+
+function renderEditList(){
+  const platform = $('editListDecade').value;
+  const genre = $('editListGenre').value;
+  const key = comboKey(platform, genre);
+  const removedSet = new Set(customRemovals[key] || []);
+  const baseList = (GAME_DB[platform] && GAME_DB[platform][genre]) || [];
+  const additions = customAdditions[key] || [];
+
+  const rows = [];
+  baseList.forEach(m => {
+    if (removedSet.has(`${m.title}|${m.year}`)) return; // hidden by the user
+    rows.push({ title: m.title, year: m.year, source: 'builtin' });
+  });
+  additions.forEach(m => rows.push({ title: m.title, year: m.year, source: 'custom' }));
+
+  $('editListGames').innerHTML = rows.map((m, i) => `
+    <div class="crew-item">
+      <span class="crew-name">${escapeHtml(m.title)} <span class="hint" style="margin:0;">(${m.year})${m.source === 'custom' ? ' · added by you' : ''}</span></span>
+      <div class="crew-actions">
+        <button class="btn-danger btn-icon" title="Remove" data-idx="${i}">×</button>
+      </div>
+    </div>
+  `).join('');
+  $('editListGames').querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = rows[Number(btn.dataset.idx)];
+      if (row.source === 'builtin'){
+        if (!customRemovals[key]) customRemovals[key] = [];
+        customRemovals[key].push(`${row.title}|${row.year}`);
+        await saveCustomRemovals();
+      } else {
+        customAdditions[key] = (customAdditions[key] || []).filter(m => !(m.title === row.title && m.year === row.year));
+        await saveCustomAdditions();
+      }
+      renderEditList();
+    });
+  });
+}
+
+async function addEditListGame(){
+  const title = $('editListTitleInput').value.trim();
+  const yearRaw = $('editListYearInput').value.trim();
+  const year = Number(yearRaw);
+  $('editListError').style.display = 'none';
+  if (!title || !yearRaw || isNaN(year)){
+    $('editListError').textContent = 'Enter both a title and a valid year.';
+    $('editListError').style.display = 'block';
+    return;
+  }
+  const platform = $('editListDecade').value;
+  const genre = $('editListGenre').value;
+  const key = comboKey(platform, genre);
+  if (!customAdditions[key]) customAdditions[key] = [];
+  customAdditions[key].push({ title, year });
+  await saveCustomAdditions();
+  $('editListTitleInput').value = '';
+  $('editListYearInput').value = '';
+  renderEditList();
+}
+
+$('editListDecade').addEventListener('change', renderEditList);
+$('editListGenre').addEventListener('change', renderEditList);
+$('editListAddBtn').addEventListener('click', addEditListGame);
+$('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListGame(); });
+$('editListResetBtn').addEventListener('click', async () => {
+  const platform = $('editListDecade').value;
+  const genre = $('editListGenre').value;
+  const key = comboKey(platform, genre);
+  if (!confirm(`Reset ${platform} ${genre} back to the default built-in list? This removes anything you've added or removed for this combo.`)) return;
+  delete customAdditions[key];
+  delete customRemovals[key];
+  await saveCustomAdditions();
+  await saveCustomRemovals();
+  renderEditList();
+});
+
+$('blockAddBtn').addEventListener('click', addBlockedGame);
+$('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedGame(); });
+
+$('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES.slice(); renderAdmin(); await saveEnabledGenres(); });
+$('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
+$('platformsAllBtn').addEventListener('click', async () => { enabledPlatforms = PLATFORM_KEYS.slice(); renderAdmin(); await saveEnabledPlatforms(); });
+$('platformsNoneBtn').addEventListener('click', async () => { enabledPlatforms = []; renderAdmin(); await saveEnabledPlatforms(); });
+
+function showRatingRangeNote(text){
+  const el = $('ratingRangeNote');
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(showRatingRangeNote._t);
+  showRatingRangeNote._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+const RATING_GAP = 1;
+function ratingOptionValues(selectId){
+  return Array.from($(selectId).options).map(o => Number(o.value)).sort((a, b) => a - b);
+}
+function smallestRatingAtLeast(value, selectId){
+  const opts = ratingOptionValues(selectId);
+  return opts.find(v => v >= value - 1e-9) ?? null;
+}
+function largestRatingAtMost(value, selectId){
+  const opts = ratingOptionValues(selectId);
+  let result = null;
+  for (const v of opts){ if (v <= value + 1e-9) result = v; else break; }
+  return result;
+}
+$('minRatingSelect').addEventListener('change', async (e) => {
+  minRating = Number(e.target.value);
+  if (maxRating !== 0 && (maxRating - minRating) < RATING_GAP - 1e-9){
+    const bumped = smallestRatingAtLeast(minRating + RATING_GAP, 'maxRatingSelect');
+    maxRating = bumped != null ? bumped : 0; // no room left above — remove the cap entirely
+    $('maxRatingSelect').value = String(maxRating);
+    await saveMaxRating();
+    showRatingRangeNote(`Maximum adjusted to keep at least a ${RATING_GAP}-point gap from the minimum.`);
+  }
+  await saveMinRating();
+});
+$('maxRatingSelect').addEventListener('change', async (e) => {
+  maxRating = Number(e.target.value);
+  if (maxRating !== 0 && minRating !== 0 && (maxRating - minRating) < RATING_GAP - 1e-9){
+    const lowered = largestRatingAtMost(maxRating - RATING_GAP, 'minRatingSelect');
+    minRating = lowered != null ? lowered : 0; // no room left below — remove the floor entirely
+    $('minRatingSelect').value = String(minRating);
+    await saveMinRating();
+    showRatingRangeNote(`Minimum adjusted to keep at least a ${RATING_GAP}-point gap from the maximum.`);
+  }
+  await saveMaxRating();
+});
+
+$('signInBtn').addEventListener('click', signInWithGoogle);
+$('signOutBtn').addEventListener('click', signOutOfGoogle);
+
+$('filterExplicitContentCheckbox').addEventListener('change', async (e) => {
+  filterExplicitContent = e.target.checked;
+  await saveFilterExplicitContent();
+});
+
+function renderExplicitKeywordCount(){
+  const n = customExplicitKeywords.length;
+  $('explicitKeywordCount').textContent = `Built-in list active, plus ${n} keyword${n === 1 ? '' : 's'} you've added.`;
+}
+async function addExplicitKeyword(){
+  const val = $('explicitKeywordInput').value.trim();
+  if (!val) return;
+  const allLower = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords).map(k => k.toLowerCase());
+  if (allLower.includes(val.toLowerCase())){
+    $('explicitKeywordInput').value = '';
+    return; // already covered, either by the built-in list or a previous addition
+  }
+  customExplicitKeywords.push(val);
+  await saveCustomExplicitKeywords();
+  $('explicitKeywordInput').value = '';
+  renderExplicitKeywordCount();
+}
+$('explicitKeywordAddBtn').addEventListener('click', addExplicitKeyword);
+$('explicitKeywordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addExplicitKeyword(); });
+
+$('explicitKeywordClearBtn').addEventListener('click', async () => {
+  if (!customExplicitKeywords.length) return;
+  if (!confirm(`Remove all ${customExplicitKeywords.length} keyword(s) you've added? The built-in list stays active either way.`)) return;
+  customExplicitKeywords = [];
+  await saveCustomExplicitKeywords();
+  renderExplicitKeywordCount();
+});
+
+$('maxResultsInput').addEventListener('change', async (e) => {
+  let val = Math.round(Number(e.target.value));
+  if (isNaN(val)) val = MAX_RESULTS_DEFAULT;
+  val = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, val));
+  maxResults = val;
+  e.target.value = String(val);
+  await saveMaxResults();
+});
+
+function populateCacheStatsDropdowns(){
+  const platformSel = $('cacheStatsDecade');
+  if (platformSel.options.length <= 1){
+    PLATFORM_KEYS.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      platformSel.appendChild(opt);
+    });
+  }
+  const genreSel = $('cacheStatsGenre');
+  if (genreSel.options.length <= 1){
+    GENRES.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      genreSel.appendChild(opt);
+    });
+  }
+}
+
+function updateCacheStats(){
+  const platformSel = $('cacheStatsDecade').value;
+  const genreSel = $('cacheStatsGenre').value;
+  let count = 0;
+  let missingPlatformData = 0;
+  wmRatingsCache.forEach((entry) => {
+    if (platformSel !== 'all'){
+      if (!entry.platforms || !entry.platforms.length){ missingPlatformData++; return; }
+      if (!entry.platforms.includes(platformSel)) return;
+    }
+    if (genreSel !== 'all'){
+      if (!entry.genres || !entry.genres.includes(genreSel)) return;
+    }
+    count++;
+  });
+  let text = `${count} game${count === 1 ? '' : 's'} cached for ${platformSel === 'all' ? 'all platforms' : platformSel} / ${genreSel === 'all' ? 'all genres' : genreSel}.`;
+  if (platformSel !== 'all' && missingPlatformData){
+    text += ` (${missingPlatformData} cached entries from before this feature can't be counted by platform until re-fetched.)`;
+  }
+  $('cacheStatsResult').textContent = text;
+}
+
+$('cacheStatsDecade').addEventListener('change', updateCacheStats);
+$('cacheStatsGenre').addEventListener('change', updateCacheStats);
+
+// No-op — this only ever drove the Built-in/Live source-box toggle UI,
+// which doesn't apply here (no live-discovery mode exists to toggle
+// to). Left as a stub rather than removed from every call site, since
+// several other functions still call it; safe to fully remove in a
+// later cleanup pass once nothing depends on the call existing.
+function updateSourceNote(){}
+
+/* ==================================================================
+   Spin
+   ================================================================== */
+$('spinBtn').addEventListener('click', spin);
+$('rerunFiltersBtn').addEventListener('click', () => {
+  if (!lastFullPool.length) return;
+  applyFiltersAndRender();
+  switchTab('main');
+});
+
+// Last-resort safety net — races a promise against a plain timer. Doesn't
+// actually cancel the underlying request (fetch() has no clean way to do
+// that here), but stops the UI from waiting on it indefinitely if
+// something hangs without ever returning an error of its own.
+function withTimeout(promise, ms, message){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message || 'Timed out')), ms))
+  ]);
+}
+
+// Writes live progress underneath the Search button instead of into the
+// button's own label — the label stays "🎮 Search the Library" throughout
+// so it never changes size or becomes hard to read mid-search.
+function setSpinStatus(text){
+  $('spinStatusNote').textContent = text || '';
+}
+
+async function spin(){
+  $('spinError').style.display = 'none';
+  $('enrichStatusNote').textContent = '';
+  setSpinStatus('');
+  apiCallLog = [];
+  forceRefreshedThisSpin.clear();
+  // Reset the circuit breaker on every fresh search — a genuine outage
+  // can clear up, so a deliberate new attempt deserves a real chance
+  // rather than being permanently blocked for the rest of the browser
+  // session by whatever happened on a previous search.
+  bggUnavailable = false;
+  bggConsecutiveFailedCalls = 0;
+
+  const platformPool = PLATFORM_KEYS.filter(p => enabledPlatforms.includes(p));
+  const genrePool = GENRES.filter(g => enabledGenres.includes(g));
+  if (!platformPool.length || !genrePool.length){
+    $('spinError').textContent = 'Turn at least one platform and one genre back on in the Admin tab first.';
+    $('spinError').style.display = 'block';
+    return;
+  }
+
+  $('spinBtn').disabled = true;
+  $('resultsArea').style.display = 'none';
+  $('tonightBanner').innerHTML = '';
+
+  const finalPlatform = randomFrom(platformPool);
+  const finalGenre = randomFrom(genrePool);
+
+  const platformReel = $('platformReel'), genreReel = $('genreReel');
+  platformReel.classList.add('spinning'); genreReel.classList.add('spinning');
+
+  // Platform names vary a lot in length ("Wii" vs "Super Nintendo
+  // Entertainment System") — the reel box has a fixed height for the
+  // sprocket-hole decoration either side of it, so a long name needs a
+  // smaller font rather than being allowed to grow the box.
+  function setPlatformReelText(text){
+    const el = $('platformValue');
+    el.textContent = text;
+    el.classList.toggle('long-text', text.length > 14);
+  }
+
+  let ticks = 0;
+  const maxTicks = 16;
+  await new Promise((resolve) => {
+    const timer = setInterval(() => {
+      ticks++;
+      setPlatformReelText(randomFrom(platformPool));
+      $('genreValue').textContent = randomFrom(genrePool);
+      if (ticks >= maxTicks){
+        clearInterval(timer);
+        setPlatformReelText(finalPlatform);
+        $('genreValue').textContent = finalGenre;
+        platformReel.classList.remove('spinning'); genreReel.classList.remove('spinning');
+        resolve();
+      }
+    }, 70);
+  });
+
+  currentChoice = { platform: finalPlatform, genre: finalGenre };
+
+  try{
+    lastFullPool = await buildGamePool(finalPlatform, finalGenre);
+    currentSource = 'builtin'; // always accurate now — BGG only ever enriches the built-in list, never discovers beyond it
+    setSpinStatus('');
+  } catch(e){
+    lastFullPool = getEffectiveGameList(finalPlatform, finalGenre);
+    currentSource = 'builtin';
+    setSpinStatus('');
+    $('spinError').textContent = 'Enrichment failed (' + e.message + ') — showing the built-in list with whatever data was already cached.';
+    $('spinError').style.display = 'block';
+  }
+
+  applyFiltersAndRender();
+  $('spinBtn').disabled = false;
+}
+
+// Re-applies block/explicit-content/Max-Results filtering against the
+// full pool already fetched (and, for IGDB, already enriched)
+// this spin — no new API calls. Used right after a spin, and again by
+// the "Re-run Filters" button if filter settings change afterward.
+// Pure — no rendering, no global state writes. Filters, sorts, and trims a
+// raw pool down to Max Results, returning both the survivors and a record
+// of everything excluded and why. Shared by the initial spin, the pool
+// growth loop below, and the Re-run Filters button.
+function computeFilteredSurvivors(pool){
+  const survivors = [];
+  const filteredOut = [];
+  pool.forEach(m => {
+    // Deliberately silent — unlike every other exclusion reason below,
+    // this one never shows up in the Filtered Out list at all. IGDB's
+    // "Erotic" theme is real, structured data (confirmed live), not a
+    // text-match guess, so there's no ambiguity to explain to the user
+    // the way the keyword-based explicit filter sometimes has. Only
+    // applies when the Explicit Content Filter is on; turning that off
+    // turns this off too, same as the keyword-based check below.
+    if (filterExplicitContent && m.themes && m.themes.includes('Erotic')) return;
+    if (isBlocked(m.title, m.year)){
+      filteredOut.push({ game: m, reason: 'Blocked' });
+      return;
+    }
+    if (!matchesExplicitContentFilter(m)){
+      filteredOut.push({ game: m, reason: 'Excluded by explicit content filter' });
+      return;
+    }
+    if (!matchesMinRating(m)){
+      filteredOut.push({ game: m, reason: `Rating ${m.userRating.toFixed(1)} below your ${minRating.toFixed(1)}+ minimum` });
+      return;
+    }
+    if (!matchesMaxRating(m)){
+      filteredOut.push({ game: m, reason: `Rating ${m.userRating.toFixed(1)} above your ${maxRating.toFixed(1)} maximum` });
+      return;
+    }
+    survivors.push(m);
+  });
+
+  survivors.sort((a, b) => {
+    if (a.userRating == null && b.userRating == null) return 0;
+    if (a.userRating == null) return 1;
+    if (b.userRating == null) return -1;
+    return b.userRating - a.userRating;
+  });
+
+  const allQualified = survivors.slice(); // everything that passed real content criteria, before the display-only max-results trim below
+
+  if (survivors.length > maxResults){
+    const overflow = survivors.slice(maxResults);
+    overflow.forEach(m => filteredOut.push({ game: m, reason: `Exceeded Max Results (${maxResults}) — kept the higher-rated titles instead` }));
+    return { survivors: survivors.slice(0, maxResults), filteredOut, allQualified };
+  }
+  return { survivors, filteredOut, allQualified };
+}
+
+function applyFiltersAndRender(){
+  const { survivors, filteredOut } = computeFilteredSurvivors(lastFullPool);
+  currentBatch = survivors;
+  lastFilteredOut = filteredOut;
+  renderFilteredOut();
+
+  renderResults();
+  $('rerunFiltersCard').style.display = lastFullPool.length ? 'block' : 'none';
+  $('spinBtn').disabled = false;
+}
+
+function firstNumber(...vals){
+  for (const v of vals) if (typeof v === 'number') return v;
+  return null;
+}
+function firstString(...vals){
+  for (const v of vals) if (typeof v === 'string' && v) return v;
+  return null;
+}
+function firstArray(...vals){
+  for (const v of vals) if (Array.isArray(v) && v.length) return v;
+  return null;
+}
+// Unlike Movies/TV (whose canonical genre is the short form "Sci-Fi"),
+// Books' canonical genre name is the full "Science Fiction" — matching
+// what Open Library's own subject tags actually say — so no alias
+// translation is needed here the way it was for those.
+const GENRE_DISPLAY_ALIASES = {};
+
+function normalizeGenreList(arr){
+  if (!arr) return null;
+  const names = arr.map(g => {
+    let name = '';
+    if (typeof g === 'string') name = g;
+    else if (g && typeof g === 'object' && g.name) name = g.name;
+    return GENRE_DISPLAY_ALIASES[name] || name;
+  }).filter(Boolean);
+  return names.length ? names : null;
+}
+
+// Runs `worker` over `items` with at most `limit` in flight at once, and a
+// small pause between each item in a lane, so a 50-game batch spreads its
+// requests out over several seconds instead of bursting all at once.
+async function mapWithConcurrency(items, limit, worker, paceMs){
+  let cursor = 0;
+  async function runNext(){
+    while (cursor < items.length){
+      const i = cursor++;
+      try{
+        await worker(items[i], i);
+      } catch(e){
+        // The worker is expected to catch its own errors, but this is a
+        // shared queue runner — if anything unexpected ever slips through,
+        // one item's failure must never be able to halt the rest of the
+        // batch behind it.
+        console.warn('mapWithConcurrency: worker threw unexpectedly', e);
+      }
+      if (paceMs) await new Promise(r => setTimeout(r, paceMs));
+    }
+  }
+  const runners = Array.from({ length: Math.min(limit, items.length) }, runNext);
+  await Promise.all(runners);
+}
+
+function gameHasEnrichmentData(cached){
+  return !!cached && (cached.description || cached.posterUrl || (cached.genres && cached.genres.length));
+}
+
+function gameNeedsEnrichment(game){
+  return !game.description && !game.posterUrl;
+}
+
+// BGG's /thing endpoint, with stats=1 for rating/complexity — confirmed
+// live against a real response (Catan, id 13), not assumed. Returns a
+// plain object shaped like this app expects, extracted from the raw XML
+// Document bggFetch returns. A single <item> is expected for a single id;
+// BGG's /thing does support comma-separated ids for batching, but this
+// stays one-at-a-time for now to keep the extraction logic simple while
+// the integration is still new — worth revisiting once this is proven
+// stable.
+async function fetchGameDetails(id, maxAttempts, reason){
+  const doc = await bggFetch('thing', { id, stats: 1 }, 0, maxAttempts, reason);
+  const item = doc.querySelector('item');
+  if (!item) return null;
+  const nameEl = item.querySelector('name[type="primary"]') || item.querySelector('name');
+  const categories = Array.from(item.querySelectorAll('link[type="boardgamecategory"]')).map(el => el.getAttribute('value'));
+  const mechanics = Array.from(item.querySelectorAll('link[type="boardgamemechanic"]')).map(el => el.getAttribute('value'));
+  const ratingsEl = item.querySelector('statistics ratings');
+  const numAttr = (el, sel) => {
+    const v = el && el.querySelector(sel) && el.querySelector(sel).getAttribute('value');
+    return (v != null && v !== '') ? Number(v) : null;
+  };
+  return {
+    id,
+    name: nameEl ? nameEl.getAttribute('value') : null,
+    year: numAttr(item, 'yearpublished'),
+    minPlayers: numAttr(item, 'minplayers'),
+    maxPlayers: numAttr(item, 'maxplayers'),
+    playtime: numAttr(item, 'maxplaytime') || numAttr(item, 'playingtime'), // maxplaytime is the more meaningful "how long could this run" figure; playingtime as fallback for the rare item missing it
+    minAge: numAttr(item, 'minage'),
+    description: item.querySelector('description') ? item.querySelector('description').textContent : null,
+    imageUrl: item.querySelector('image') ? item.querySelector('image').textContent : null,
+    categories: categories,
+    mechanics: mechanics,
+    userRating: ratingsEl ? numAttr(ratingsEl, 'average') : null,
+    complexity: ratingsEl ? numAttr(ratingsEl, 'averageweight') : null
+  };
+}
+
+async function enrichOneGame(game, maxAttempts, forceRefresh){
+  const id = game.gameId;
+  let record = forceRefresh ? {} : (wmRatingsCache.get(id) || {});
+
+  // Shared, cross-user cache — checked whenever any tier this device
+  // knows about (or doesn't know about at all) might be stale. Only
+  // consulted while signed in, and skipped entirely on a forced
+  // refresh — the whole point of that is to bypass every cache, not
+  // just the local one.
+  if (currentUser && !forceRefresh){
+    const anyTierNeedsShared = !isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS)
+      || !isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
+    if (anyTierNeedsShared){
+      try{
+        const sharedDoc = await fbDb.collection('sharedBoardGameRatings').doc(String(id)).get();
+        if (sharedDoc.exists) record = mergeFreshestTiers(record, sharedDoc.data());
+      } catch(e){ console.warn('Shared enrichment cache lookup failed, falling back to IGDB directly', e.message); }
+    }
+  }
+
+  const discoveryFresh = isFresh(record.discoveredAt, WM_DISCOVERY_STALE_MS);
+  const enrichmentFresh = isFresh(record.enrichedAt, WM_ENRICHMENT_STALE_MS);
+
+  if (discoveryFresh && enrichmentFresh && gameHasEnrichmentData(record)){
+    // Every tier we might need is fresh, whether from local or the shared
+    // merge above — no live call needed at all. Genres are still merged
+    // with whatever this specific search just discovered, though — the
+    // cached record might only reflect an earlier, different genre
+    // search that happened to surface this same game, and applying it
+    // as-is would silently overwrite (not merge with) the genre this
+    // particular discovery found it under.
+    record = Object.assign({}, record, { genres: mergeGenreLists(game.genresOverride, record.genres) });
+    wmRatingsCache.set(id, record);
+    saveWmRatingsCache();
+    applyRecordToGame(game, record);
+    return { ok: true, hasData: true };
+  }
+
+  // At least one tier is stale or was never known — since everything
+  // comes from the same IGDB /games lookup, a single live call refreshes
+  // it all at once.
+  try{
+    const details = await fetchGameDetails(id, maxAttempts, `Details lookup: "${game.title}"`);
+    // A response with neither a name nor an id at all is treated as a
+    // failure rather than a legitimate "nothing here" result — this is
+    // what a degraded/throttled response would look like.
+    if (!details || (details.name == null && details.id == null)){
+      throw new Error('Empty or unexpected response from BGG');
+    }
+    const now = Date.now();
+    const fresh = {
+      title: game.title,
+      year: details.year || (game.year || null),
+      genres: mergeGenreLists(game.genresOverride, record.genres), // merged, not overwritten — see mergeGenreLists; BGG's own categories folded in below once fetched, not instead of what discovery already tagged this with
+      discoveredAt: now,
+      posterUrl: details.imageUrl || (game.posterUrl || null),
+      description: details.description || null,
+      userRating: details.userRating ?? (game.userRating ?? null), // BGG's average is already 0-10 scale — no conversion needed, unlike IGDB's old 0-100 scale
+      minPlayers: details.minPlayers ?? (game.minPlayers ?? null),
+      maxPlayers: details.maxPlayers ?? (game.maxPlayers ?? null),
+      playtime: details.playtime ?? (game.playtime ?? null),
+      complexity: details.complexity ?? (game.complexity ?? null),
+      minAge: details.minAge ?? (game.minAge ?? null),
+      mechanics: details.mechanics && details.mechanics.length ? details.mechanics : (game.mechanics || []),
+      bggUrl: id ? `https://boardgamegeek.com/boardgame/${id}` : (game.bggUrl || null),
+      enrichedAt: now
+    };
+    // BGG's own confirmed category list takes precedence over whatever
+    // this built-in-list entry was filed under, once actually known —
+    // the whole reason this app needs live enrichment at all is that a
+    // hand-picked category tag turned out to be wrong for at least one
+    // real title (Catan: filed as Strategy Game, BGG's own data says
+    // Economic/Negotiation) — merged in on top of the discovery-time
+    // genre merge above, not overwriting it outright, so a title tagged
+    // under multiple spin categories some other way stays discoverable
+    // under all of them, not just BGG's own list.
+    if (details.categories && details.categories.length){
+      fresh.genres = mergeGenreLists(details.categories, fresh.genres);
+    }
+    const hasData = gameHasEnrichmentData(fresh);
+    // Only cache when there's actually something here — a degraded
+    // response must NOT get cached, or every future attempt — including
+    // our own retry pass below — will just read back the same empty
+    // result instead of trying again.
+    if (hasData){
+      wmRatingsCache.set(id, fresh);
+      saveWmRatingsCache(); // fire-and-forget — don't block on a local storage write
+      if (currentUser){
+        fbDb.collection('sharedBoardGameRatings').doc(String(id)).set(fresh, { merge: true })
+          .catch(e => console.warn('Could not write shared enrichment cache entry', e.message)); // fire-and-forget — never blocks the enrichment result
+      }
+      applyRecordToGame(game, fresh);
+      return { ok: true, hasData: true };
+    }
+    // Live call succeeded but came back empty — fall back to whichever
+    // tiers were actually fresh before we tried, rather than nothing.
+    if (discoveryFresh || enrichmentFresh){
+      applyRecordToGame(game, record, { discoveryFresh, enrichmentFresh });
+      return { ok: true, hasData: gameHasEnrichmentData(record) };
+    }
+    return { ok: true, hasData: false };
+  } catch(e){
+    console.warn('BGG detail lookup failed for', game.title, e.message);
+    // Live call failed entirely — still use whatever tiers were fresh
+    // going in, rather than surfacing a total failure when we actually
+    // had usable (if partial) data on hand.
+    if (discoveryFresh || enrichmentFresh){
+      applyRecordToGame(game, record, { discoveryFresh, enrichmentFresh });
+      return { ok: true, hasData: gameHasEnrichmentData(record) };
+    }
+    return { ok: false, hasData: false, error: e.message };
+  }
+}
+
+async function enrichBatchWithRatings(games, opts){
+  const silent = opts && opts.silent;
+  // Experimenting with concurrency 3 (was 1, then 2 — confirmed fine). Every
+  // request still passes through the same global adaptive throttle
+  // regardless of lane count, and the throttle-gate race condition is
+  // fixed, so lanes queue correctly rather than slipping through together.
+  // If IGDB's limit is throughput-based this won't speed anything
+  // up beyond what 2 already got — the throttle will just queue the third
+  // lane behind the others — but it's safe to try. Drop back down if
+  // rate-limiting creeps up.
+  let done = 0, missing = 0, firstError = null;
+  await mapWithConcurrency(games, 3, async (game) => {
+    const result = await enrichOneGame(game, 6);
+    done++;
+    if (!result.ok || !result.hasData){
+      missing++;
+      if (result.error && !firstError) firstError = result.error;
+    }
+    if (!silent) setSpinStatus(`Fetching details… ${done}/${games.length}`);
+  });
+
+  if (silent) return;
+  if (missing){
+    $('enrichStatusNote').textContent =
+      `Details loaded for ${games.length - missing}/${games.length}.` +
+      (firstError ? ` (${firstError})` : ' (IGDB may simply have nothing on file for the rest.)') +
+      ` Anything missing fills in automatically when you click into it.`;
+  } else {
+    $('enrichStatusNote').textContent = '';
+  }
+}
+
+
+// Looks up a single built-in list title on IGDB by name, picks the top
+// match, and caches the resolved key (or the confirmed absence of one)
+// so the same title is never searched for twice.
+async function searchIGDBForGame(game){
+  const searchKey = `${game.title}|${game.year}`;
+  const cached = wmSearchCache.get(searchKey);
+  if (cached && isFresh(cached.cachedAt, WM_GLOBAL_MAX_STALE_MS)){
+    return cached.gameId;
+  }
+
+  // Shared database lookup by title+year — checked before ever needing a
+  // live search. This is what lets built-in list enrichment work for a
+  // signed-in user right away: a title/year match here gives us the
+  // IGDB id directly, since that's the document's own ID in the shared
+  // collection.
+  if (currentUser){
+    try{
+      const snap = await fbDb.collection('sharedBoardGameRatings')
+        .where('title', '==', game.title)
+        .where('year', '==', game.year)
+        .limit(1)
+        .get();
+      if (!snap.empty){
+        const gameId = Number(snap.docs[0].id);
+        wmSearchCache.set(searchKey, { gameId, cachedAt: Date.now() });
+        saveWmSearchCache();
+        return gameId;
+      }
+    } catch(e){ console.warn('Shared database title/year lookup failed (may need a Firestore index on title+year) — falling back to live search', e.message); }
+  }
+
+  let gameId = null;
+  try{
+    const doc = await bggFetch('search', { query: game.title, type: 'boardgame' }, 0, 3, `Built-in list search: "${game.title}"`);
+    const items = Array.from(doc.querySelectorAll('item'));
+    // BGG's search returns every edition, expansion, and foreign-language
+    // variant of a title, not just the base game — confirmed live (a
+    // "Catan" search returned 142 results). Filtering to items whose
+    // primary name exactly matches (case-insensitive) narrows this
+    // considerably, since expansions and alternates are typically tagged
+    // as alternate names or have a different primary name entirely.
+    const exactMatches = items.filter(item => {
+      const nameEl = item.querySelector('name[type="primary"]');
+      return nameEl && nameEl.getAttribute('value').toLowerCase() === game.title.toLowerCase();
+    });
+    const candidates = exactMatches.length ? exactMatches : items;
+    // Among exact-name matches, prefer the one whose published year
+    // matches this built-in list entry's year — disambiguates the base
+    // game from same-named reprints/anniversary editions in different
+    // years. Falls back to the first candidate if no year matches (or
+    // this entry has no year to compare against).
+    let best = candidates[0] || null;
+    if (game.year){
+      const yearMatch = candidates.find(item => {
+        const yp = item.querySelector('yearpublished');
+        return yp && Number(yp.getAttribute('value')) === game.year;
+      });
+      if (yearMatch) best = yearMatch;
+    }
+    gameId = best ? Number(best.getAttribute('id')) : null;
+  } catch(e){
+    console.warn('BGG search failed for', game.title, e.message);
+    wmSearchCache.delete(searchKey); // don't cache a failure as a confirmed no-match — worth retrying later
+    return null;
+  }
+  wmSearchCache.set(searchKey, { gameId, cachedAt: Date.now() });
+  saveWmSearchCache(); // fire-and-forget
+  return gameId;
+}
+
+// Best-effort: try to enrich each built-in list title with the same
+// ratings/cover/categories/description a live BGG result would have.
+// Silently does nothing for a title it can't resolve — the built-in
+// list still displays exactly as before either way.
+async function enrichBuiltinListWithIGDB(games){
+  let done = 0;
+  await mapWithConcurrency(games, 1, async (game) => {
+    if (!game.gameId){
+      const gameId = await searchIGDBForGame(game);
+      if (gameId) game.gameId = gameId;
+    }
+    if (game.gameId){
+      await enrichOneGame(game, 2);
+    }
+    done++;
+    setSpinStatus(`Enriching built-in list… ${done}/${games.length}`);
+  }, 250);
+}
+
+// Best-effort only — a text match on title/description, not a content
+// analysis of the actual film. Won't catch everything, and can very
+// occasionally flag something legitimate (a serious documentary that uses
+// one of these words clinically, for instance). No source-scoping needed
+// here, unlike the filters above — a title with no description simply
+// can't match anything, so it passes through either way.
+function matchesExplicitContentFilter(game){
+  if (!filterExplicitContent) return true;
+  const allKeywords = DEFAULT_EXPLICIT_KEYWORDS.concat(customExplicitKeywords);
+  if (!allKeywords.length) return true;
+  const haystack = `${game.title || ''} ${game.description || ''}`.toLowerCase();
+  return !allKeywords.some(kw => kw && haystack.includes(kw.toLowerCase()));
+}
+
+function matchesMinRating(game){
+  if (!minRating) return true;
+  if (game.userRating == null) return true; // no data — don't punish it
+  return game.userRating >= minRating;
+}
+
+function matchesMaxRating(game){
+  if (!maxRating) return true;
+  if (game.userRating == null) return true; // no data — don't punish it
+  return game.userRating <= maxRating;
+}
+
+// ARCHITECTURE NOTE: unlike every other app in this suite, there is no
+// live "discover games matching category X and player count Y" query to
+// fall back on here. BGG's XML API2 was checked directly against its
+// official docs before building this — its only multi-result endpoints
+// are /hot (unfilterable trending list), /search (name only), and
+// /collection (one specific user's owned games) — none support
+// discovery by category or player count. So the pool for any given spin
+// is always exactly the built-in list for that combo; BGG's /thing
+// endpoint is used only to enrich already-known titles (rating,
+// description, image, real category list, playtime, complexity, age)
+// after the fact, never to find new ones. This is a deliberate,
+// confirmed design choice, not a placeholder for a live query to be
+// added later — see the conversation that led to this build for the
+// full reasoning.
+async function buildGamePool(playerCount, category){
+  setSpinStatus('Checking the built-in list…');
+  const pool = getEffectiveGameList(playerCount, category).map(entry => {
+    const cached = wmRatingsCache.get(entry.bggId);
+    return {
+      title: entry.title,
+      year: entry.year,
+      gameId: entry.bggId,
+      posterUrl: cached ? cached.posterUrl : null,
+      userRating: cached ? cached.userRating : null,
+      genresOverride: (cached && cached.genres) || [category],
+      playtime: cached ? cached.playtime : null, // minutes, from BGG's maxplaytime
+      complexity: cached ? cached.complexity : null, // BGG's averageweight, 1-5 scale
+      minAge: cached ? cached.minAge : null,
+      description: cached ? cached.description : null,
+      bggUrl: entry.bggId ? `https://boardgamegeek.com/boardgame/${entry.bggId}` : null
+    };
+  });
+
+  const needsEnrichment = pool.filter(m => gameNeedsEnrichment(m) && !isBlocked(m.title, m.year));
+  if (needsEnrichment.length){
+    await enrichBatchWithRatings(needsEnrichment);
+  }
+
+  return pool;
+}
+
+/* ==================================================================
+   Results / grid
+   ================================================================== */
+function isPicked(title, year){ return picks.some(p => p.title === title && p.year === year); }
+// Looks up who picked a given title, for display on the grid card once
+// it's watched — returns null if unpicked, or if picked without a
+// named picker (crew was empty / picker skipped as Unknown).
+function getPickerFor(title, year){
+  const entry = picks.find(p => p.title === title && p.year === year);
+  return (entry && entry.picker && entry.picker !== 'Unknown') ? entry.picker : null;
+}
+
+function gameGenres(game){
+  if (game.genresOverride) return game.genresOverride;
+  const key = `${game.title}|${game.year}`;
+  if (EXTRA_GENRES[key]) return EXTRA_GENRES[key];
+  return currentChoice ? [currentChoice.genre] : [];
+}
+
+function gameDetailLink(game){
+  // IGDB's own url field, confirmed live — a real, curated game page,
+  // not a guess. Falls back to a general web search only for titles
+  // that haven't been enriched yet (e.g. an untouched built-in list
+  // entry), where no igdbUrl exists at all.
+  if (game.igdbUrl) return game.igdbUrl;
+  return `https://www.google.com/search?q=${encodeURIComponent(game.title + ' video game')}`;
+}
+
+function gameCoverUrl(game){
+  return game.posterUrl || null;
+}
+
+function gameLinkLabel(game){
+  return game.igdbUrl ? 'IGDB' : 'Search';
+}
+
+function genreChipsHtml(game){
+  const genres = gameGenres(game);
+  if (!genres.length) return '';
+  return `<div class="genre-chips">${genres.map(g => `<span class="genre-chip">${escapeHtml(g)}</span>`).join('')}</div>`;
+}
+
+function themeChipsHtml(game){
+  if (!game.themes || !game.themes.length) return '';
+  return `<div class="genre-chips">${game.themes.map(t => `<span class="theme-chip">${escapeHtml(t)}</span>`).join('')}</div>`;
+}
+
+function bylineHtml(game){
+  // Games don't have an "author" the way books do — showing platforms
+  // here instead, since that's real, confirmed data and tells you
+  // something genuinely useful about the game.
+  if (!game.platforms || !game.platforms.length) return '';
+  return `on ${escapeHtml(game.platforms.join(', '))}`;
+}
+
+function metaLineHtml(game){
+  const genres = gameGenres(game);
+  const bits = [game.year || '—'];
+  if (genres.length) bits.push(genres.join(', '));
+  if (game.esrbRating) bits.push(`ESRB ${game.esrbRating}`);
+  return bits.join(' · ');
+}
+
+function ratingChipsHtml(game){
+  const chips = [];
+  if (game.userRating != null) chips.push(`<span class="rating-chip" title="User rating">⭐ User ${game.userRating.toFixed(1)}</span>`);
+  if (!chips.length) return '';
+  return `<div class="genre-chips rating-chips">${chips.join('')}</div>`;
+}
+
+// Builds a single .poster-card element for the results grid.
+function buildGameCard(game, index, onClick){
+  const picked = isPicked(game.title, game.year);
+  const card = document.createElement('div');
+  card.className = 'poster-card' + (picked ? ' disabled' : '');
+  card.dataset.idx = index;
+  const picker = picked ? getPickerFor(game.title, game.year) : null;
+  const watchedTagHtml = picked ? `<div class="watched-tag">PLAYED${picker ? ' · ' + escapeHtml(picker) : ''}</div>` : '';
+  card.innerHTML = `
+    ${watchedTagHtml}
+    <div class="poster-meta">
+      <div class="p-num">${String(index + 1).padStart(2, '0')}</div>
+      <div class="p-title-row"><div class="p-title">${escapeHtml(game.title)}</div></div>
+      <div class="p-year">${game.year || '—'}</div>
+      <div class="rating-row">${ratingChipsHtml(game)}</div>
+      <div class="genre-row">${genreChipsHtml(game)}</div>
+      <div class="theme-row">${themeChipsHtml(game)}</div>
+      <div class="meta-footer">
+        <a class="detail-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" title="View on ${gameLinkLabel(game)}">🔗 ${gameLinkLabel(game)}</a>
+        <button class="block-card-btn" title="Block this game">⛔</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('.detail-link').addEventListener('click', (e) => e.stopPropagation());
+  card.querySelector('.block-card-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    blockGameFromGrid(game);
+  });
+  if (!picked && onClick) card.addEventListener('click', () => onClick(game));
+  return card;
+}
+
+function renderResults(){
+  $('resultsTitle').textContent = `${currentChoice.platform} ${currentChoice.genre}`;
+  $('resultsCount').textContent = `${currentBatch.length} game${currentBatch.length === 1 ? '' : 's'}`;
+  $('resultsArea').style.display = 'block';
+  updateSourceNote();
+
+  const grid = $('grid');
+  grid.innerHTML = '';
+  $('emptyNote').style.display = currentBatch.length ? 'none' : 'block';
+
+  currentBatch.forEach((game, i) => {
+    grid.appendChild(buildGameCard(game, i, openConfirm));
+  });
+}
+
+async function blockGameFromGrid(game){
+  if (!confirm(`Block "${game.title}" (${game.year || '—'}) so it never shows up in a spin again?`)) return;
+  blockedGames.push({ title: game.title, year: game.year || null });
+  await saveBlockedGames();
+  currentBatch = currentBatch.filter(m => !(m.title === game.title && m.year === game.year));
+  // Shows up immediately in the Filtered Out list, same {game, reason}
+  // shape every other exclusion reason already uses — rather than the
+  // game just silently vanishing from the grid with no trace of what
+  // happened to it.
+  lastFilteredOut.push({ game, reason: 'Blocked' });
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session — nothing to re-render
+  renderFilteredOut();
+  renderBlockList();
+}
+
+/* ==================================================================
+   Confirm pick modal
+   ================================================================== */
+function openConfirm(game){
+  const root = $('modalRoot');
+  const posterUrl = gameCoverUrl(game);
+  const posterHtml = posterUrl
+    ? `<img id="modalPoster" src="${posterUrl}" alt="${escapeHtml(game.title)} cover">`
+    : `<div class="m-icon" id="modalPoster">🎮</div>`;
+  const showDetailsLookup = currentSource === 'igdb' && game.gameId;
+  const canForceRefresh = !!game.gameId;
+  const alreadyRefreshedThisSpin = canForceRefresh && forceRefreshedThisSpin.has(game.gameId);
+  const showExtrasContainer = showDetailsLookup || canForceRefresh;
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal">
+        ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from IGDB'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
+        ${posterHtml}
+        <h3>${escapeHtml(game.title)}</h3>
+        <p class="hint" id="modalByline" style="${bylineHtml(game) ? '' : 'display:none;'}">${bylineHtml(game)}</p>
+        <p id="modalMeta">${metaLineHtml(game)}</p>
+        <div id="modalRatings">${ratingChipsHtml(game)}</div>
+        <div id="modalGenres">${genreChipsHtml(game)}</div>
+        <div id="modalThemes">${themeChipsHtml(game)}</div>
+        <p id="modalDescription" class="modal-description" style="${game.description ? '' : 'display:none;'}">${escapeHtml(game.description || '')}</p>
+        ${showExtrasContainer ? `<div id="modalExtras" class="hint">${showDetailsLookup ? 'Loading details…' : ''}</div>` : ''}
+        <div class="row">
+          <button class="btn-ghost" id="cancelPick">Cancel</button>
+          <button class="btn-primary" id="confirmPick">Pick This Game</button>
+        </div>
+      </div>
+    </div>
+  `;
+  $('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') closeModal(); });
+  $('cancelPick').addEventListener('click', closeModal);
+  $('confirmPick').addEventListener('click', () => openPickerPrompt(game));
+
+  if (canForceRefresh && !alreadyRefreshedThisSpin){
+    $('forceRefreshBtn').addEventListener('click', async () => {
+      const btn = $('forceRefreshBtn');
+      btn.disabled = true;
+      btn.textContent = '⟳ Refreshing…';
+      const extrasEl = document.getElementById('modalExtras');
+      if (extrasEl) extrasEl.textContent = 'Loading details…';
+      try{
+        const extras = await fetchGameExtras(game, true); // true = bypass every cache, local and shared
+        appendModalExtras(extras, game);
+      } finally {
+        // Marked used here, not just on success — the API call already
+        // went out and the quota's already spent whether or not it
+        // ultimately threw, and this keeps the tracking set and what the
+        // button visually shows always in sync if the modal is reopened
+        // later in the same spin.
+        forceRefreshedThisSpin.add(game.gameId);
+        // Only touch the button if the modal (and this button) is still
+        // open — it may have been closed while the live call was in
+        // flight. Once used, it stays permanently marked "Refreshed" for
+        // the rest of this spin, even on error, since the point is
+        // limiting API calls, not retrying until something useful comes
+        // back.
+        if (document.getElementById('forceRefreshBtn')){
+          btn.disabled = true;
+          btn.textContent = '✓ Refreshed';
+        }
+      }
+    });
+  }
+
+  if (showDetailsLookup){
+    fetchGameExtras(game).then(extras => appendModalExtras(extras, game));
+  }
+}
+
+function appendModalExtras(extras, game){
+  if (!game.posterUrl && extras.posterUrl) game.posterUrl = extras.posterUrl;
+  if (extras.genres && extras.genres.length) game.genresOverride = extras.genres;
+  if (!game.description && extras.description) game.description = extras.description;
+  if (game.userRating == null && extras.userRating != null) game.userRating = extras.userRating;
+  if (extras.platforms && extras.platforms.length) game.platforms = extras.platforms;
+  if (extras.esrbRating) game.esrbRating = extras.esrbRating;
+
+  backfillGridCard(game);
+
+  const container = document.getElementById('modalExtras');
+  if (!container) return; // modal already closed — data above is still backfilled to the grid
+
+  const bylineBox = document.getElementById('modalByline');
+  if (bylineBox){
+    const byline = bylineHtml(game);
+    bylineBox.textContent = byline;
+    bylineBox.style.display = byline ? '' : 'none';
+  }
+  const metaBox = document.getElementById('modalMeta');
+  if (metaBox) metaBox.textContent = metaLineHtml(game);
+  const ratingsBox = document.getElementById('modalRatings');
+  if (ratingsBox) ratingsBox.innerHTML = ratingChipsHtml(game);
+  const genresBox = document.getElementById('modalGenres');
+  if (genresBox) genresBox.innerHTML = genreChipsHtml(game);
+  const themesBox = document.getElementById('modalThemes');
+  if (themesBox) themesBox.innerHTML = themeChipsHtml(game);
+  const descBox = document.getElementById('modalDescription');
+  if (descBox && game.description){
+    descBox.textContent = game.description;
+    descBox.style.display = '';
+  }
+
+  const posterEl = document.getElementById('modalPoster');
+  if (posterEl && posterEl.tagName !== 'IMG' && game.posterUrl){
+    const img = document.createElement('img');
+    img.id = 'modalPoster';
+    img.src = game.posterUrl;
+    img.alt = game.title + ' cover';
+    posterEl.replaceWith(img);
+  }
+
+  container.className = '';
+  container.innerHTML = detailLinkHtml(game);
+}
+
+// IGDB has no borrow/availability concept the way Open Library
+// did — this links out to the game's real page instead: Open Library's
+// own work page when we have that id, a WorldCat lookup by ISBN
+// otherwise, or a plain title search as the last resort. Matches
+// gameDetailLink/gameLinkLabel, which decide the same thing for the
+// "Search" link shown before extras load.
+function detailLinkHtml(game){
+  return `<a class="detail-link" href="${gameDetailLink(game)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px;">View on ${escapeHtml(gameLinkLabel(game))} →</a>`;
+}
+
+
+// needing a full re-render.
+function backfillGridCard(game){
+  const idx = currentBatch.indexOf(game);
+  if (idx === -1) return; // a new spin has replaced the batch since
+  const card = document.querySelector(`.poster-card[data-idx="${idx}"]`);
+  if (!card) return;
+  const ratingRow = card.querySelector('.rating-row');
+  if (ratingRow) ratingRow.innerHTML = ratingChipsHtml(game);
+  const genreRow = card.querySelector('.genre-row');
+  if (genreRow) genreRow.innerHTML = genreChipsHtml(game);
+  const themeRow = card.querySelector('.theme-row');
+  if (themeRow) themeRow.innerHTML = themeChipsHtml(game);
+}
+
+function closeModal(){ $('modalRoot').innerHTML = ''; }
+
+// Called by the native Android side (MainActivity.kt) when the device back
+// button is pressed. Returning true means "handled here, don't exit the
+// app" — false means "nothing to close, go ahead and exit."
+window.handleNativeBackPress = function(){
+  if ($('modalBackdrop')){
+    closeModal();
+    return true;
+  }
+  return false;
+};
+
+async function confirmPick(game, picker){
+  const platform = currentChoice ? currentChoice.platform : ((game.platforms && game.platforms[0]) || 'Unknown');
+  const genre = currentChoice ? currentChoice.genre : 'Found via search';
+  picks.push({
+    title: game.title, year: game.year,
+    platform: platform, genre: genre,
+    picker: picker, pickedAt: new Date().toISOString().slice(0, 10),
+    gameId: game.gameId || null // kept so a future feature could look this exact title back up without re-searching — not used anywhere yet
+  });
+  closeModal();
+  showTonightBanner(game, picker);
+  if (currentChoice) renderResults(); // no-op if no spin has happened yet this session — nothing to re-render
+  renderHistory();
+  await savePicks();
+  await recordPick(picker);
+
+  if (currentSource === 'igdb' && game.gameId){
+    fetchGameExtras(game).then(extras => appendTonightExtras(extras, game));
+  }
+}
+
+// A game picked straight from a live spin has almost always already been
+// enriched during discovery, before the grid even rendered — this mostly
+// just returns what enrichOneGame already set on the game object. It
+// only does real work when forceRefresh is set (the "⟳ Refresh" button)
+// or for the rare case where discovery-time enrichment didn't complete
+// for this specific title.
+async function fetchGameExtras(game, forceRefresh){
+  await enrichOneGame(game, 6, forceRefresh);
+  return {
+    posterUrl: game.posterUrl || null,
+    genres: game.genresOverride || null,
+    description: game.description || null,
+    userRating: game.userRating ?? null,
+    platforms: game.platforms || null,
+    esrbRating: game.esrbRating || null
+  };
+}
+
+function appendTonightExtras(extras, game){
+  if (extras.genres && extras.genres.length) game.genresOverride = extras.genres;
+  if (game.userRating == null && extras.userRating != null) game.userRating = extras.userRating;
+  if (extras.platforms && extras.platforms.length) game.platforms = extras.platforms;
+  if (extras.esrbRating) game.esrbRating = extras.esrbRating;
+  backfillGridCard(game);
+
+  const banner = document.querySelector('#tonightBanner .tonight > div');
+  if (!banner) return; // user already spun again / banner no longer showing
+  const bylineBox = document.getElementById('tonightByline');
+  if (bylineBox){
+    const byline = bylineHtml(game);
+    bylineBox.textContent = byline;
+    bylineBox.style.display = byline ? '' : 'none';
+  }
+  const metaBox = document.getElementById('tonightMeta');
+  if (metaBox) metaBox.textContent = `${metaLineHtml(game)} · Happy gaming`;
+  banner.insertAdjacentHTML('beforeend', `<div style="margin-top:8px;">${detailLinkHtml(game)}</div>`);
+}
+
+function showTonightBanner(game, picker){
+  const posterUrl = gameCoverUrl(game);
+  const posterHtml = posterUrl ? `<img src="${posterUrl}" alt="">` : '<div class="t-icon">🎮</div>';
+  const byline = bylineHtml(game);
+  $('tonightBanner').innerHTML = `
+    <div class="tonight">
+      ${posterHtml}
+      <div>
+        <div class="t-eyebrow">Tonight's Pick${picker ? ' — chosen by ' + escapeHtml(picker) : ''}</div>
+        <h3>${escapeHtml(game.title)}</h3>
+        ${byline ? `<p class="hint" id="tonightByline">${byline}</p>` : '<p class="hint" id="tonightByline" style="display:none;"></p>'}
+        <div id="tonightRatings">${ratingChipsHtml(game)}</div>
+        <p id="tonightMeta">${metaLineHtml(game)} · Happy gaming</p>
+      </div>
+    </div>
+  `;
+}
+
+/* ==================================================================
+   History
+   ================================================================== */
+$('historyToggleBtn').addEventListener('click', () => {
+  const panel = $('historyPanel');
+  const showing = panel.style.display === 'block';
+  panel.style.display = showing ? 'none' : 'block';
+  $('historyToggleBtn').textContent = showing ? 'Show Past Picks' : 'Hide Past Picks';
+});
+
+$('apiLogToggleBtn').addEventListener('click', () => {
+  const panel = $('apiLogPanel');
+  const showing = panel.style.display === 'block';
+  panel.style.display = showing ? 'none' : 'block';
+  $('apiLogToggleBtn').textContent = showing ? 'Show Log' : 'Hide Log';
+  if (!showing) renderApiCallLog();
+});
+
+$('filteredOutToggleBtn').addEventListener('click', () => {
+  const panel = $('filteredOutPanel');
+  const showing = panel.style.display === 'block';
+  panel.style.display = showing ? 'none' : 'block';
+  $('filteredOutToggleBtn').textContent = (showing ? 'Show' : 'Hide') + ` ${lastFilteredOut.length} Filtered Out`;
+});
+
+function renderFilteredOut(){
+  const row = $('filteredOutToggleRow');
+  const panel = $('filteredOutPanel');
+  if (!lastFilteredOut.length){
+    row.style.display = 'none';
+    panel.style.display = 'none';
+    $('filteredOutList').innerHTML = '';
+    return;
+  }
+  row.style.display = 'block';
+  $('filteredOutToggleBtn').textContent = `Show ${lastFilteredOut.length} Filtered Out`;
+  panel.style.display = 'none';
+  $('filteredOutList').innerHTML = lastFilteredOut.map(({ game, reason }, i) => `
+    <div class="history-item clickable" data-idx="${i}" title="Click for details — you can still pick this game">
+      <span class="h-name">${escapeHtml(game.title)} <span class="h-meta">(${game.year || '—'})</span></span>
+      <span class="h-meta">${escapeHtml(reason)}</span>
+    </div>
+  `).join('');
+  $('filteredOutList').querySelectorAll('.history-item[data-idx]').forEach(el => {
+    el.addEventListener('click', () => {
+      const entry = lastFilteredOut[Number(el.dataset.idx)];
+      if (entry) openConfirm(entry.game);
+    });
+  });
+}
+
+function renderHistory(){
+  const list = $('historyList');
+  if (!picks.length){ list.innerHTML = '<div class="empty-note">No games picked yet.</div>'; return; }
+  // Walk picks in reverse (newest first) but keep track of each item's
+  // real index in the underlying array so removal targets the right one.
+  const rows = picks.map((p, idx) => ({ p, idx })).reverse();
+  list.innerHTML = rows.map(({ p, idx }) => `
+    <div class="history-item">
+      <span class="h-name">${escapeHtml(p.title)} <span class="h-meta">(${p.year || '—'})</span></span>
+      <span class="h-meta" style="display:flex; align-items:center; gap:10px;">
+        ${p.platform} · ${p.genre}${p.picker ? ' · picked by ' + escapeHtml(p.picker) : ''} · ${p.pickedAt}
+        <button class="btn-danger btn-icon" title="Remove this pick" data-remove-idx="${idx}">✕</button>
+      </span>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-remove-idx]').forEach(btn => {
+    btn.addEventListener('click', () => removePickAt(Number(btn.dataset.removeIdx)));
+  });
+}
+
+async function removePickAt(idx){
+  const removed = picks[idx];
+  if (!removed) return;
+  if (!confirm(`Remove "${removed.title}" (${removed.year || '—'}) from the picked list? It'll become selectable again.`)) return;
+  picks.splice(idx, 1);
+  renderHistory();
+  if (currentBatch.length) renderResults();
+  await savePicks();
+}
+
+$('clearHistoryBtn').addEventListener('click', async () => {
+  if (!confirm('Clear all past picks? Every game will become pickable again.')) return;
+  picks = [];
+  renderHistory();
+  if (currentBatch.length) renderResults();
+  await savePicks();
+});
+
+// Registers the service worker so the app can be installed to the home
+// screen and reload instantly even without a network connection. Silently
+// does nothing if unsupported or if this file is opened directly via
+// file:// — service workers require being served over HTTPS (or
+// localhost), so this only takes effect once hosted somewhere.
+if ('serviceWorker' in navigator && location.protocol !== 'file:'){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then((registration) => {
+      // Ask right away whether a newer sw.js exists, rather than only
+      // relying on the browser's own background check timing (which can
+      // be quite lazy about it).
+      registration.update().catch(() => {});
+    }).catch((e) => console.warn('Service worker registration failed', e));
+
+    // Fires once a new service worker actually takes control — which
+    // happens automatically shortly after a newer version is found and
+    // installed, since sw.js calls skipWaiting()/clients.claim() rather
+    // than waiting for every tab to close first. This reloads the page
+    // exactly once so the fresh version is what's actually showing,
+    // instead of needing a manual hard-refresh or cache clear. This only
+    // touches the service worker's own app-shell cache (the HTML/CSS/JS
+    // files themselves) — it has no effect on localStorage or Firestore,
+    // so your crew, picks, and settings are completely untouched by it.
+    let hasReloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hasReloadedForUpdate) return; // guard against a theoretical double-fire
+      hasReloadedForUpdate = true;
+      location.reload();
+    });
+  });
+}
+
+init();
+</script>
+</body>
+</html>
