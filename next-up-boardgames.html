@@ -540,7 +540,7 @@
     <div class="marquee">
       <div class="sprockets"></div>
       <h1>🎲 NEXT UP - BOARD GAMES</h1>
-      <div class="tagline">We spin up a random category + time to play to break the shelf paralysis — you still pick whatever actually hits the table.</div>
+      <div class="tagline">We pull BGG's live "hot" list and enrich it with real ratings and details — you pick whatever's actually trending and worth playing.</div>
       <div class="tagline" id="authStatus" style="display:none; margin-top:4px;"></div>
       <div class="version-badge" id="versionBadge"></div>
     </div>
@@ -548,23 +548,12 @@
     <div class="tabs">
       <button class="tab-btn active" id="tabMainBtn">🎲 Next Up</button>
       <button class="tab-btn" id="tabFiltersBtn">🎯 Board Game Filters</button>
-      <button class="tab-btn" id="tabBuiltinBtn">🎲 Built-In Board Game List</button>
       <button class="tab-btn" id="tabAdminBtn">⚙ Admin</button>
     </div>
 
     <!-- ===================== MAIN TAB ===================== -->
     <div id="mainTab">
 
-      <div class="reel-stage">
-        <div class="reel" id="platformReel">
-          <div class="reel-label">PLATFORM</div>
-          <div class="reel-value" id="platformValue">----</div>
-        </div>
-        <div class="reel" id="genreReel">
-          <div class="reel-label">GENRE</div>
-          <div class="reel-value" id="genreValue">----</div>
-        </div>
-      </div>
       <div class="spin-btn-row">
         <button class="btn-primary spin-btn" id="spinBtn">🎲 Roll the Dice</button>
         <div class="error" id="spinError" style="display:none;"></div>
@@ -613,19 +602,16 @@
       </div>
 
       <div class="card" id="igdbConnectionCard">
-        <h2>BoardGameGeek <span class="status-pill" style="background:rgba(255,255,255,0.08); color:var(--muted);">NOT YET CONNECTED</span></h2>
-        <p class="desc">Prototype status: category and player count spin from the built-in list below, but enrichment against BoardGameGeek's real data (rating, description, image, playtime, complexity, age) isn't wired up yet — that's the next step, pending verification of BGG's API behavior from a browser context.</p>
+        <h2>BoardGameGeek <span class="status-pill status-connected">CONNECTED</span></h2>
+        <p class="desc">The spin fetches BGG's live "hot" list (trending games) and enriches each one with real rating, categories, playtime, complexity, and age — no built-in-list combo to fall back to anymore; if the hot list or enrichment fails, a static 30-game fallback list is used instead.</p>
         <div class="row" style="margin-top:8px;">
           <button class="btn-danger" id="clearCacheBtn">Clear Cache</button>
         </div>
 
-        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many games are already cached for a platform/genre. Those spins feel faster since little or no live lookup is needed.</p>
+        <p class="desc" style="margin-top:18px; margin-bottom:6px;"><strong style="color:var(--cream);">Cache Stats</strong> — how many games are already cached for a given player count. Those spins feel faster since little or no live lookup is needed.</p>
         <div class="row">
           <select id="cacheStatsDecade" style="max-width:140px;">
-            <option value="all">All Platforms</option>
-          </select>
-          <select id="cacheStatsGenre" style="max-width:160px;">
-            <option value="all">All Genres</option>
+            <option value="all">All Player Counts</option>
           </select>
         </div>
         <p class="desc" id="cacheStatsResult" style="margin-top:10px; margin-bottom:0;"></p>
@@ -633,13 +619,13 @@
 
       <div class="card">
         <h2>Max Results</h2>
-        <p class="desc">How many titles you'll see after a IGDB spin (10–100). If filtering leaves you short, it fetches more to make up the difference — higher numbers mean a longer wait. Doesn't affect the built-in list.</p>
+        <p class="desc">How many titles you'll see after a spin (10–100), kept from the top of the enriched hot list by rating. Doesn't affect how many games are fetched from BGG — just how many make it into the results grid.</p>
         <input type="number" id="maxResultsInput" min="10" max="100" step="1" style="max-width:120px;">
       </div>
 
       <div class="card">
         <h2>API Call Log <span class="hint" id="apiLogCount" style="margin:0;"></span></h2>
-        <p class="desc">Every IGDB request made since your last spin, and why — useful for seeing where time (and today's free-tier quota) goes. Clears on the next spin.</p>
+        <p class="desc">Every BGG request made since your last spin, and why — useful for seeing where time goes. Clears on the next spin.</p>
         <div class="select-all-row">
           <button class="btn-ghost" id="apiLogToggleBtn">Show Log</button>
         </div>
@@ -650,7 +636,7 @@
 
       <div class="card">
         <h2>About</h2>
-        <p class="desc">Next Up is a free, independent project — not affiliated with, endorsed by, or sponsored by IGDB, Twitch, or any publisher. Game data, covers, and ratings come from IGDB and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
+        <p class="desc">Next Up is a free, independent project — not affiliated with, endorsed by, or sponsored by BoardGameGeek or any publisher. Game data, covers, and ratings come from BoardGameGeek and are provided as-is; accuracy isn't guaranteed. No ads, no analytics or tracking of any kind.</p>
         <p class="desc" style="margin-top:8px;"><a href="privacy.html">Privacy Policy</a></p>
         <p class="desc hint" style="margin-top:8px;">App version: <span id="appVersionLabel"></span></p>
       </div>
@@ -664,26 +650,6 @@
         <h2>Apply Changes</h2>
         <p class="desc">Re-run your filters against the same fetched games — no new spin, no new API calls, just re-checks who currently passes.</p>
         <button class="btn-primary" id="rerunFiltersBtn">🔄 Re-run Filters</button>
-      </div>
-
-      <div class="card">
-        <h2>Time to Play</h2>
-        <p class="desc">Check which time-to-play buckets you want included — a spin picks one of these plus a category. Buckets are verified against real BGG playtime data: Flash (up to 15 min), Quick (16-30), Short (31-60), Medium (61-90), Long (91-120), Epic (121+).</p>
-        <div class="select-all-row">
-          <button class="btn-ghost" id="platformsAllBtn">Select All</button>
-          <button class="btn-ghost" id="platformsNoneBtn">Select None</button>
-        </div>
-        <div id="platformToggles" class="toggle-grid"></div>
-      </div>
-
-      <div class="card">
-        <h2>Categories</h2>
-        <p class="desc">Check which categories you want included.</p>
-        <div class="select-all-row">
-          <button class="btn-ghost" id="genresAllBtn">Select All</button>
-          <button class="btn-ghost" id="genresNoneBtn">Select None</button>
-        </div>
-        <div id="genreToggles" class="toggle-grid"></div>
       </div>
 
       <div class="card">
@@ -785,7 +751,7 @@
 
       <div class="card">
         <h2>Explicit Content Filter</h2>
-        <p class="desc">Also excludes any game IGDB itself tags with the "Erotic" theme — real, structured data, not a guess, so these never appear anywhere, including the Filtered Out list below. Beyond that, this is best-effort: a keyword match on title and description, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
+        <p class="desc">Also excludes any game BGG itself tags with the "Erotic" category — real, structured data, not a guess, so these never appear anywhere, including the Filtered Out list below. Beyond that, this is best-effort: a keyword match on title and description, not the content itself, so it can miss things or occasionally flag something legitimate. A built-in list is included automatically; add your own below. Case-insensitive, matches anywhere in the text.</p>
         <label class="toggle-chip" style="justify-content:flex-start; margin-bottom:12px;">
           <input type="checkbox" id="filterExplicitContentCheckbox"> Remove Games With Explicit Content
         </label>
@@ -807,30 +773,6 @@
         </div>
         <div id="blockList" class="crew-list"></div>
         <div class="hint" id="blockEmptyHint" style="display:none;">No blocked games.</div>
-      </div>
-
-    </div>
-
-    <!-- ===================== BUILT-IN VIDEO GAME LIST TAB ===================== -->
-    <div id="builtinTab" style="display:none;">
-
-      <div class="card">
-        <h2>Edit Built-in List</h2>
-        <p class="desc">Add or remove games from the built-in list for one platform + genre — used whenever that's the active source. These titles also get looked up automatically on IGDB for covers, ratings, and descriptions.</p>
-        <div class="row">
-          <select id="editListDecade"></select>
-          <select id="editListGenre"></select>
-        </div>
-        <div id="editListGames" class="crew-list" style="margin-top:14px;"></div>
-        <div class="row" style="margin-top:12px;">
-          <input type="text" id="editListTitleInput" placeholder="Game title">
-          <input type="text" id="editListYearInput" placeholder="Year" style="flex: 0 1 100px;">
-          <button class="btn-primary" id="editListAddBtn">Add</button>
-        </div>
-        <div class="error" id="editListError" style="display:none;"></div>
-        <div class="footer-actions" style="margin-top:12px;">
-          <button class="btn-danger" id="editListResetBtn">Reset This Combo to Default</button>
-        </div>
       </div>
 
     </div>
@@ -873,13 +815,12 @@ let currentUser = null; // set once signed in; null while signed out
 // Bumped with every shipped update — shown in Admin's About card, and a
 // useful thing to check if you're ever unsure whether a page is actually
 // running the latest version versus something the service worker cached.
-const APP_VERSION = '0.5.1'; // MAJOR.MINOR.PATCH — adjusted time-to-play boundaries per feedback: Flash (up to 15 min), Quick (16-30), Short (31-60), Medium (61-90), Long (91-120), Epic (121+) — inclusive on both ends now, instead of the previous exclusive-upper-bound scheme. This reclassified 13 of the 30 built-in titles, since many real playtimes land exactly on the round boundary numbers (15/30/60/90/120) that used to sort into the tier above rather than the one at that number: Flash goes from empty to its first 3 real entries (Sushi Go!, Codenames, Coup, all exactly 15 min); Root moves Long -> Medium; five 30-minute games (Splendor, Patchwork, King of Tokyo, 7 Wonders, Dixit, The Resistance) move Short -> Quick; three 60-minute games (Ticket to Ride, Betrayal at House on the Hill, Just One) move Medium -> Short. Verified live: spins against Flash+Card Game, Medium+Wargame, and Short+Trains each correctly return exactly the expected reclassified titles (Sushi Go!/Codenames/Coup, Root, and Ticket to Ride respectively).
+const APP_VERSION = '0.6.0'; // MAJOR.MINOR.PATCH — major architectural rewrite: category + time-to-play spin axes removed entirely (BGG's API genuinely has no way to discover games by category, confirmed exhaustively across this session — /search only matches titles not tags, /family needs a known id and isn't the same taxonomy, and a third-party project's approach turned out to require a BGG website login our proxy's API token can't provide). Replaced with BGG's live /hot list (~50 currently-trending games), enriched via the existing /thing pipeline, shown as a flat results grid — no more spin-a-combo-first step. Player Rating/Complexity/Age/Player Count remain as filters on this flat pool; Category and Time-to-Play filters removed since there's no longer a category axis to filter by. Added a real, practical filter excluding games not yet released (confirmed live: BGG's hot list includes unreleased titles like "Lionwake" at yearpublished=2027 — pre-release buzz is real but this app should never suggest something nobody can actually play yet). Removed the entire combo-based "Edit Built-in List" admin tab and its custom-additions/removals feature, which no longer applies without a combo to edit; GAME_DB is now a flat 30-game fallback list used only if /hot fails outright. Also removed a substantial amount of now-dead code this rewrite orphaned (searchIGDBForGame, enrichBuiltinListWithIGDB, enrichBatchWithRatings, the wmSearchCache tier — all confirmed uncalled before removal) and fixed several stale "IGDB"/"Twitch" references left over from the original Games template that had never been updated for BGG (Admin's About/Max Results/API Call Log text, the Explicit Content Filter description, a force-refresh tooltip). Caught and fixed a real self-inflicted bug mid-rewrite: an early cleanup pass accidentally deleted PLAYER_COUNT_OPTIONS' own declaration while removing the category/time constants around it, breaking the entire page — caught via live test before shipping, not after. Verified end-to-end with a live spin (via full await, not a guessed UI wait time) showing real enriched data flowing correctly, and confirmed clean via screenshots of the Main, Filters, and Admin tabs.
 document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
 const SYNCED_KEYS = new Set([
   'game_picks', 'blocked_games',
-  'custom_game_additions', 'custom_game_removals',
-  'enabled_genres', 'enabled_platforms', 'enabled_player_counts',
+  'enabled_player_counts',
   'min_rating', 'max_rating_ceiling', 'min_complexity', 'max_complexity', 'max_age_allowed',
   'filter_explicit_content', 'custom_explicit_keywords', 'max_results',
   'data_source_pref', 'color_theme'
@@ -902,227 +843,47 @@ const SYNCED_KEYS = new Set([
    which had no honest fit anywhere and was dropped rather than
    force-placed.
    ================================================================== */
-// Restructured around genre + time-to-play as the main spin axes (player
-// count moved to a separate filter, matching the app's own real spin
-// mechanic now). Time-to-play buckets and every category here are VERIFIED
-// against real, live BGG data (two separate batch runs against the actual
-// app + proxy: categories first, then playtime). bggId is real and
-// confirmed for every entry. minPlayers/maxPlayers are carried forward
-// UNCHANGED from the original, unverified estimates in the very first
-// build -- neither verification pass has checked these yet; they're only
-// filter material now, not what drives discovery, but still flagged as a
-// real follow-up.
-// Bucket boundaries are inclusive on both ends per user preference:
-// Flash <=15, Quick 16-30, Short 31-60, Medium 61-90, Long 91-120, Epic
-// 121+. A game whose real playtime lands exactly on a round boundary
-// number (15/30/60/90/120 -- common, and hit exactly by many real games)
-// sorts into the LOWER bucket, not the upper one -- e.g. a 30-minute game
-// is Quick, not Short.
-const GAME_DB = {
-"Flash":{
-"Card Game":[{title:"Sushi Go!",year:2013,bggId:133473,minPlayers:2,maxPlayers:5},{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7},{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
-"Party Game":[{title:"Sushi Go!",year:2013,bggId:133473,minPlayers:2,maxPlayers:5},{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7},{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
-"Deduction":[{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7},{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
-"Spies / Secret Agents":[{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7}],
-"Word Game":[{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7}],
-"Bluffing":[{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}],
-"Political":[{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6}]
-},
-"Quick":{
-"Card Game":[{title:"Splendor",year:2014,bggId:148228,minPlayers:2,maxPlayers:4},{title:"Love Letter",year:2012,bggId:129622,minPlayers:2,maxPlayers:4},{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7},{title:"Dixit",year:2008,bggId:39856,minPlayers:3,maxPlayers:6},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
-"Economic":[{title:"Splendor",year:2014,bggId:148228,minPlayers:2,maxPlayers:4},{title:"Patchwork",year:2014,bggId:163412,minPlayers:2,maxPlayers:2},{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
-"Renaissance":[{title:"Splendor",year:2014,bggId:148228,minPlayers:2,maxPlayers:4},{title:"Love Letter",year:2012,bggId:129622,minPlayers:2,maxPlayers:4}],
-"Dice":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6}],
-"Fighting":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6}],
-"Movies / TV / Radio theme":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6}],
-"Science Fiction":[{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
-"Abstract Strategy":[{title:"Patchwork",year:2014,bggId:163412,minPlayers:2,maxPlayers:2},{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4},{title:"Onitama",year:2014,bggId:160477,minPlayers:2,maxPlayers:2},{title:"Hive",year:2001,bggId:2655,minPlayers:2,maxPlayers:2}],
-"Puzzle":[{title:"Patchwork",year:2014,bggId:163412,minPlayers:2,maxPlayers:2},{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4}],
-"Medieval":[{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4}],
-"Territory Building":[{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4}],
-"Animals":[{title:"Hive",year:2001,bggId:2655,minPlayers:2,maxPlayers:2}],
-"Deduction":[{title:"Love Letter",year:2012,bggId:129622,minPlayers:2,maxPlayers:4},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
-"Ancient":[{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
-"City Building":[{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
-"Civilization":[{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7}],
-"Humor":[{title:"Dixit",year:2008,bggId:39856,minPlayers:3,maxPlayers:6}],
-"Party Game":[{title:"Dixit",year:2008,bggId:39856,minPlayers:3,maxPlayers:6},{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
-"Bluffing":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
-"Negotiation":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
-"Print & Play":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}],
-"Spies / Secret Agents":[{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7}]
-},
-"Short":{
-"Abstract Strategy":[{title:"Sagrada",year:2017,bggId:199561,minPlayers:1,maxPlayers:4},{title:"Azul",year:2017,bggId:230802,minPlayers:2,maxPlayers:4}],
-"Dice":[{title:"Sagrada",year:2017,bggId:199561,minPlayers:1,maxPlayers:4}],
-"Puzzle":[{title:"Sagrada",year:2017,bggId:199561,minPlayers:1,maxPlayers:4}],
-"Trains":[{title:"Ticket to Ride",year:2004,bggId:9209,minPlayers:2,maxPlayers:5}],
-"Renaissance":[{title:"Azul",year:2017,bggId:230802,minPlayers:2,maxPlayers:4}],
-"Medieval":[{title:"Carcassonne",year:2000,bggId:822,minPlayers:2,maxPlayers:5},{title:"Century: Spice Road",year:2017,bggId:209685,minPlayers:2,maxPlayers:5}],
-"Territory Building":[{title:"Carcassonne",year:2000,bggId:822,minPlayers:2,maxPlayers:5}],
-"Card Game":[{title:"Century: Spice Road",year:2017,bggId:209685,minPlayers:2,maxPlayers:5},{title:"Skull",year:2011,bggId:92415,minPlayers:3,maxPlayers:6}],
-"Economic":[{title:"Century: Spice Road",year:2017,bggId:209685,minPlayers:2,maxPlayers:5}],
-"Medical":[{title:"Pandemic",year:2008,bggId:30549,minPlayers:2,maxPlayers:4}],
-"Travel":[{title:"Pandemic",year:2008,bggId:30549,minPlayers:2,maxPlayers:4}],
-"Adventure":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547,minPlayers:3,maxPlayers:6}],
-"Exploration":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547,minPlayers:3,maxPlayers:6}],
-"Horror":[{title:"Betrayal at House on the Hill",year:2004,bggId:10547,minPlayers:3,maxPlayers:6}],
-"Deduction":[{title:"Just One",year:2018,bggId:254640,minPlayers:3,maxPlayers:7}],
-"Party Game":[{title:"Just One",year:2018,bggId:254640,minPlayers:3,maxPlayers:7},{title:"Skull",year:2011,bggId:92415,minPlayers:3,maxPlayers:6}],
-"Word Game":[{title:"Just One",year:2018,bggId:254640,minPlayers:3,maxPlayers:7}],
-"Bluffing":[{title:"Skull",year:2011,bggId:92415,minPlayers:3,maxPlayers:6}]
-},
-"Medium":{
-"Animals":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5},{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
-"Card Game":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5}],
-"Educational":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5}],
-"Environmental":[{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5}],
-"Fantasy":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
-"Negotiation":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
-"Territory Building":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}],
-"Wargame":[{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4}]
-},
-"Long":{
-"Civilization":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
-"Economic":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5},{title:"Concordia",year:2013,bggId:124361,minPlayers:2,maxPlayers:5},{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4},{title:"Catan",year:1995,bggId:13,minPlayers:3,maxPlayers:4}],
-"Environmental":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
-"Industry / Manufacturing":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5},{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
-"Science Fiction":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
-"Space Exploration":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
-"Territory Building":[{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5}],
-"Adventure":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
-"Exploration":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
-"Fantasy":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
-"Fighting":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
-"Miniatures":[{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4}],
-"Ancient":[{title:"Concordia",year:2013,bggId:124361,minPlayers:2,maxPlayers:5}],
-"Nautical":[{title:"Concordia",year:2013,bggId:124361,minPlayers:2,maxPlayers:5}],
-"Age of Reason":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
-"Post-Napoleonic":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
-"Trains":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
-"Transportation":[{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4}],
-"Negotiation":[{title:"Catan",year:1995,bggId:13,minPlayers:3,maxPlayers:4}]
-},
-"Epic":{
-"Modern Warfare":[{title:"Twilight Struggle",year:2005,bggId:12333,minPlayers:2,maxPlayers:2}],
-"Political":[{title:"Twilight Struggle",year:2005,bggId:12333,minPlayers:2,maxPlayers:2}],
-"Wargame":[{title:"Twilight Struggle",year:2005,bggId:12333,minPlayers:2,maxPlayers:2}]
-},
-};
-
-// VERIFIED against real, live BGG data — every category here is one at
-// least one built-in-list game is actually, confirmedly tagged with by
-// BGG itself, not a guessed general-knowledge list. Not exhaustive of
-// every category BGG has ever used (only what these 30 games cover),
-// so this will keep growing as more titles get added and checked.
-const BG_CATEGORIES = [
-  "Abstract Strategy",
-  "Adventure",
-  "Age of Reason",
-  "Ancient",
-  "Animals",
-  "Bluffing",
-  "Card Game",
-  "City Building",
-  "Civilization",
-  "Deduction",
-  "Dice",
-  "Economic",
-  "Educational",
-  "Environmental",
-  "Exploration",
-  "Fantasy",
-  "Fighting",
-  "Horror",
-  "Humor",
-  "Industry / Manufacturing",
-  "Medical",
-  "Medieval",
-  "Miniatures",
-  "Modern Warfare",
-  "Movies / TV / Radio theme",
-  "Nautical",
-  "Negotiation",
-  "Party Game",
-  "Political",
-  "Post-Napoleonic",
-  "Print & Play",
-  "Puzzle",
-  "Renaissance",
-  "Science Fiction",
-  "Space Exploration",
-  "Spies / Secret Agents",
-  "Territory Building",
-  "Trains",
-  "Transportation",
-  "Travel",
-  "Wargame",
-  "Word Game",
+// Flat fallback list, used only if /hot fails outright (network error,
+// BGG down, etc.) — the primary pool is always the live /hot list now,
+// not this. These 30 entries are the same real, verified titles from the
+// original category-based build (real bggId, confirmed categories from a
+// prior batch verification), just flattened out of their old
+// [timeToPlay][category] grouping, which no longer applies now that
+// there's no category/time spin axis to group by.
+const GAME_DB = [
+{title:"Sushi Go!",year:2013,bggId:133473,minPlayers:2,maxPlayers:5},
+{title:"Codenames",year:2015,bggId:178900,minPlayers:2,maxPlayers:7},
+{title:"Coup",year:2012,bggId:131357,minPlayers:2,maxPlayers:6},
+{title:"Splendor",year:2014,bggId:148228,minPlayers:2,maxPlayers:4},
+{title:"Love Letter",year:2012,bggId:129622,minPlayers:2,maxPlayers:4},
+{title:"7 Wonders",year:2010,bggId:68448,minPlayers:3,maxPlayers:7},
+{title:"Dixit",year:2008,bggId:39856,minPlayers:3,maxPlayers:6},
+{title:"The Resistance",year:2009,bggId:41114,minPlayers:5,maxPlayers:7},
+{title:"Patchwork",year:2014,bggId:163412,minPlayers:2,maxPlayers:2},
+{title:"King of Tokyo",year:2011,bggId:70323,minPlayers:2,maxPlayers:6},
+{title:"Kingdomino",year:2016,bggId:204583,minPlayers:2,maxPlayers:4},
+{title:"Onitama",year:2014,bggId:160477,minPlayers:2,maxPlayers:2},
+{title:"Hive",year:2001,bggId:2655,minPlayers:2,maxPlayers:2},
+{title:"Sagrada",year:2017,bggId:199561,minPlayers:1,maxPlayers:4},
+{title:"Azul",year:2017,bggId:230802,minPlayers:2,maxPlayers:4},
+{title:"Ticket to Ride",year:2004,bggId:9209,minPlayers:2,maxPlayers:5},
+{title:"Carcassonne",year:2000,bggId:822,minPlayers:2,maxPlayers:5},
+{title:"Century: Spice Road",year:2017,bggId:209685,minPlayers:2,maxPlayers:5},
+{title:"Skull",year:2011,bggId:92415,minPlayers:3,maxPlayers:6},
+{title:"Pandemic",year:2008,bggId:30549,minPlayers:2,maxPlayers:4},
+{title:"Betrayal at House on the Hill",year:2004,bggId:10547,minPlayers:3,maxPlayers:6},
+{title:"Just One",year:2018,bggId:254640,minPlayers:3,maxPlayers:7},
+{title:"Wingspan",year:2019,bggId:266192,minPlayers:1,maxPlayers:5},
+{title:"Root",year:2018,bggId:237182,minPlayers:2,maxPlayers:4},
+{title:"Terraforming Mars",year:2016,bggId:167791,minPlayers:1,maxPlayers:5},
+{title:"Concordia",year:2013,bggId:124361,minPlayers:2,maxPlayers:5},
+{title:"Brass: Birmingham",year:2018,bggId:224517,minPlayers:2,maxPlayers:4},
+{title:"Catan",year:1995,bggId:13,minPlayers:3,maxPlayers:4},
+{title:"Gloomhaven",year:2017,bggId:174430,minPlayers:1,maxPlayers:4},
+{title:"Twilight Struggle",year:2005,bggId:12333,minPlayers:2,maxPlayers:2}
 ];
 
-// The spin's second axis, alongside category — replaces player count,
-// which moved to its own separate filter (see enabledPlayerCounts
-// below). Boundaries and every game's placement are VERIFIED against
-// real, live BGG playtime data for all 30 built-in titles (a full batch
-// run against the actual app + proxy), not guessed. Every tier's bound
-// is inclusive on both ends, per explicit preference: a game landing
-// exactly on a round boundary number (15/30/60/90/120 — common, and hit
-// exactly by many real games) sorts into the LOWER tier, not the upper
-// one — e.g. a 30-minute game is Quick, not Short; a 15-minute game is
-// Flash, not Quick.
-const TIME_TO_PLAY_OPTIONS = ['Flash', 'Quick', 'Short', 'Medium', 'Long', 'Epic'];
-// Flash (up to 15 min), Quick (16-30), Short (31-60), Medium (61-90),
-// Long (91-120), Epic (121+) — three of the 30 built-in titles (Sushi
-// Go!, Codenames, Coup) land exactly at 15 minutes, giving Flash its
-// first real entries.
 
-// A specific number, not a range — matches against each game's real
-// minplayers–maxplayers range from BGG (a game supporting 2–5 players
-// matches a spin of 3, 4, or 5, not just a game explicitly labeled "3
-// players"). "7+" catches anything whose max genuinely goes that high,
-// not just games specifically designed for 7. No longer the spin axis
-// itself — now a standalone filter, same role Playtime/Complexity/Age
-// already have.
-const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '5', '6', '7+'];
-
-
-
-// ESRB is organization id 1 within IGDB's age_ratings system — confirmed
-// live via /age_rating_categories, not assumed. rating_category values
-// below are ESRB-specific; other organizations (PEGI, CERO, etc.) have
-// their own separate category IDs not listed here.
-const ESRB_RATINGS = {
-  1: 'RP',   // Rating Pending
-  2: 'EC',   // Early Childhood
-  3: 'E',    // Everyone
-  4: 'E10+', // Everyone 10+
-  5: 'T',    // Teen
-  6: 'M',    // Mature
-  7: 'AO'    // Adults Only
-};
-
-// Sourced directly from BG_CATEGORIES/PLAYER_COUNT_OPTIONS — unlike the
-// other apps, there's no live "discover" query these could fall back to
-// verifying against (see the architecture note on GAME_DB below), so
-// this list IS the complete, authoritative set of what's toggle-able,
-// not just a convenience derived from something more authoritative.
-const GENRES = BG_CATEGORIES.slice();
-const PLATFORM_KEYS = TIME_TO_PLAY_OPTIONS.slice();
-
-function comboKey(platform, genre){ return `${platform}|${genre}`; }
-
-// Returns the built-in list for one platform/genre with the user's own edits
-// applied — anything they've removed hidden, anything they've added
-// appended. GAME_DB itself is never modified; this is the only place that
-// should be read from when the built-in list is actually used for a spin.
-function getEffectiveGameList(platform, genre){
-  const base = (GAME_DB[platform] && GAME_DB[platform][genre]) || [];
-  const key = comboKey(platform, genre);
-  const removed = new Set(customRemovals[key] || []);
-  const kept = base.filter(m => !removed.has(`${m.title}|${m.year}`));
-  const additions = customAdditions[key] || [];
-  return kept.concat(additions);
-}
 // User-configurable in Admin — how many titles a IGDB spin pulls
 // back. Requesting more costs nothing extra for discovery itself (still
 // one call either way); the actual state variable and its bounds are set
@@ -1276,9 +1037,15 @@ function applyRecordToGame(game, record, tierFlags){
 const wmDetailsCache = new Map(); // gameId -> {posterUrl, genres, description, userRating, minPlayers, maxPlayers, playtime, complexity, minAge, mechanics, enrichedAt} — persisted locally, mirroring wmRatingsCache's shape
 const WM_DETAILS_PRUNE_MS = WM_GLOBAL_MAX_STALE_MS; // entries where BOTH tiers have gone past the 90-day floor get dropped entirely on save, so the cache doesn't grow forever with titles never revisited
 const wmRatingsCache = new Map(); // gameId -> {title, year, genres, posterUrl, description, userRating, minPlayers, maxPlayers, playtime, complexity, minAge, mechanics, bggUrl, discoveredAt, enrichedAt} — used for the whole grid (session only)
-const wmSearchCache = new Map(); // "title|year" -> gameId (or null for a confirmed no-match), used to enrich the built-in list
-let enabledGenres = GENRES.slice();
-let enabledPlatforms = PLATFORM_KEYS.slice();
+
+// A specific number, not a range — matches against each game's real
+// minplayers–maxplayers range from BGG (a game supporting 2–5 players
+// matches an enabled "3" the same way it matched a spin of 3 back when
+// player count was the spin axis itself). "7+" catches anything whose
+// max genuinely goes that high, not just games specifically designed
+// for 7. Still just a filter now, same role Playtime/Complexity/Age
+// already have — no longer anything to do with discovery.
+const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '5', '6', '7+'];
 let enabledPlayerCounts = PLAYER_COUNT_OPTIONS.slice();
 
 // Color themes — each swaps the accent + base palette; danger (velvet) and
@@ -1325,8 +1092,6 @@ const DEFAULT_EXPLICIT_KEYWORDS = [
 ];
 let customExplicitKeywords = []; // user-added, on top of the built-in list above
 let blockedGames = []; // {title, year|null}
-let customAdditions = {}; // "platform|genre" -> [{title, year}] — user-added built-in-list entries
-let customRemovals = {}; // "platform|genre" -> ["title|year", ...] — built-in entries the user has hidden
 let maxResults = MAX_RESULTS_DEFAULT;
 
 const $ = (id) => document.getElementById(id);
@@ -1463,10 +1228,6 @@ window.onNativeGoogleSignIn = function(payloadStr){
 const SYNCED_KEY_DEFAULTS = {
   game_picks: () => [],
   blocked_games: () => [],
-  custom_game_additions: () => ({}),
-  custom_game_removals: () => ({}),
-  enabled_genres: () => GENRES.slice(),
-  enabled_platforms: () => PLATFORM_KEYS.slice(),
   enabled_player_counts: () => PLAYER_COUNT_OPTIONS.slice(),
   min_rating: () => 0,
   max_rating_ceiling: () => 10,
@@ -1597,8 +1358,6 @@ async function saveMaxRating(){ await saveJSON('max_rating_ceiling', maxRating);
 async function saveMinComplexity(){ await saveJSON('min_complexity', minComplexity); }
 async function saveMaxComplexity(){ await saveJSON('max_complexity', maxComplexity); }
 async function saveMaxAgeAllowed(){ await saveJSON('max_age_allowed', maxAgeAllowed); }
-async function saveEnabledGenres(){ await saveJSON('enabled_genres', enabledGenres); }
-async function saveEnabledPlatforms(){ await saveJSON('enabled_platforms', enabledPlatforms); }
 async function saveEnabledPlayerCounts(){ await saveJSON('enabled_player_counts', enabledPlayerCounts); }
 
 function applyColorTheme(name){
@@ -1639,18 +1398,11 @@ function renderThemeSwatches(){
 async function saveFilterExplicitContent(){ await saveJSON('filter_explicit_content', filterExplicitContent); }
 async function saveCustomExplicitKeywords(){ await saveJSON('custom_explicit_keywords', customExplicitKeywords); }
 async function saveBlockedGames(){ await saveJSON('blocked_games', blockedGames); }
-async function saveCustomAdditions(){ await saveJSON('custom_game_additions', customAdditions); }
-async function saveCustomRemovals(){ await saveJSON('custom_game_removals', customRemovals); }
 async function saveMaxResults(){ await saveJSON('max_results', maxResults); }
 async function saveWmRatingsCache(){
   const obj = {};
   wmRatingsCache.forEach((v, k) => { obj[k] = v; });
   await saveJSON('bgg_ratings_cache', obj);
-}
-async function saveWmSearchCache(){
-  const obj = {};
-  wmSearchCache.forEach((v, k) => { obj[k] = v; });
-  await saveJSON('bgg_search_cache', obj);
 }
 async function saveWmDetailsCache(){
   const obj = {};
@@ -1672,24 +1424,7 @@ async function init(){
   minComplexity = await loadJSON('min_complexity', 0);
   maxComplexity = await loadJSON('max_complexity', 5);
   maxAgeAllowed = await loadJSON('max_age_allowed', 99);
-  enabledGenres = await loadJSON('enabled_genres', GENRES.slice());
-  enabledPlatforms = await loadJSON('enabled_platforms', PLATFORM_KEYS.slice());
   enabledPlayerCounts = await loadJSON('enabled_player_counts', PLAYER_COUNT_OPTIONS.slice());
-  // Migration: a genre added to the app after someone already saved their
-  // filter selection (e.g. Fantasy/Western) should default to enabled for
-  // them too, not silently vanish from their spin pool — but a genre the
-  // user has deliberately unchecked must never get silently re-enabled
-  // just because it's also "missing" from their enabled list. The only way
-  // to tell those apart is to track which categories the app has actually
-  // seen before: only a category that's brand new since last time counts
-  // as "missing," never one that already existed and was just turned off.
-  const knownGenres = await loadJSON('known_genres', GENRES.slice()); // first run after this fix: treat everything current as already known, so nothing gets force-re-enabled once
-  const newlyAddedGenres = GENRES.filter(g => !knownGenres.includes(g));
-  if (newlyAddedGenres.length){
-    enabledGenres = enabledGenres.concat(newlyAddedGenres.filter(g => !enabledGenres.includes(g)));
-    await saveEnabledGenres();
-  }
-  await saveJSON('known_genres', GENRES.slice());
 
   colorTheme = await loadJSON('color_theme', 'amber');
   filterExplicitContent = await loadJSON('filter_explicit_content', true);
@@ -1705,13 +1440,9 @@ async function init(){
     await saveCustomExplicitKeywords();
   }
   blockedGames = await loadJSON('blocked_games', []);
-  customAdditions = await loadJSON('custom_game_additions', {});
-  customRemovals = await loadJSON('custom_game_removals', {});
   maxResults = Math.min(MAX_RESULTS_MAX, Math.max(MAX_RESULTS_MIN, await loadJSON('max_results', MAX_RESULTS_DEFAULT)));
   const savedRatingsCache = await loadJSON('bgg_ratings_cache', {});
   Object.entries(savedRatingsCache).forEach(([k, v]) => wmRatingsCache.set(Number(k), v));
-  const savedSearchCache = await loadJSON('bgg_search_cache', {});
-  Object.entries(savedSearchCache).forEach(([k, v]) => wmSearchCache.set(k, v));
   const savedDetailsCache = await loadJSON('bgg_details_cache', {});
   Object.entries(savedDetailsCache).forEach(([k, v]) => wmDetailsCache.set(Number(k) || k, v)); // per-tier freshness is checked at actual use time in fetchGameExtras, not at load time
 
@@ -1725,20 +1456,16 @@ async function init(){
    ================================================================== */
 $('tabMainBtn').addEventListener('click', () => switchTab('main'));
 $('tabFiltersBtn').addEventListener('click', () => switchTab('filters'));
-$('tabBuiltinBtn').addEventListener('click', () => switchTab('builtin'));
 
 $('tabAdminBtn').addEventListener('click', () => switchTab('admin'));
 function switchTab(tab){
   $('mainTab').style.display = tab === 'main' ? 'block' : 'none';
   $('filtersTab').style.display = tab === 'filters' ? 'block' : 'none';
-  $('builtinTab').style.display = tab === 'builtin' ? 'block' : 'none';
   $('adminTab').style.display = tab === 'admin' ? 'block' : 'none';
   $('tabMainBtn').classList.toggle('active', tab === 'main');
   $('tabFiltersBtn').classList.toggle('active', tab === 'filters');
-  $('tabBuiltinBtn').classList.toggle('active', tab === 'builtin');
   $('tabAdminBtn').classList.toggle('active', tab === 'admin');
   if (tab === 'admin') updateCacheStats();
-  if (tab === 'builtin') renderEditList();
 }
 
 /* ==================================================================
@@ -1952,44 +1679,12 @@ function renderAdmin(){
   renderThemeSwatches();
   populateCacheStatsDropdowns();
   updateCacheStats();
-  populateEditListDropdowns();
-  renderEditList();
 
   $('minRatingSelect').value = String(minRating);
   $('maxRatingSelect').value = String(maxRating);
   $('minComplexitySelect').value = String(minComplexity);
   $('maxComplexitySelect').value = String(maxComplexity);
   $('maxAgeSelect').value = String(maxAgeAllowed);
-
-  $('genreToggles').innerHTML = GENRES.map(g => `
-    <label class="toggle-chip ${enabledGenres.includes(g) ? '' : 'off'}">
-      <input type="checkbox" data-genre="${escapeHtml(g)}" ${enabledGenres.includes(g) ? 'checked' : ''}> ${escapeHtml(g)}
-    </label>
-  `).join('');
-  $('genreToggles').querySelectorAll('input').forEach(cb => {
-    cb.addEventListener('change', async () => {
-      const g = cb.dataset.genre;
-      if (cb.checked) { if (!enabledGenres.includes(g)) enabledGenres.push(g); }
-      else { enabledGenres = enabledGenres.filter(x => x !== g); }
-      renderAdmin();
-      await saveEnabledGenres();
-    });
-  });
-
-  $('platformToggles').innerHTML = PLATFORM_KEYS.map(p => `
-    <label class="toggle-chip ${enabledPlatforms.includes(p) ? '' : 'off'}">
-      <input type="checkbox" data-platform="${escapeHtml(p)}" ${enabledPlatforms.includes(p) ? 'checked' : ''}> ${escapeHtml(p)}
-    </label>
-  `).join('');
-  $('platformToggles').querySelectorAll('input').forEach(cb => {
-    cb.addEventListener('change', async () => {
-      const p = cb.dataset.platform;
-      if (cb.checked) { if (!enabledPlatforms.includes(p)) enabledPlatforms.push(p); }
-      else { enabledPlatforms = enabledPlatforms.filter(x => x !== p); }
-      renderAdmin();
-      await saveEnabledPlatforms();
-    });
-  });
 
   $('playerCountToggles').innerHTML = PLAYER_COUNT_OPTIONS.map(p => `
     <label class="toggle-chip ${enabledPlayerCounts.includes(p) ? '' : 'off'}">
@@ -2052,110 +1747,9 @@ function isBlocked(title, year){
   );
 }
 
-function populateEditListDropdowns(){
-  const platformSel = $('editListDecade');
-  if (platformSel.options.length === 0){
-    PLATFORM_KEYS.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p;
-      opt.textContent = p;
-      platformSel.appendChild(opt);
-    });
-  }
-  const genreSel = $('editListGenre');
-  if (genreSel.options.length === 0){
-    GENRES.forEach(g => {
-      const opt = document.createElement('option');
-      opt.value = g;
-      opt.textContent = g;
-      genreSel.appendChild(opt);
-    });
-  }
-}
-
-function renderEditList(){
-  const platform = $('editListDecade').value;
-  const genre = $('editListGenre').value;
-  const key = comboKey(platform, genre);
-  const removedSet = new Set(customRemovals[key] || []);
-  const baseList = (GAME_DB[platform] && GAME_DB[platform][genre]) || [];
-  const additions = customAdditions[key] || [];
-
-  const rows = [];
-  baseList.forEach(m => {
-    if (removedSet.has(`${m.title}|${m.year}`)) return; // hidden by the user
-    rows.push({ title: m.title, year: m.year, source: 'builtin' });
-  });
-  additions.forEach(m => rows.push({ title: m.title, year: m.year, source: 'custom' }));
-
-  $('editListGames').innerHTML = rows.map((m, i) => `
-    <div class="crew-item">
-      <span class="crew-name">${escapeHtml(m.title)} <span class="hint" style="margin:0;">(${m.year})${m.source === 'custom' ? ' · added by you' : ''}</span></span>
-      <div class="crew-actions">
-        <button class="btn-danger btn-icon" title="Remove" data-idx="${i}">×</button>
-      </div>
-    </div>
-  `).join('');
-  $('editListGames').querySelectorAll('button[data-idx]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const row = rows[Number(btn.dataset.idx)];
-      if (row.source === 'builtin'){
-        if (!customRemovals[key]) customRemovals[key] = [];
-        customRemovals[key].push(`${row.title}|${row.year}`);
-        await saveCustomRemovals();
-      } else {
-        customAdditions[key] = (customAdditions[key] || []).filter(m => !(m.title === row.title && m.year === row.year));
-        await saveCustomAdditions();
-      }
-      renderEditList();
-    });
-  });
-}
-
-async function addEditListGame(){
-  const title = $('editListTitleInput').value.trim();
-  const yearRaw = $('editListYearInput').value.trim();
-  const year = Number(yearRaw);
-  $('editListError').style.display = 'none';
-  if (!title || !yearRaw || isNaN(year)){
-    $('editListError').textContent = 'Enter both a title and a valid year.';
-    $('editListError').style.display = 'block';
-    return;
-  }
-  const platform = $('editListDecade').value;
-  const genre = $('editListGenre').value;
-  const key = comboKey(platform, genre);
-  if (!customAdditions[key]) customAdditions[key] = [];
-  customAdditions[key].push({ title, year });
-  await saveCustomAdditions();
-  $('editListTitleInput').value = '';
-  $('editListYearInput').value = '';
-  renderEditList();
-}
-
-$('editListDecade').addEventListener('change', renderEditList);
-$('editListGenre').addEventListener('change', renderEditList);
-$('editListAddBtn').addEventListener('click', addEditListGame);
-$('editListYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEditListGame(); });
-$('editListResetBtn').addEventListener('click', async () => {
-  const platform = $('editListDecade').value;
-  const genre = $('editListGenre').value;
-  const key = comboKey(platform, genre);
-  if (!confirm(`Reset ${platform} ${genre} back to the default built-in list? This removes anything you've added or removed for this combo.`)) return;
-  delete customAdditions[key];
-  delete customRemovals[key];
-  await saveCustomAdditions();
-  await saveCustomRemovals();
-  renderEditList();
-});
-
 $('blockAddBtn').addEventListener('click', addBlockedGame);
 $('blockYearInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlockedGame(); });
 
-$('genresAllBtn').addEventListener('click', async () => { enabledGenres = GENRES.slice(); renderAdmin(); await saveEnabledGenres(); });
-$('genresNoneBtn').addEventListener('click', async () => { enabledGenres = []; renderAdmin(); await saveEnabledGenres(); });
-$('platformsAllBtn').addEventListener('click', async () => { enabledPlatforms = PLATFORM_KEYS.slice(); renderAdmin(); await saveEnabledPlatforms(); });
-$('platformsNoneBtn').addEventListener('click', async () => { enabledPlatforms = []; renderAdmin(); await saveEnabledPlatforms(); });
 $('playerCountsAllBtn').addEventListener('click', async () => { enabledPlayerCounts = PLAYER_COUNT_OPTIONS.slice(); renderAdmin(); await saveEnabledPlayerCounts(); });
 $('playerCountsNoneBtn').addEventListener('click', async () => { enabledPlayerCounts = []; renderAdmin(); await saveEnabledPlayerCounts(); });
 
@@ -2264,27 +1858,17 @@ $('maxResultsInput').addEventListener('change', async (e) => {
 function populateCacheStatsDropdowns(){
   const platformSel = $('cacheStatsDecade');
   if (platformSel.options.length <= 1){
-    PLATFORM_KEYS.forEach(p => {
+    PLAYER_COUNT_OPTIONS.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p;
       opt.textContent = p;
       platformSel.appendChild(opt);
     });
   }
-  const genreSel = $('cacheStatsGenre');
-  if (genreSel.options.length <= 1){
-    GENRES.forEach(g => {
-      const opt = document.createElement('option');
-      opt.value = g;
-      opt.textContent = g;
-      genreSel.appendChild(opt);
-    });
-  }
 }
 
 function updateCacheStats(){
   const platformSel = $('cacheStatsDecade').value;
-  const genreSel = $('cacheStatsGenre').value;
   let count = 0;
   let missingPlatformData = 0;
   wmRatingsCache.forEach((entry) => {
@@ -2294,12 +1878,9 @@ function updateCacheStats(){
       const matches = platformSel === '7+' ? entry.maxPlayers >= 7 : (entry.minPlayers <= n && entry.maxPlayers >= n);
       if (!matches) return;
     }
-    if (genreSel !== 'all'){
-      if (!entry.genres || !entry.genres.includes(genreSel)) return;
-    }
     count++;
   });
-  let text = `${count} game${count === 1 ? '' : 's'} cached for ${platformSel === 'all' ? 'all player counts' : platformSel + ' players'} / ${genreSel === 'all' ? 'all categories' : genreSel}.`;
+  let text = `${count} game${count === 1 ? '' : 's'} cached for ${platformSel === 'all' ? 'all player counts' : platformSel + ' players'}.`;
   if (platformSel !== 'all' && missingPlatformData){
     text += ` (${missingPlatformData} cached entries from before this feature can't be counted by player count until re-fetched.)`;
   }
@@ -2307,7 +1888,6 @@ function updateCacheStats(){
 }
 
 $('cacheStatsDecade').addEventListener('change', updateCacheStats);
-$('cacheStatsGenre').addEventListener('change', updateCacheStats);
 
 // No-op — this only ever drove the Built-in/Live source-box toggle UI,
 // which doesn't apply here (no live-discovery mode exists to toggle
@@ -2357,62 +1937,27 @@ async function spin(){
   bggUnavailable = false;
   bggConsecutiveFailedCalls = 0;
 
-  const platformPool = PLATFORM_KEYS.filter(p => enabledPlatforms.includes(p));
-  const genrePool = GENRES.filter(g => enabledGenres.includes(g));
-  if (!platformPool.length || !genrePool.length){
-    $('spinError').textContent = 'Turn at least one platform and one genre back on in the Admin tab first.';
-    $('spinError').style.display = 'block';
-    return;
-  }
-
   $('spinBtn').disabled = true;
   $('resultsArea').style.display = 'none';
   $('tonightBanner').innerHTML = '';
 
-  const finalPlatform = randomFrom(platformPool);
-  const finalGenre = randomFrom(genrePool);
-
-  const platformReel = $('platformReel'), genreReel = $('genreReel');
-  platformReel.classList.add('spinning'); genreReel.classList.add('spinning');
-
-  // Platform names vary a lot in length ("Wii" vs "Super Nintendo
-  // Entertainment System") — the reel box has a fixed height for the
-  // sprocket-hole decoration either side of it, so a long name needs a
-  // smaller font rather than being allowed to grow the box.
-  function setPlatformReelText(text){
-    const el = $('platformValue');
-    el.textContent = text;
-    el.classList.toggle('long-text', text.length > 14);
-  }
-
-  let ticks = 0;
-  const maxTicks = 16;
-  await new Promise((resolve) => {
-    const timer = setInterval(() => {
-      ticks++;
-      setPlatformReelText(randomFrom(platformPool));
-      $('genreValue').textContent = randomFrom(genrePool);
-      if (ticks >= maxTicks){
-        clearInterval(timer);
-        setPlatformReelText(finalPlatform);
-        $('genreValue').textContent = finalGenre;
-        platformReel.classList.remove('spinning'); genreReel.classList.remove('spinning');
-        resolve();
-      }
-    }, 70);
-  });
-
-  currentChoice = { platform: finalPlatform, genre: finalGenre };
+  // currentChoice no longer represents a spun combo (there's no
+  // category/time axis left to spin) — kept as a simple marker so the
+  // rest of the pick/confirm/banner flow (which checks "was this
+  // reached via a spin, or found some other way") still behaves
+  // correctly; genre/platform strings on it are just fixed labels now,
+  // not something that was actually randomized.
+  currentChoice = { platform: 'Hot List', genre: 'Trending Now' };
 
   try{
-    lastFullPool = await buildGamePool(finalPlatform, finalGenre);
-    currentSource = 'builtin'; // always accurate now — BGG only ever enriches the built-in list, never discovers beyond it
-    setSpinStatus('');
-  } catch(e){
-    lastFullPool = getEffectiveGameList(finalPlatform, finalGenre);
+    lastFullPool = await buildGamePool();
     currentSource = 'builtin';
     setSpinStatus('');
-    $('spinError').textContent = 'Enrichment failed (' + e.message + ') — showing the built-in list with whatever data was already cached.';
+  } catch(e){
+    lastFullPool = GAME_DB.slice();
+    currentSource = 'builtin';
+    setSpinStatus('');
+    $('spinError').textContent = 'Fetching the hot list failed (' + e.message + ') — showing the built-in list with whatever data was already cached.';
     $('spinError').style.display = 'block';
   }
 
@@ -2619,7 +2164,7 @@ async function enrichOneGame(game, maxAttempts, forceRefresh){
       try{
         const sharedDoc = await fbDb.collection('sharedBoardGameRatings').doc(String(id)).get();
         if (sharedDoc.exists) record = mergeFreshestTiers(record, sharedDoc.data());
-      } catch(e){ console.warn('Shared enrichment cache lookup failed, falling back to IGDB directly', e.message); }
+      } catch(e){ console.warn('Shared enrichment cache lookup failed, falling back to BGG directly', e.message); }
     }
   }
 
@@ -2717,141 +2262,6 @@ async function enrichOneGame(game, maxAttempts, forceRefresh){
   }
 }
 
-async function enrichBatchWithRatings(games, opts){
-  const silent = opts && opts.silent;
-  // Experimenting with concurrency 3 (was 1, then 2 — confirmed fine). Every
-  // request still passes through the same global adaptive throttle
-  // regardless of lane count, and the throttle-gate race condition is
-  // fixed, so lanes queue correctly rather than slipping through together.
-  // If IGDB's limit is throughput-based this won't speed anything
-  // up beyond what 2 already got — the throttle will just queue the third
-  // lane behind the others — but it's safe to try. Drop back down if
-  // rate-limiting creeps up.
-  let done = 0, missing = 0, firstError = null;
-  await mapWithConcurrency(games, 3, async (game) => {
-    const result = await enrichOneGame(game, 6);
-    done++;
-    if (!result.ok || !result.hasData){
-      missing++;
-      if (result.error && !firstError) firstError = result.error;
-    }
-    if (!silent) setSpinStatus(`Fetching details… ${done}/${games.length}`);
-  });
-
-  if (silent) return;
-  if (missing){
-    $('enrichStatusNote').textContent =
-      `Details loaded for ${games.length - missing}/${games.length}.` +
-      (firstError ? ` (${firstError})` : ' (IGDB may simply have nothing on file for the rest.)') +
-      ` Anything missing fills in automatically when you click into it.`;
-  } else {
-    $('enrichStatusNote').textContent = '';
-  }
-}
-
-
-// Looks up a single built-in list title on IGDB by name, picks the top
-// match, and caches the resolved key (or the confirmed absence of one)
-// so the same title is never searched for twice.
-async function searchIGDBForGame(game){
-  const searchKey = `${game.title}|${game.year}`;
-  const cached = wmSearchCache.get(searchKey);
-  if (cached && isFresh(cached.cachedAt, WM_GLOBAL_MAX_STALE_MS)){
-    return cached.gameId;
-  }
-
-  // Shared database lookup by title+year — checked before ever needing a
-  // live search. This is what lets built-in list enrichment work for a
-  // signed-in user right away: a title/year match here gives us the
-  // IGDB id directly, since that's the document's own ID in the shared
-  // collection.
-  if (currentUser){
-    try{
-      const snap = await fbDb.collection('sharedBoardGameRatings')
-        .where('title', '==', game.title)
-        .where('year', '==', game.year)
-        .limit(1)
-        .get();
-      if (!snap.empty){
-        const gameId = Number(snap.docs[0].id);
-        wmSearchCache.set(searchKey, { gameId, cachedAt: Date.now() });
-        saveWmSearchCache();
-        return gameId;
-      }
-    } catch(e){ console.warn('Shared database title/year lookup failed (may need a Firestore index on title+year) — falling back to live search', e.message); }
-  }
-
-  let gameId = null;
-  try{
-    const doc = await bggFetch('search', { query: game.title, type: 'boardgame' }, 0, 3, `Built-in list search: "${game.title}"`);
-    const items = Array.from(doc.querySelectorAll('item'));
-    // BGG's search returns every edition, expansion, and foreign-language
-    // variant of a title, not just the base game — confirmed live (a
-    // "Catan" search returned 142 results). Filtering to items whose
-    // primary name exactly matches (case-insensitive) narrows this
-    // considerably, since expansions and alternates are typically tagged
-    // as alternate names or have a different primary name entirely.
-    const exactMatches = items.filter(item => {
-      const nameEl = item.querySelector('name[type="primary"]');
-      return nameEl && nameEl.getAttribute('value').toLowerCase() === game.title.toLowerCase();
-    });
-    const candidates = exactMatches.length ? exactMatches : items;
-    // Among exact-name matches, prefer the one whose published year
-    // matches this built-in list entry's year — disambiguates the base
-    // game from same-named reprints/anniversary editions in different
-    // years. Falls back to the first candidate if no year matches (or
-    // this entry has no year to compare against).
-    let best = candidates[0] || null;
-    if (game.year){
-      const yearMatch = candidates.find(item => {
-        const yp = item.querySelector('yearpublished');
-        return yp && Number(yp.getAttribute('value')) === game.year;
-      });
-      if (yearMatch) best = yearMatch;
-    }
-    gameId = best ? Number(best.getAttribute('id')) : null;
-  } catch(e){
-    console.warn('BGG search failed for', game.title, e.message);
-    wmSearchCache.delete(searchKey); // don't cache a failure as a confirmed no-match — worth retrying later
-    return null;
-  }
-  wmSearchCache.set(searchKey, { gameId, cachedAt: Date.now() });
-  saveWmSearchCache(); // fire-and-forget
-  return gameId;
-}
-
-// Best-effort: try to enrich each built-in list title with the same
-// ratings/cover/categories/description a live BGG result would have.
-// Silently does nothing for a title it can't resolve — the built-in
-// list still displays exactly as before either way.
-async function enrichBuiltinListWithIGDB(games){
-  let done = 0, missing = 0, firstError = null;
-  await mapWithConcurrency(games, 1, async (game) => {
-    if (!game.gameId){
-      const gameId = await searchIGDBForGame(game);
-      if (gameId) game.gameId = gameId;
-    }
-    if (game.gameId){
-      const result = await enrichOneGame(game, 2);
-      if (!result.ok || !result.hasData){
-        missing++;
-        if (result.error && !firstError) firstError = result.error;
-      }
-    } else {
-      missing++; // never resolved to a BGG id at all — no enrichment was possible
-    }
-    done++;
-    setSpinStatus(`Enriching built-in list… ${done}/${games.length}`);
-  }, 250);
-  if (missing){
-    $('enrichStatusNote').textContent =
-      `Details loaded for ${games.length - missing}/${games.length}.` +
-      (firstError ? ` (${firstError})` : ' (BGG may simply have nothing on file for the rest, or this title couldn\'t be matched to a BGG id by name search.)') +
-      ` Anything missing fills in automatically when you click into it.`;
-  } else {
-    $('enrichStatusNote').textContent = '';
-  }
-}
 
 // Best-effort only — a text match on title/description, not a content
 // analysis of the actual film. Won't catch everything, and can very
@@ -2925,9 +2335,53 @@ function matchesPlayerCount(game){
 // confirmed design choice, not a placeholder for a live query to be
 // added later — see the conversation that led to this build for the
 // full reasoning.
-async function buildGamePool(timeToPlay, category){
-  setSpinStatus('Checking the built-in list…');
-  const pool = getEffectiveGameList(timeToPlay, category).map(entry => {
+// NOT YET INDEPENDENTLY LIVE-VERIFIED: this assumes /hot's <item>
+// elements carry id and name the same way /search's do (confirmed
+// live for /search and /thing separately) — a reasonable assumption
+// given every other BGG XML API2 endpoint follows this exact pattern,
+// but /hot itself hasn't been checked this specific way yet. If this
+// turns out wrong, only this parsing step needs adjusting — everything
+// downstream (enrichment, filtering, the pick itself) is unaffected by
+// how getEffectiveGameList's caller-side extraction is written.
+async function fetchHotList(){
+  const doc = await bggFetch('hot', { type: 'boardgame' }, 0, 3, 'Hot list refresh');
+  const currentYear = new Date().getFullYear();
+  return Array.from(doc.querySelectorAll('item')).map(item => ({
+    bggId: Number(item.getAttribute('id')),
+    title: item.querySelector('name') ? item.querySelector('name').getAttribute('value') : null,
+    year: item.querySelector('yearpublished') ? Number(item.querySelector('yearpublished').getAttribute('value')) : null
+  }))
+    .filter(g => g.bggId && g.title)
+    // Confirmed live and real, not hypothetical: BGG's hot list includes
+    // games that haven't actually released yet (e.g. "Lionwake" at
+    // yearpublished=2027, seen directly in a real /hot response) —
+    // pre-release buzz drives plenty of attention on BGG, but a game
+    // nobody can buy or own yet isn't something this app should ever
+    // suggest for tonight. A missing year is left in rather than
+    // excluded — safer to show something with unknown release status
+    // than to silently drop real, correctly-dated hot games due to a
+    // parsing gap.
+    .filter(g => g.year == null || g.year <= currentYear);
+}
+
+// Replaces the old [timeToPlay][category] built-in-list lookup entirely
+// — there's no category/time axis to look up anymore. Fetches BGG's
+// current "hot" list fresh every spin (not cached across spins — the
+// whole point is a live, changing pool, not a static one), enriches
+// every entry, and returns the full flat pool for a simple random pick.
+// Falls back to the static GAME_DB list (now also flat, no
+// grouping) if /hot or enrichment fails outright.
+async function buildGamePool(){
+  setSpinStatus('Checking what\'s hot on BGG…');
+  let hotList;
+  try{
+    hotList = await fetchHotList();
+  } catch(e){
+    console.warn('Hot list fetch failed, falling back to the built-in list', e.message);
+    hotList = GAME_DB.slice();
+  }
+
+  const pool = hotList.map(entry => {
     const cached = wmRatingsCache.get(entry.bggId);
     return {
       title: entry.title,
@@ -2935,16 +2389,12 @@ async function buildGamePool(timeToPlay, category){
       gameId: entry.bggId,
       posterUrl: cached ? cached.posterUrl : null,
       userRating: cached ? cached.userRating : null,
-      genresOverride: (cached && cached.genres) || [category],
-      playtime: cached ? cached.playtime : null, // minutes, from BGG's maxplaytime
-      complexity: cached ? cached.complexity : null, // BGG's averageweight, 1-5 scale
+      genresOverride: (cached && cached.genres) || [],
+      playtime: cached ? cached.playtime : null,
+      complexity: cached ? cached.complexity : null,
       minAge: cached ? cached.minAge : null,
-      // Available immediately from the built-in list itself, unlike the
-      // fields above — real enrichment (once it runs) still takes
-      // precedence if it disagrees, same "cached wins once known"
-      // pattern as everything else here.
-      minPlayers: (cached && cached.minPlayers != null) ? cached.minPlayers : (entry.minPlayers ?? null),
-      maxPlayers: (cached && cached.maxPlayers != null) ? cached.maxPlayers : (entry.maxPlayers ?? null),
+      minPlayers: (cached && cached.minPlayers != null) ? cached.minPlayers : null,
+      maxPlayers: (cached && cached.maxPlayers != null) ? cached.maxPlayers : null,
       description: cached ? cached.description : null,
       bggUrl: entry.bggId ? `https://boardgamegeek.com/boardgame/${entry.bggId}` : null
     };
@@ -2952,7 +2402,12 @@ async function buildGamePool(timeToPlay, category){
 
   const needsEnrichment = pool.filter(m => gameNeedsEnrichment(m) && !isBlocked(m.title, m.year));
   if (needsEnrichment.length){
-    await enrichBuiltinListWithIGDB(needsEnrichment);
+    let done = 0;
+    await mapWithConcurrency(needsEnrichment, 1, async (game) => {
+      await enrichOneGame(game, 2);
+      done++;
+      setSpinStatus(`Enriching hot list… ${done}/${needsEnrichment.length}`);
+    }, 250);
   }
 
   return pool;
@@ -3069,7 +2524,7 @@ function buildGameCard(game, index, onClick){
 }
 
 function renderResults(){
-  $('resultsTitle').textContent = `${currentChoice.platform} ${currentChoice.genre}`;
+  $('resultsTitle').textContent = '🔥 Trending on BGG';
   $('resultsCount').textContent = `${currentBatch.length} game${currentBatch.length === 1 ? '' : 's'}`;
   $('resultsArea').style.display = 'block';
   updateSourceNote();
@@ -3114,7 +2569,7 @@ function openConfirm(game){
   root.innerHTML = `
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
-        ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from IGDB'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
+        ${canForceRefresh ? `<button class="force-refresh-btn" id="forceRefreshBtn" ${alreadyRefreshedThisSpin ? 'disabled' : ''} title="${alreadyRefreshedThisSpin ? 'Already refreshed this spin — spin again to refresh it once more' : 'Bypass all caches and pull fresh data straight from BGG'}">${alreadyRefreshedThisSpin ? '✓ Refreshed' : '⟳ Refresh'}</button>` : ''}
         ${posterHtml}
         <h3>${escapeHtml(game.title)}</h3>
         <p class="hint" id="modalByline" style="${bylineHtml(game) ? '' : 'display:none;'}">${bylineHtml(game)}</p>
