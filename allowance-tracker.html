@@ -1,0 +1,767 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+:root{
+  --ink:#202a3c;
+  --ink-soft:#4a5468;
+  --paper:#e9dfc4;
+  --paper-card:#f6f0de;
+  --rule:#c7b98c;
+  --brass:#a9782e;
+  --brass-dark:#8a611f;
+  --sage:#4f6b4c;
+  --clay:#9b4a3d;
+  --clay-dark:#7d392e;
+}
+
+*{box-sizing:border-box;}
+
+#app{
+  font-family:'IBM Plex Sans',sans-serif;
+  color:var(--ink);
+  background:var(--paper);
+  min-height:100%;
+  padding:0;
+  max-width:520px;
+  margin:0 auto;
+  line-height:1.4;
+}
+
+.header{
+  padding:20px 18px 14px;
+  border-bottom:2px solid var(--ink);
+}
+
+.header h1{
+  font-family:'IBM Plex Slab',serif;
+  font-weight:700;
+  font-size:22px;
+  margin:0 0 2px;
+  letter-spacing:0.2px;
+}
+
+.header .subtitle{
+  font-size:13px;
+  color:var(--ink-soft);
+  margin:0;
+}
+
+.sync-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-top:12px;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.sync-status{
+  font-size:12px;
+  color:var(--ink-soft);
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.sync-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--ink-soft);
+  flex-shrink:0;
+}
+.sync-dot.saved{background:var(--sage);}
+.sync-dot.error{background:var(--clay);}
+.sync-dot.busy{background:var(--brass);animation:pulse 1s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+.btn{
+  font-family:'IBM Plex Sans',sans-serif;
+  font-weight:600;
+  font-size:12.5px;
+  border:1.5px solid var(--ink);
+  background:transparent;
+  color:var(--ink);
+  padding:6px 12px;
+  border-radius:3px;
+  cursor:pointer;
+}
+.btn:active{transform:translateY(1px);}
+.btn.primary{background:var(--brass);border-color:var(--brass-dark);color:#fff;}
+.btn.small{padding:4px 9px;font-size:11.5px;}
+.btn.danger{border-color:var(--clay);color:var(--clay);}
+.btn.ghost{border-color:transparent;color:var(--ink-soft);}
+.btn:disabled{opacity:0.45;cursor:default;}
+
+.error-banner{
+  margin:12px 18px 0;
+  padding:10px 12px;
+  border:1.5px solid var(--clay);
+  background:#f3e6e1;
+  color:var(--clay-dark);
+  font-size:12.5px;
+  border-radius:3px;
+}
+
+.notice-banner{
+  margin:12px 18px 0;
+  padding:10px 12px;
+  border:1.5px solid var(--brass);
+  background:#f2e9d6;
+  color:var(--brass-dark);
+  font-size:12.5px;
+  border-radius:3px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.people-strip{
+  display:flex;
+  gap:8px;
+  padding:14px 18px;
+  overflow-x:auto;
+  border-bottom:1px solid var(--rule);
+}
+
+.person-chip{
+  flex-shrink:0;
+  background:var(--paper-card);
+  border:1.5px solid var(--ink);
+  border-radius:3px;
+  padding:8px 12px;
+  cursor:pointer;
+  text-align:left;
+  font-family:'IBM Plex Sans',sans-serif;
+}
+.person-chip.active{background:var(--ink);color:var(--paper-card);}
+.person-chip .pname{font-weight:600;font-size:13px;display:block;}
+.person-chip .pbal{font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:1px;display:block;}
+
+.add-person{
+  flex-shrink:0;
+  border:1.5px dashed var(--ink-soft);
+  background:transparent;
+  border-radius:3px;
+  padding:8px 12px;
+  font-size:13px;
+  color:var(--ink-soft);
+  cursor:pointer;
+  font-family:'IBM Plex Sans',sans-serif;
+}
+
+.quick-add-wrap{
+  padding:16px 18px;
+}
+.quick-add-wrap p{font-size:13px;color:var(--ink-soft);margin:0 0 8px;}
+.quick-add-chips{display:flex;gap:8px;flex-wrap:wrap;}
+
+.empty-state{
+  padding:40px 24px;
+  text-align:center;
+  color:var(--ink-soft);
+  font-size:13.5px;
+}
+
+.person-detail{padding:18px;}
+
+.balance-block{
+  text-align:left;
+  border-bottom:2px solid var(--ink);
+  padding-bottom:14px;
+  margin-bottom:18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+}
+.balance-block .name{
+  font-family:'IBM Plex Slab',serif;
+  font-size:19px;
+  font-weight:600;
+}
+.balance-block .balance{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:28px;
+  font-weight:700;
+}
+.balance-block .balance.neg{color:var(--clay);}
+
+.section-title{
+  font-family:'IBM Plex Slab',serif;
+  font-size:14px;
+  font-weight:600;
+  margin:0 0 8px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.ledger-list{list-style:none;margin:0 0 10px;padding:0;}
+
+.ledger-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:9px 0;
+  border-bottom:1px solid var(--rule);
+  gap:10px;
+}
+.ledger-row .lr-main{font-size:13px;}
+.ledger-row .lr-sub{font-size:11.5px;color:var(--ink-soft);margin-top:1px;}
+.ledger-row .lr-amt{
+  font-family:'IBM Plex Mono',monospace;
+  font-weight:600;
+  font-size:13.5px;
+  white-space:nowrap;
+}
+.lr-amt.neg{color:var(--clay);}
+.lr-amt.pos{color:var(--sage);}
+.ledger-row .lr-actions{display:flex;gap:6px;flex-shrink:0;}
+
+.add-form{
+  background:var(--paper-card);
+  border:1.5px solid var(--ink);
+  border-radius:4px;
+  padding:12px;
+  margin-bottom:16px;
+}
+.add-form .field-row{display:flex;gap:8px;margin-bottom:8px;}
+.add-form .field{flex:1;display:flex;flex-direction:column;gap:3px;margin-bottom:8px;}
+.add-form label{font-size:11px;color:var(--ink-soft);font-weight:600;}
+.add-form input, .add-form select{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:13px;
+  padding:6px 7px;
+  border:1.5px solid var(--rule);
+  border-radius:3px;
+  background:#fff;
+  color:var(--ink);
+  width:100%;
+}
+.add-form .checkbox-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft);margin-bottom:8px;}
+.add-form .checkbox-row input{width:auto;}
+.add-form .form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:2px;}
+.field-error{font-size:11.5px;color:var(--clay-dark);margin:-4px 0 8px;}
+.field-hint{font-size:11.5px;color:var(--ink-soft);margin:0 0 12px;}
+
+.toggle-add{
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--brass-dark);
+  background:none;
+  border:none;
+  cursor:pointer;
+  padding:0;
+  font-family:'IBM Plex Sans',sans-serif;
+}
+
+.footer-note{
+  padding:16px 18px 28px;
+  font-size:11px;
+  color:var(--ink-soft);
+  text-align:center;
+}
+</style>
+
+<div id="app"></div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'tracker-config';
+  const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbycWltA1ttpN3hT7lA6JMoXDi-jIxdJvYOBLLyl6Pff9lYQLmW0X_Nx81mjhpj3nOL1/exec';
+  const QUICK_ADD_NAMES = ["Alan","Jack","Owen"];
+  const hasStorage = typeof window.storage !== 'undefined';
+
+  let state = {
+    scriptUrl: null,
+    driveFileTitle: null,
+    setupChecked: false,
+    people: [],
+    activePersonId: null,
+    sync: "idle", // idle | loading | saving | saved | error
+    syncError: null,
+    lastSynced: null,
+    dirty: false,
+    openForm: null,
+    confirmDelete: null,
+    confirmSwitch: false,
+    formError: null
+  };
+
+  const root = document.getElementById('app');
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(16).slice(2));
+  const todayStr = () => new Date().toISOString().slice(0,10);
+  const money = (n) => (n<0?'-$':'$') + Math.abs(n).toFixed(2);
+
+  function weeksInRange(start, end){
+    const s = new Date(start+'T00:00:00Z');
+    const e = new Date((end||todayStr())+'T00:00:00Z');
+    const days = Math.round((e-s)/86400000);
+    if (days < 0) return 0;
+    return Math.floor(days/7)+1;
+  }
+
+  function personBalance(p){
+    let total = 0;
+    p.weeklyRules.forEach(r => total += weeksInRange(r.start, r.end) * r.amount);
+    p.oneTime.forEach(o => total += o.amount);
+    return total;
+  }
+
+  function rangesOverlap(aStart, aEnd, bStart, bEnd){
+    const inf = '9999-12-31';
+    const ae = aEnd || inf, be = bEnd || inf;
+    return aStart <= be && ae >= bStart;
+  }
+
+  function findOverlap(person, start, end, excludeId){
+    return person.weeklyRules.find(r => r.id !== excludeId && rangesOverlap(start, end, r.start, r.end));
+  }
+
+  function displayName(title){
+    if (!title) return 'Allowance Tracker';
+    return title.replace(/\.json$/i,'').trim() || 'Allowance Tracker';
+  }
+
+  // ---------- Local (per-artifact) config storage ----------
+  async function getStoredConfig(){
+    if (!hasStorage) return null;
+    try {
+      const res = await window.storage.get(STORAGE_KEY, true);
+      return res ? JSON.parse(res.value) : null;
+    } catch(e){ return null; }
+  }
+  async function setStoredConfig(scriptUrl, title){
+    if (!hasStorage) return;
+    try { await window.storage.set(STORAGE_KEY, JSON.stringify({ scriptUrl, title }), true); } catch(e){ /* best effort */ }
+  }
+  async function clearStoredConfig(){
+    if (!hasStorage) return;
+    try { await window.storage.delete(STORAGE_KEY, true); } catch(e){ /* best effort */ }
+  }
+
+  // ---------- Apps Script sync ----------
+  function applyLoadedData(json){
+    state.people = Array.isArray(json.people) ? json.people : [];
+    state.people.forEach(p => {
+      if (!p.weeklyRules) p.weeklyRules = [];
+      if (!p.oneTime) p.oneTime = [];
+    });
+    if (!state.activePersonId && state.people.length) state.activePersonId = state.people[0].id;
+  }
+
+  async function setupTracker(scriptUrl, title){
+    state.sync = 'loading';
+    state.syncError = null;
+    render();
+    try {
+      const res = await fetch(`${scriptUrl}?action=load&title=${encodeURIComponent(title)}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await setStoredConfig(scriptUrl, title);
+      state.scriptUrl = scriptUrl;
+      state.driveFileTitle = title;
+      applyLoadedData(data);
+      state.sync = 'saved';
+      state.dirty = false;
+      state.lastSynced = new Date();
+    } catch(err){
+      state.sync = 'error';
+      state.syncError = 'Could not connect to that tracker: ' + err.message;
+    }
+    render();
+  }
+
+  async function loadFromDrive(){
+    state.sync = 'loading';
+    render();
+    try {
+      const res = await fetch(`${state.scriptUrl}?action=load&title=${encodeURIComponent(state.driveFileTitle)}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      applyLoadedData(data);
+      state.sync = 'saved';
+      state.dirty = false;
+      state.lastSynced = new Date();
+      state.syncError = null;
+    } catch(err){
+      state.sync = 'error';
+      state.syncError = 'Could not load from Drive: ' + err.message;
+    }
+    render();
+  }
+
+  async function saveToDrive(){
+    state.sync = 'saving';
+    render();
+    try {
+      const payload = JSON.stringify({ schemaVersion: 1, people: state.people });
+      const res = await fetch(state.scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ title: state.driveFileTitle, content: payload })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      state.sync = 'saved';
+      state.dirty = false;
+      state.lastSynced = new Date();
+      state.syncError = null;
+    } catch(err){
+      state.sync = 'error';
+      state.syncError = 'Could not save to Drive: ' + err.message;
+    }
+    render();
+  }
+
+  function markDirty(){ state.dirty = true; }
+
+  function resetTrackerConfig(){
+    clearStoredConfig();
+    state.scriptUrl = null;
+    state.driveFileTitle = null;
+    state.people = [];
+    state.activePersonId = null;
+    state.dirty = false;
+    state.sync = 'idle';
+    state.syncError = null;
+    state.confirmSwitch = false;
+    render();
+  }
+
+  // ---------- Mutations ----------
+  function addPerson(name){
+    if (!name || !name.trim()) return;
+    const p = { id: uid(), name: name.trim(), weeklyRules: [], oneTime: [] };
+    state.people.push(p);
+    state.activePersonId = p.id;
+    markDirty();
+    render();
+  }
+
+  function removePerson(id){
+    state.people = state.people.filter(p => p.id !== id);
+    if (state.activePersonId === id) state.activePersonId = state.people.length ? state.people[0].id : null;
+    markDirty();
+    render();
+  }
+
+  function addWeeklyRule(personId, start, end, amount){
+    const p = state.people.find(p => p.id === personId);
+    if (!p) return { error: 'Person not found' };
+    if (!start) return { error: 'Start date is required.' };
+    if (end && end < start) return { error: 'End date must be after the start date.' };
+    if (!(amount > 0)) return { error: 'Enter an amount greater than $0.' };
+    const overlap = findOverlap(p, start, end || null, null);
+    if (overlap) return { error: `That range overlaps an existing weekly rule (${overlap.start} to ${overlap.end || 'ongoing'}).` };
+    p.weeklyRules.push({ id: uid(), start, end: end || null, amount });
+    markDirty();
+    return { ok: true };
+  }
+
+  function addOneTime(personId, date, label, amount, isDeduction){
+    const p = state.people.find(p => p.id === personId);
+    if (!p) return { error: 'Person not found' };
+    if (!date) return { error: 'Date is required.' };
+    if (!(amount > 0)) return { error: 'Enter an amount greater than $0.' };
+    p.oneTime.push({ id: uid(), date, label: (label||'').trim() || (isDeduction? 'Deduction':'Addition'), amount: isDeduction ? -amount : amount });
+    markDirty();
+    return { ok: true };
+  }
+
+  function removeEntry(personId, listName, entryId){
+    const p = state.people.find(p => p.id === personId);
+    if (!p) return;
+    p[listName] = p[listName].filter(e => e.id !== entryId);
+    markDirty();
+    render();
+  }
+
+  // ---------- Render ----------
+  function syncLabel(){
+    if (state.sync === 'loading') return 'Loading from Drive\u2026';
+    if (state.sync === 'saving') return 'Saving to Drive\u2026';
+    if (state.sync === 'error') return 'Sync error';
+    if (state.dirty) return 'Unsaved changes';
+    if (state.lastSynced) return 'Synced ' + state.lastSynced.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    return 'Ready';
+  }
+  function syncDotClass(){
+    if (state.sync === 'loading' || state.sync === 'saving') return 'busy';
+    if (state.sync === 'error') return 'error';
+    if (!state.dirty && state.lastSynced) return 'saved';
+    return '';
+  }
+
+  function renderHeader(){
+    return `
+      <div class="header">
+        <h1>${escapeHtml(displayName(state.driveFileTitle))}</h1>
+        <p class="subtitle">Shared allowance ledger &mdash; synced to a Google Drive file anyone with access can update</p>
+        <div class="sync-row">
+          <div class="sync-status"><span class="sync-dot ${syncDotClass()}"></span>${syncLabel()}</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn small ghost" data-action="change-tracker">Switch tracker</button>
+            <button class="btn small" data-action="reload" ${state.sync==='loading'||state.sync==='saving'?'disabled':''}>Reload</button>
+            <button class="btn small primary" data-action="save" ${state.sync==='saving'||!state.dirty?'disabled':''}>Save</button>
+          </div>
+        </div>
+      </div>
+      ${state.syncError ? `<div class="error-banner">${state.syncError}</div>` : ''}
+      ${state.confirmSwitch ? `<div class="notice-banner">
+        <span>You have unsaved changes. Switching now discards them here (your last save is safe).</span>
+        <span style="display:flex;gap:8px;">
+          <button class="btn small" data-action="cancel-change-tracker">Cancel</button>
+          <button class="btn small danger" data-action="confirm-change-tracker">Discard &amp; switch</button>
+        </span>
+      </div>` : ''}
+    `;
+  }
+
+  function renderSetup(){
+    return `
+      <div class="header">
+        <h1>Allowance Tracker</h1>
+        <p class="subtitle">Track weekly allowances and one-time additions for anyone in your household, synced to Google Drive</p>
+      </div>
+      ${state.syncError ? `<div class="error-banner">${state.syncError}</div>` : ''}
+      <div class="person-detail">
+        <div class="section-title">Set up your tracker</div>
+        <p class="field-hint">Connects to a Google Apps Script web app tied to your own Google account, which reads and writes a file in your Drive. If you haven't deployed one yet, ask Claude for the setup script and deployment steps. Everyone sharing a tracker should use the same Web app URL and tracker name.</p>
+        <form class="add-form" data-form="setup-form">
+          <div class="field"><label>Web app URL</label><input type="text" name="scripturl" placeholder="https://script.google.com/macros/s/.../exec" value="${DEFAULT_SCRIPT_URL}" required ${state.sync==='loading'?'disabled':''}></div>
+          <div class="field"><label>Tracker name</label><input type="text" name="label" placeholder="e.g. Kramer Family" required ${state.sync==='loading'?'disabled':''}></div>
+          <div class="form-actions"><button type="submit" class="btn primary small" ${state.sync==='loading'?'disabled':''}>${state.sync==='loading' ? 'Connecting\u2026' : 'Set up tracker'}</button></div>
+        </form>
+      </div>
+    `;
+  }
+
+  function renderPeopleStrip(){
+    const chips = state.people.map(p => {
+      const bal = personBalance(p);
+      return `<button class="person-chip ${p.id===state.activePersonId?'active':''}" data-action="select-person" data-id="${p.id}">
+        <span class="pname">${escapeHtml(p.name)}</span>
+        <span class="pbal ${bal<0?'neg':''}">${money(bal)}</span>
+      </button>`;
+    }).join('');
+    return `<div class="people-strip">${chips}<button class="add-person" data-action="prompt-add-person">+ Add person</button></div>`;
+  }
+
+  function renderQuickAdd(){
+    const chips = QUICK_ADD_NAMES.map(n => `<button class="btn small" data-action="quick-add-person" data-name="${n}">+ ${n}</button>`).join('');
+    return `<div class="quick-add-wrap">
+      <p>Quick add:</p>
+      <div class="quick-add-chips">${chips}<button class="btn small" data-action="prompt-add-person">+ Someone else</button></div>
+    </div>`;
+  }
+
+  function renderPersonDetail(){
+    const p = state.people.find(p => p.id === state.activePersonId);
+    if (!p) return `<div class="empty-state">Select or add someone to start tracking their allowance.</div>`;
+    const bal = personBalance(p);
+
+    const weeklyRows = p.weeklyRules.slice().sort((a,b)=> b.start.localeCompare(a.start)).map(r => {
+      const wks = weeksInRange(r.start, r.end);
+      const subtotal = wks * r.amount;
+      const isConfirm = state.confirmDelete === r.id;
+      return `<li class="ledger-row">
+        <div>
+          <div class="lr-main">${r.start} &rarr; ${r.end || 'ongoing'}</div>
+          <div class="lr-sub">${money(r.amount)}/wk &times; ${wks} wk${wks===1?'':'s'}</div>
+        </div>
+        <div class="lr-actions">
+          <span class="lr-amt pos">${money(subtotal)}</span>
+          ${isConfirm
+            ? `<button class="btn small danger" data-action="confirm-remove" data-list="weeklyRules" data-id="${r.id}">Confirm?</button>`
+            : `<button class="btn small" data-action="ask-remove" data-id="${r.id}">Remove</button>`}
+        </div>
+      </li>`;
+    }).join('') || `<li class="ledger-row" style="color:var(--ink-soft);font-size:12.5px;border-bottom:none;">No weekly rules yet.</li>`;
+
+    const oneTimeRows = p.oneTime.slice().sort((a,b)=> b.date.localeCompare(a.date)).map(o => {
+      const isConfirm = state.confirmDelete === o.id;
+      return `<li class="ledger-row">
+        <div>
+          <div class="lr-main">${escapeHtml(o.label)}</div>
+          <div class="lr-sub">${o.date}</div>
+        </div>
+        <div class="lr-actions">
+          <span class="lr-amt ${o.amount<0?'neg':'pos'}">${money(o.amount)}</span>
+          ${isConfirm
+            ? `<button class="btn small danger" data-action="confirm-remove" data-list="oneTime" data-id="${o.id}">Confirm?</button>`
+            : `<button class="btn small" data-action="ask-remove" data-id="${o.id}">Remove</button>`}
+        </div>
+      </li>`;
+    }).join('') || `<li class="ledger-row" style="color:var(--ink-soft);font-size:12.5px;border-bottom:none;">No one-time entries yet.</li>`;
+
+    return `
+      <div class="person-detail">
+        <div class="balance-block">
+          <div>
+            <div class="name">${escapeHtml(p.name)}</div>
+          </div>
+          <div>
+            <div class="balance ${bal<0?'neg':''}">${money(bal)}</div>
+          </div>
+        </div>
+
+        <div class="section-title">
+          Weekly allowance rules
+          <button class="toggle-add" data-action="toggle-form" data-form="weekly">${state.openForm==='weekly'?'Cancel':'+ Add rule'}</button>
+        </div>
+        ${state.openForm==='weekly' ? renderWeeklyForm() : ''}
+        <ul class="ledger-list">${weeklyRows}</ul>
+
+        <div class="section-title" style="margin-top:22px;">
+          One-time entries
+          <button class="toggle-add" data-action="toggle-form" data-form="onetime">${state.openForm==='onetime'?'Cancel':'+ Add entry'}</button>
+        </div>
+        ${state.openForm==='onetime' ? renderOneTimeForm() : ''}
+        <ul class="ledger-list">${oneTimeRows}</ul>
+
+        <div style="margin-top:20px;">
+          <button class="btn danger small" data-action="remove-person" data-id="${p.id}">Remove ${escapeHtml(p.name)}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderWeeklyForm(){
+    return `
+      <form class="add-form" data-form="weekly-form">
+        <div class="field-row">
+          <div class="field"><label>Start date</label><input type="date" name="start" required value="${todayStr()}"></div>
+          <div class="field"><label>End date</label><input type="date" name="end"></div>
+        </div>
+        <div class="checkbox-row"><input type="checkbox" name="ongoing" id="ongoing-cb"><label for="ongoing-cb">No end date (ongoing)</label></div>
+        <div class="field-row">
+          <div class="field"><label>Amount per week</label><input type="number" name="amount" min="0.01" step="0.01" placeholder="10.00" required></div>
+        </div>
+        ${state.formError ? `<div class="field-error">${state.formError}</div>` : ''}
+        <div class="form-actions">
+          <button type="submit" class="btn primary small">Add rule</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function renderOneTimeForm(){
+    return `
+      <form class="add-form" data-form="onetime-form">
+        <div class="field-row">
+          <div class="field"><label>Date</label><input type="date" name="date" required value="${todayStr()}"></div>
+          <div class="field"><label>Type</label>
+            <select name="kind"><option value="add">Addition</option><option value="sub">Deduction</option></select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Label</label><input type="text" name="label" placeholder="Birthday money"></div>
+          <div class="field"><label>Amount</label><input type="number" name="amount" min="0.01" step="0.01" placeholder="20.00" required></div>
+        </div>
+        ${state.formError ? `<div class="field-error">${state.formError}</div>` : ''}
+        <div class="form-actions">
+          <button type="submit" class="btn primary small">Add entry</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function render(){
+    if (!state.scriptUrl || !state.driveFileTitle){
+      root.innerHTML = renderSetup();
+      return;
+    }
+    let body;
+    if (!state.people.length && state.sync !== 'loading'){
+      body = renderQuickAdd() + `<div class="empty-state">No one added yet. Add a family member to start tracking their allowance.</div>`;
+    } else {
+      body = renderPeopleStrip() + renderPersonDetail();
+    }
+    root.innerHTML = renderHeader() + body + `<div class="footer-note">Anyone with edit access to the Drive file can update this tracker &mdash; the latest save wins.</div>`;
+  }
+
+  // ---------- Events ----------
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+
+    if (action === 'reload') { loadFromDrive(); return; }
+    if (action === 'save') { saveToDrive(); return; }
+    if (action === 'select-person') { state.activePersonId = btn.dataset.id; state.openForm=null; state.confirmDelete=null; render(); return; }
+    if (action === 'prompt-add-person') {
+      const name = window.prompt("Name to add:");
+      if (name) addPerson(name);
+      return;
+    }
+    if (action === 'quick-add-person') { addPerson(btn.dataset.name); return; }
+    if (action === 'remove-person') { removePerson(btn.dataset.id); return; }
+    if (action === 'toggle-form') {
+      state.formError = null;
+      state.openForm = state.openForm === btn.dataset.form ? null : btn.dataset.form;
+      render();
+      return;
+    }
+    if (action === 'ask-remove') { state.confirmDelete = btn.dataset.id; render(); return; }
+    if (action === 'confirm-remove') { removeEntry(state.activePersonId, btn.dataset.list, btn.dataset.id); state.confirmDelete=null; return; }
+    if (action === 'change-tracker') {
+      if (state.dirty) { state.confirmSwitch = true; render(); }
+      else { resetTrackerConfig(); }
+      return;
+    }
+    if (action === 'confirm-change-tracker') { resetTrackerConfig(); return; }
+    if (action === 'cancel-change-tracker') { state.confirmSwitch = false; render(); return; }
+  });
+
+  root.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const form = e.target;
+    if (form.dataset.form === 'setup-form') {
+      const scriptUrl = form.scripturl.value.trim();
+      const label = form.label.value.trim();
+      const title = (label || 'My') + ' Allowance Tracker.json';
+      setupTracker(scriptUrl, title);
+      return;
+    }
+    if (form.dataset.form === 'weekly-form') {
+      const start = form.start.value;
+      const ongoing = form.ongoing.checked;
+      const end = ongoing ? '' : form.end.value;
+      const amount = parseFloat(form.amount.value);
+      const res = addWeeklyRule(state.activePersonId, start, end, amount);
+      if (res.error) { state.formError = res.error; render(); }
+      else { state.openForm = null; state.formError = null; render(); }
+      return;
+    }
+    if (form.dataset.form === 'onetime-form') {
+      const date = form.date.value;
+      const label = form.label.value;
+      const amount = parseFloat(form.amount.value);
+      const isDeduction = form.kind.value === 'sub';
+      const res = addOneTime(state.activePersonId, date, label, amount, isDeduction);
+      if (res.error) { state.formError = res.error; render(); }
+      else { state.openForm = null; state.formError = null; render(); }
+      return;
+    }
+  });
+
+  async function init(){
+    render();
+    const stored = await getStoredConfig();
+    if (stored && stored.scriptUrl && stored.title) {
+      state.scriptUrl = stored.scriptUrl;
+      state.driveFileTitle = stored.title;
+      loadFromDrive();
+    } else {
+      render();
+    }
+  }
+
+  init();
+})();
+</script>
